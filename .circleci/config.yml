@@ -1,0 +1,75 @@
+version: 2.19
+
+workflows:
+  version: 2
+  test:
+    jobs:
+      - test-3-6
+      - flake8
+      - mypy
+      - publish:
+          requires:
+            - flake8
+            - mypy
+            - test-3-6
+          filters:
+            branches:
+              only: master
+
+defaults: &defaults
+  docker:
+    - image: circleci/python:3.8.2
+
+restore_cache: &restore_cache
+  restore_cache:
+    name: "Restore cache"
+    key: deps9-{{ .Branch }}-{{ checksum "poetry.lock" }}
+
+
+bootstrap: &bootstrap
+  run:
+    name: Bootstrap
+    command: ./bootstrap
+
+
+jobs:
+  flake8:
+    <<: *defaults
+    steps:
+      - checkout
+      - *bootstrap
+      - run:
+          name: Flake8
+          command: poetry run flake8
+
+  mypy:
+    <<: *defaults
+    steps:
+      - checkout
+      - *bootstrap
+      - run:
+          name: Mypy
+          command: poetry run mypy .
+
+  test-3-6: &test-template
+    <<: *defaults
+    steps:
+      - checkout
+      - *bootstrap
+      - *restore_cache
+      - run:
+          name: Test
+          command: poetry run pytest tests
+
+  publish:
+    <<: *defaults
+    steps:
+      - checkout
+      - *bootstrap
+      - run:
+          name: Publish
+          command: >
+            poetry run ./.bin/recreate_stubs
+            poetry run ./.bin/generate_version
+            poetry build
+            poetry publish --username $PYPI_USERNAME --password $PYPI_PASSWORD

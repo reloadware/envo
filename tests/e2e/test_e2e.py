@@ -240,4 +240,5 @@ class TestParentChild:
 
         s = spawn("envo test")
         s.sendline('"sandbox.sandbox.sandbox" in $PROMPT')
-        s.expect("True")
+        s.expect("True", timeout=3)
+
