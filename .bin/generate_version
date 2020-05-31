@@ -1,0 +1,14 @@
+#!/usr/bin/env python
+import toml
+import os
+from pathlib import Path
+
+root = Path(os.path.realpath(__file__)).parent.parent.absolute()
+
+config = toml.load(str(root/"pyproject.toml"))
+version: str = config["tool"]["poetry"]["version"]
+
+version_file = Path(root/"envo/__version__.py")
+Path(version_file).touch()
+
+version_file.write_text(f'__version__ = "{version}"\n')

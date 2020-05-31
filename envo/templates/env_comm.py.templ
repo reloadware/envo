@@ -1,0 +1,30 @@
+from pathlib import Path
+
+import envo
+
+
+class {{ class_name }}Comm(envo.Env):
+    class Meta(envo.Env.Meta):
+        root = Path(__file__).parent
+        name = "{{ name }}"
+        version = "0.1.0"
+        parent = None
+
+    {%- if "venv" in selected_addons%}
+    venv: envo.VenvEnv
+    {%- endif %}
+
+    # Declare your variables here
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        {%- if "venv" in selected_addons %}
+        self.venv = envo.VenvEnv(owner=self)
+        {%- endif %}
+
+        # Define your variables here
+
+
+Env = {{ class_name }}Comm
+

@@ -1,0 +1,27 @@
+#!/usr/bin/env python
+import os
+import shutil
+from pathlib import Path
+
+root = Path(os.path.realpath(__file__)).parent.parent.absolute() / "envo"
+
+from pexpect import run
+
+
+def gen_stubs_in_dir(dir: Path):
+    for f in dir.glob("*"):
+        if f.name.endswith(".py"):
+            os.chdir(str(f.parent))
+            cmd = f"stubgen {str(f.name)} -o ."
+            # print(cmd)
+            run(cmd)
+
+            if Path("__main__").exists():
+                shutil.copy("__main__/__init__.pyi", "__init__.pyi")
+                shutil.rmtree("__main__")
+        if f.is_dir():
+            gen_stubs_in_dir(f)
+
+
+if __name__ == "__main__":
+    gen_stubs_in_dir(root)

@@ -1,0 +1,5 @@
+[flake8]
+ignore = D203, C901, W503
+exclude = .venv, envo/templates
+max-complexity = 10
+max-line-length = 120

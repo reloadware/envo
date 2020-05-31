@@ -1,0 +1,53 @@
+[tool.poetry]
+name = "envo"
+version = "0.6.4"
+description = "Smart Environment variables - Define environmental variables in python and activate hot reloaded shells for them."
+authors = ["Damian Krystkiewicz <damian.krystkiewicz@gmail.com>"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Environment :: Console",
+    "Topic :: System :: Shells",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9"
+]
+
+license = "Apache 2.0"
+readme = "README.rst"
+
+[tool.poetry.urls]
+homepage = "https://gitlab.com/plasma-opensource/envo"
+
+[tool.poetry.dependencies]
+python = ">=3.6.1, <4.0"
+dataclasses = { version = "*", python = ">=3.6, <3.7" }
+inotify = "*"
+loguru = "*"
+jinja2 = "^2"
+ilock = "^1"
+xonsh = "^0.9"
+prompt_toolkit = "^3"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.4.1"
+flake8 = "^3.7.9"
+pep8-naming = "^0.10.0"
+mypy = "^0.770"
+pygments = "^2.6.1"
+pytest-mock = "^3.1.0"
+pexpect = "^4.8.0"
+pre-commit = "^2.3.0"
+toml = "^0.10.0"
+loguru-caplog = "^0.1.3"
+
+[tool.poetry.scripts]
+envo = "envo.scripts:_main"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
+
