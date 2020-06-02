@@ -5,6 +5,8 @@ workflows:
   test:
     jobs:
       - test-3-6
+      - test-3-7
+      - test-3-8
       - flake8
       - mypy
       - publish:
@@ -12,6 +14,8 @@ workflows:
             - flake8
             - mypy
             - test-3-6
+            - test-3-7
+            - test-3-8
           filters:
             branches:
               only: master
@@ -22,10 +26,19 @@ defaults: &defaults
   docker:
     - image: circleci/python:3.8.2
 
+cache-key: &cache-key
+  deps9-{{ .Branch }}-{{ checksum "poetry.lock" }}
+
 restore_cache: &restore_cache
   restore_cache:
     name: "Restore cache"
-    key: deps9-{{ .Branch }}-{{ checksum "poetry.lock" }}
+    key: *cache-key
+
+save_cache: &save_cache
+  save_cache:
+    key: *cache-key
+    paths:
+     - .venv
 
 
 bootstrap: &bootstrap
@@ -39,42 +52,58 @@ jobs:
     <<: *defaults
     steps:
       - checkout
-      - *bootstrap
       - *restore_cache
+      - *bootstrap
       - run:
           name: Flake8
           command: poetry run flake8
+      - *save_cache
 
   mypy:
     <<: *defaults
     steps:
       - checkout
-      - *bootstrap
       - *restore_cache
+      - *bootstrap
       - run:
           name: Mypy
           command: poetry run mypy .
+      - *save_cache
 
-  test-3-6: &test-template
+  test-3-8: &test-template
     <<: *defaults
     steps:
       - checkout
-      - *bootstrap
       - *restore_cache
+      - *bootstrap
       - run:
           name: Test
           command: poetry run pytest tests
+      - *save_cache
+
+  test-3-7:
+    <<: *test-template
+    image: circleci/python:3.7
+
+  test-3-6:
+    <<: *test-template
+    image: circleci/python:3.6
 
   publish:
     <<: *defaults
     steps:
       - checkout
-      - *bootstrap
       - *restore_cache
+      - *bootstrap
       - run:
           name: Publish
-          command: >
-            poetry run ./.bin/recreate_stubs
-            poetry run ./.bin/generate_version
-            poetry build
-            poetry publish --username $PYPI_USERNAME --password $PYPI_PASSWORD
+          command: poetry run ./.bin/recreate_stubs
+      - run:
+          name: Generate version
+          command: poetry run ./.bin/generate_version
+      - run:
+          name: Build
+          command: poetry build
+      - run:
+          name: publish
+          command: poetry publish --username $PYPI_USERNAME --password $PYPI_PASSWORD
