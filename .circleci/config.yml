@@ -21,6 +21,14 @@ workflows:
               only: master
             tags:
               only: /^[0-9]+(\.[0-9]+)*$/
+      - upload-codecov:
+          requires:
+            - publish
+          filters:
+            branches:
+              only: master
+            tags:
+              only: /^[0-9]+(\.[0-9]+)*$/
 
 defaults: &defaults
   docker:
@@ -80,6 +88,15 @@ jobs:
           name: Test
           command: poetry run pytest tests
       - *save_cache
+      - store_artifacts:
+          path: test-results
+          destination: artifacts
+      - store_test_results:
+          path: test-results
+      - persist_to_workspace:
+          root: workspace
+          paths:
+            - test-results
 
   test-3-7:
     <<: *test-template
@@ -96,7 +113,7 @@ jobs:
       - *restore_cache
       - *bootstrap
       - run:
-          name: Publish
+          name: Recreate stubs
           command: poetry run ./.bin/recreate_stubs
       - run:
           name: Generate version
@@ -107,3 +124,19 @@ jobs:
       - run:
           name: publish
           command: poetry publish --username $PYPI_USERNAME --password $PYPI_PASSWORD
+
+  upload-codecov:
+    <<: *defaults
+    steps:
+      - checkout
+      - attach_workspace:
+          at: workspace
+      - run:
+          name: Publish
+          command: |
+            curl -s https://codecov.io/bash | bash -s -- \
+            -t "${CODECOV_TOKEN}" \
+            -n "${CIRCLE_BUILD_NUM}" \
+            -y ".codecov.yml" \
+            -f "./workspace/test-results/coverage.xml" \
+            -Z || echo 'Codecov upload failed'
