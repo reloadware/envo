@@ -6,6 +6,7 @@ from pathlib import Path
 import pexpect
 import pytest
 from pexpect import run
+
 from tests.utils import change_file
 
 
@@ -241,4 +242,3 @@ class TestParentChild:
         s = spawn("envo test")
         s.sendline('"sandbox.sandbox.sandbox" in $PROMPT')
         s.expect("True", timeout=3)
-

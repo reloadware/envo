@@ -1,23 +1,30 @@
 repos:
 -   repo: local
     hooks:
-      - id: envo-isort
-        name: "Envo: sort imports."
-        entry: .bin/os.isort
+      - id: isort
+        name: "Sort imports"
+        entry: .bin/isort
         language: script
         files: '.*.py$'
         exclude: ".*/templates"
 
-      - id: envo-black
-        name: "Envo: Make it black."
-        entry: .bin/os.black
+      - id: black
+        name: "Make it black"
+        entry: .bin/black
         language: script
         files: '.*.py$'
         exclude: ".*/templates"
 
-      - id: envo-autoflake
-        name: "Envo: Autoflake."
-        entry: .bin/os.autoflake
+      - id: autoflake
+        name: "Autoflake"
+        entry: .bin/autoflake
         language: script
         files: '.*.py$'
+        exclude: ".*/templates"
+
+      - id: check ci
+        name: "Check CI"
+        entry: .bin/check_ci
+        language: script
+        files: '.circleci/config.yml$'
         exclude: ".*/templates"
