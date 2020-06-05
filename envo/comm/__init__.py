@@ -5,7 +5,12 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
-__all__ = ["dir_name_to_class_name", "setup_logger", "render_py_file", "render_file"]
+__all__ = [
+    "dir_name_to_class_name",
+    "setup_logger",
+    "render_py_file",
+    "render_file",
+]
 
 
 def dir_name_to_class_name(dir_name: str) -> str:
@@ -26,6 +31,12 @@ def dir_name_to_pkg_name(dir_name: str) -> str:
     class_name = "_".join([s.strip() for s in class_name.split()])
 
     return class_name
+
+
+def is_valid_module_name(module: str) -> bool:
+    from keyword import iskeyword
+
+    return module.isidentifier() and not iskeyword(module)
 
 
 def setup_logger() -> None:

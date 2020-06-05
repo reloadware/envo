@@ -2,10 +2,11 @@ import os
 from pathlib import Path
 
 import pytest
-from tests.unit.utils import command, test_root
 
 import envo.scripts
 from envo.comm.test_utils import flake8, mypy
+from tests.unit.utils import command, test_root
+from tests.utils import replace_in_code
 
 environ_before = os.environ.copy()
 
@@ -13,7 +14,15 @@ environ_before = os.environ.copy()
 class TestMisc:
     @pytest.fixture(autouse=True)
     def setup(
-        self, mock_exit, mock_threading, mock_shell, sandbox, version, mocker, capsys
+        self,
+        mock_exit,
+        mock_threading,
+        mock_shell,
+        sandbox,
+        init,
+        version,
+        mocker,
+        capsys,
     ):
         mocker.patch("envo.scripts.Envo._start_files_watchdog")
         os.environ = environ_before.copy()
@@ -21,7 +30,7 @@ class TestMisc:
         out, err = capsys.readouterr()
         assert err == ""
 
-    def test_init(self, init):
+    def test_init(self):
         assert Path("env_comm.py").exists()
         assert Path("env_test.py").exists()
 
@@ -43,7 +52,7 @@ class TestMisc:
 
         flake8()
 
-    def test_importing(self, init, shell, env):
+    def test_importing(self, shell, env):
         assert str(env) == "sandbox"
         assert env.meta.stage == "test"
         assert env.meta.emoji == envo.scripts.stage_emoji_mapping[env.meta.stage]
@@ -53,32 +62,32 @@ class TestMisc:
         assert caplog.messages[0] == "1.2.3"
         assert len(caplog.messages) == 1
 
-    def test_shell(self, init):
+    def test_shell(self):
         command("test")
 
-    def test_stage(self, init, env):
+    def test_stage(self, env):
         env.activate()
         assert os.environ["SANDBOX_STAGE"] == "test"
         assert os.environ["ENVO_STAGE"] == "test"
 
-    def test_get_name(self, init, env):
+    def test_get_name(self, env):
         assert env.get_name() == "sandbox"
 
-    def test_get_namespace(self, init, env):
+    def test_get_namespace(self, env):
         assert env.get_namespace() == "SANDBOX"
 
-    def test_shell_module_with_the_same_name(self, init):
+    def test_shell_module_with_the_same_name(self):
         Path("sandbox").mkdir()
         Path("sandbox/__init__.py").touch()
         command("test")
 
-    def test_dry_run(self, init, capsys, caplog):
+    def test_dry_run(self, capsys, caplog):
         command("test", "--dry-run")
         captured = capsys.readouterr()
         assert captured.out != ""
         assert len(caplog.messages) == 0
 
-    def test_save(self, init, caplog, capsys):
+    def test_save(self, caplog, capsys):
         command("test", "--save")
 
         assert len(caplog.messages) == 1
@@ -89,16 +98,16 @@ class TestMisc:
         assert captured.out == ""
         assert captured.err == ""
 
-    def test_activating(self, init, env):
+    def test_activating(self, env):
         env.activate()
         assert os.environ["SANDBOX_STAGE"] == "test"
 
-    def test_init_py_created(self, init, mocker):
+    def test_init_py_created(self, mocker):
         mocker.patch("envo.scripts.Path.unlink")
         command("test")
         assert Path("__init__.py").exists()
 
-    def test_existing_init_py_recovered(self, init):
+    def test_existing_init_py_recovered(self):
         init_file = Path("__init__.py")
         init_file.touch()
         init_file.write_text("import flask")
@@ -107,7 +116,7 @@ class TestMisc:
         assert init_file.read_text() == "import flask"
         assert not Path("__init__.py.tmp").exists()
 
-    def test_init_py_delete_if_not_exists(self, init):
+    def test_init_py_delete_if_not_exists(self):
         assert not Path("__init__.py").exists()
 
     def test_init_untouched_if_exists(self):
@@ -118,68 +127,117 @@ class TestMisc:
 
         assert file.read_text() == "a = 1"
 
-    def test_nested(self, nested_env):
-        nested_env.activate()
-        assert os.environ["TE_STAGE"] == "test"
-        assert os.environ["TE_PYTHON_VERSION"] == "3.8.2"
+    def test_nested(self):
+        from tests.unit.utils import env
 
-    def test_verify_unset_variable(self, unset_env):
-        with pytest.raises(envo.BaseEnv.EnvException) as exc:
-            unset_env.activate()
+        replace_in_code(
+            "    # Declare your variables here",
+            """
+            class Python(envo.BaseEnv):
+                version: str
 
-        assert str(exc.value) == (
-            "Detected errors!\n"
-            'Variable "undef_env.python" is unset!\n'
-            'Variable "undef_env.child_env.child_var" is unset!'
+            python: Python
+            """,
+            indent=4,
+        )
+        replace_in_code(
+            "# Define your variables here",
+            'self.python = self.Python(version="3.8.2")',
+            file=Path("env_test.py"),
         )
 
-    def test_verify_variable_undeclared(self, undecl_env):
+        e = env()
+        e.activate()
+
+        assert os.environ["SANDBOX_STAGE"] == "test"
+        assert os.environ["SANDBOX_PYTHON_VERSION"] == "3.8.2"
+
+    def test_verify_unset_variable(self):
+        from tests.unit.utils import env
+
+        replace_in_code("# Declare your variables here", "test_var: int")
+
+        e = env()
+
         with pytest.raises(envo.BaseEnv.EnvException) as exc:
-            undecl_env.activate()
+            e.activate()
 
         assert str(exc.value) == (
-            "Detected errors!\n"
-            'Variable "undecl_env.some_var" is undeclared!\n'
-            'Variable "undecl_env.child_env.child_var" is undeclared!'
+            "Detected errors!\n" 'Variable "sandbox.test_var" is unset!'
         )
 
-    def test_verify_property_in_env(self, property_env):
-        property_env.activate()
+    def test_verify_variable_undeclared(self):
+        from tests.unit.utils import env
 
-        assert property_env.group.prop == "test_value_modified"
+        replace_in_code("# Define your variables here", "self.test_var = 12")
 
-    def test_raw(self, raw_env):
-        raw_env.activate()
-        assert os.environ["NOT_NESTED"] == "NOT_NESTED_TEST"
-        assert os.environ["NESTED"] == "NESTED_TEST"
+        e = env()
 
-    def test_get_current_stage(self, init, env_comm):
-        command("local", "--init")
-        command("stage", "--init")
-        command("local")
+        with pytest.raises(envo.BaseEnv.EnvException) as exc:
+            e.activate()
 
-        assert env_comm.get_current_stage().meta.stage == "local"
+        assert str(exc.value) == (
+            "Detected errors!\n" 'Variable "sandbox.test_var" is undeclared!'
+        )
+
+    def test_verify_property(self):
+        from tests.unit.utils import env
+
+        replace_in_code("# Declare your variables here", "value: str")
+        replace_in_code("# Define your variables here", "self.value = 'test_value'")
+        replace_in_code(
+            "    # Define your commands, handles and properties here",
+            """@property
+                            def prop(self) -> str:
+                                return self.value + "_modified"
+                        """,
+            indent=4,
+        )
+
+        e = env()
+
+        assert e.prop == "test_value_modified"
+
+    def test_raw(self):
+        from tests.unit.utils import env
+
+        replace_in_code("# Declare your variables here", "value: Raw[str]")
+        replace_in_code("# Define your variables here", "self.value = 'test_value'")
+
+        e = env()
+        e.activate()
+        assert os.environ["VALUE"] == "test_value"
 
     def test_venv_addon(self):
         from tests.unit.utils import shell, env
 
+        Path("env_comm.py").unlink()
+        Path("env_test.py").unlink()
+
         command("test", "--init=venv")
 
         shell()
-        env = env()
+        e = env()
 
-        assert hasattr(env, "venv")
-        env.activate()
+        assert hasattr(e, "venv")
+        e.activate()
         assert "SANDBOX_VENV_BIN" in os.environ
         assert f"{Path('.').absolute()}/.venv/bin" in os.environ["PATH"]
 
         flake8()
         mypy()
 
+    def test_get_current_stage(self, env_comm):
+        command("local", "--init")
+        command("stage", "--init")
+        command("local")
+
+        assert env_comm.get_current_stage().meta.stage == "local"
+
 
 class TestParentChild:
     @pytest.fixture(autouse=True)
-    def setup(self, mock_exit, mock_shell, sandbox, version, mocker, capsys):
+    def setup(self, mock_exit, mock_shell, sandbox, init, version, mocker, capsys):
         mocker.patch("envo.scripts.Envo._start_files_watchdog")
         os.environ = environ_before.copy()
         yield

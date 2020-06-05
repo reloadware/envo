@@ -3,6 +3,7 @@ from pathlib import Path
 
 from pexpect import run
 from pytest import fixture
+
 from tests.e2e import utils
 
 test_root = Path(os.path.realpath(__file__)).parent.parent

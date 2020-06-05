@@ -1,6 +1,8 @@
 from pathlib import Path
 
 import envo
+from loguru import logger  # noqa: F401
+from envo import command, Raw, run  # noqa: F401
 
 
 class {{ class_name }}Comm(envo.Env):
@@ -24,6 +26,8 @@ class {{ class_name }}Comm(envo.Env):
         {%- endif %}
 
         # Define your variables here
+
+    # Define your commands, handles and properties here
 
 
 Env = {{ class_name }}Comm

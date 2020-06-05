@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from typing import List
 
@@ -13,17 +14,18 @@ __all__ = [
     "mypy",
 ]
 
-prompt = r"[\(.*\)]*[(\w|\s)]*".encode()
+prompt = r"[\(.*\)]*.*".encode()
 envo_prompt = r"🛠\(sandbox\)".encode("utf-8") + prompt
 
 
 def spawn(command: str) -> pexpect.spawn:
-    s = pexpect.spawn(command, echo=False, timeout=2)
+    s = pexpect.spawn(command, echo=False, timeout=4)
+    s.logfile = sys.stdout.buffer
     return s
 
 
 def shell() -> pexpect.spawn:
-    p = spawn("envo test")
+    p = spawn("envo test --shell=simple")
     p.expect(envo_prompt)
     return p
 

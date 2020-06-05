@@ -1,49 +1,15 @@
 import os
+import sys
 from importlib import import_module, reload
 from pathlib import Path
 from typing import Type
 
 from pytest import fixture
-from tests.unit.nested_env.env_test import NestedEnv
-from tests.unit.parent_env.child_env.env_test import ChildEnv
-from tests.unit.property_env.env_test import PropertyEnv
-from tests.unit.raw_env.env_test import RawEnv
-from tests.unit.undecl_env.env_test import UndeclEnv
-from tests.unit.unset_env.env_test import UnsetEnv
 
 from envo import Env
+from tests.unit.parent_env.child_env.env_test import ChildEnv
 
 test_root = Path(os.path.realpath(__file__)).parent
-
-
-@fixture
-def nested_env() -> NestedEnv:
-    env = NestedEnv()
-    return env
-
-
-@fixture
-def unset_env() -> UnsetEnv:
-    env = UnsetEnv()
-    return env
-
-
-@fixture
-def undecl_env() -> UndeclEnv:
-    env = UndeclEnv()
-    return env
-
-
-@fixture
-def raw_env() -> RawEnv:
-    env = RawEnv()
-    return env
-
-
-@fixture
-def property_env() -> PropertyEnv:
-    env = PropertyEnv()
-    return env
 
 
 @fixture
@@ -75,7 +41,10 @@ def env() -> Env:
 
 @fixture
 def env_comm() -> Type[Env]:
-    env = reload(import_module("sandbox.env_comm")).Env
+    env_dir = Path(".").absolute()
+    sys.path.insert(0, str(env_dir))
+    env = reload(import_module("env_comm")).Env
+    sys.path.pop(0)
     return env
 
 

@@ -1,10 +1,13 @@
 import inspect
 import os
+import re
+import sys
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
     Dict,
     Generic,
     List,
@@ -16,9 +19,11 @@ from typing import (
 
 from loguru import logger
 
-from envo.comm import import_module_from_file
+from envo.comm import import_module_from_file, setup_logger
 
-__all__ = ["BaseEnv", "Env", "Raw", "VenvEnv"]
+setup_logger()
+
+__all__ = ["BaseEnv", "Env", "Raw", "VenvEnv", "command"]
 
 
 T = TypeVar("T")
@@ -32,11 +37,75 @@ else:
         pass
 
 
+@dataclass
+class Command:
+    name: str
+    func: Callable
+    glob: bool
+    prop: bool
+    decl: str
+    start_in: str
+    env: Optional["Env"] = None
+
+    def __call__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> Any:
+        return self.func(self=self.env, *args, **kwargs)
+
+    def __repr__(self) -> str:
+        if not self.prop:
+            return super().__repr__()
+
+        assert self.env is not None
+        cwd = Path(".").absolute()
+        os.chdir(str(self.env.root / self.start_in))
+
+        ret = self.func(self=self.env)
+
+        os.chdir(str(cwd))
+        if ret:
+            return str(ret)
+        else:
+            return "\b"
+
+
+# Decorator
+class command:  # noqa: N801
+    def __init__(self, glob: bool = False, prop: bool = True, start_in: str = "."):
+        self.glob = glob
+        self.prop = prop
+        self.start_in = start_in
+
+    def __call__(self, func: Callable) -> Any:
+        search_result = re.search(r"def (.*):", inspect.getsource(func))
+        assert search_result is not None
+        decl = search_result.group(1)
+
+        decl = re.sub(r"self,\s?", "", decl)
+        cmd = Command(
+            name=func.__name__,
+            func=func,
+            glob=self.glob,
+            prop=self.prop,
+            decl=decl,
+            start_in=self.start_in,
+        )
+
+        func.__cmd__ = cmd  # type: ignore
+
+        return func
+
+
 class EnvMetaclass(type):
     def __new__(cls, name: str, bases: Tuple, attr: Dict[str, Any]) -> Any:
         cls = super().__new__(cls, name, bases, attr)
         cls = dataclass(cls, repr=False)  # type: ignore
         return cls
+
+
+@dataclass
+class Field:
+    name: str
+    type: Any
+    value: Any
 
 
 class BaseEnv(metaclass=EnvMetaclass):
@@ -65,24 +134,25 @@ class BaseEnv(metaclass=EnvMetaclass):
         :return: error messages
         """
         # look for undeclared variables
-        field_names = set([fie.name for fie in fields(self)])
+        field_names = set(self.fields.keys())
 
         var_names = set()
         f: str
         for f in dir(self):
-            attr: Any = getattr(self, f)
+            # skip properties
+            if hasattr(self.__class__, f) and inspect.isdatadescriptor(
+                getattr(self.__class__, f)
+            ):
+                continue
 
-            if hasattr(self.__class__, f):
-                class_attr: Any = getattr(self.__class__, f)
-            else:
-                class_attr = None
+            attr: Any = getattr(self, f)
 
             if (
                 inspect.ismethod(attr)
-                or (class_attr is not None and inspect.isdatadescriptor(class_attr))
                 or f.startswith("_")
                 or inspect.isclass(attr)
                 or f == "meta"
+                or isinstance(attr, Command)
             ):
                 continue
 
@@ -115,29 +185,44 @@ class BaseEnv(metaclass=EnvMetaclass):
 
     def activate(self, owner_namespace: str = "") -> None:
         self.validate()
+        os.environ.update(**self.get_envs(owner_namespace))
 
+    def get_name(self) -> str:
+        return self._name
+
+    @property
+    def fields(self) -> Dict[str, Field]:
+        ret = {}
         for f in fields(self):
-            var = getattr(self, f.name)
+            if hasattr(self, f.name):
+                attr = getattr(self, f.name)
+                if hasattr(f.type, "__origin__"):
+                    t = f.type.__origin__
+                else:
+                    t = type(attr)
+                ret[f.name] = Field(name=f.name, type=t, value=attr)
+            else:
+                ret[f.name] = Field(name=f.name, type="undefined", value="undefined")
 
+        return ret
+
+    def get_envs(self, owner_namespace: str = "") -> Dict[str, str]:
+        envs = {}
+        for f in self.fields.values():
             namespace = ""
-            var_name = ""
-            var_type: Any = None
-            if hasattr(f.type, "__origin__"):
-                var_type = f.type.__origin__
 
-            if var_type == Raw:
+            if f.type == Raw:
                 var_name = f.name.upper()
             else:
                 namespace = f"{owner_namespace}{self.get_namespace()}_"
                 var_name = namespace + f.name.replace("_", "").upper()
 
-            if isinstance(var, BaseEnv):
-                var.activate(owner_namespace=namespace)
+            if isinstance(f.value, BaseEnv):
+                envs.update(f.value.get_envs(owner_namespace=namespace))
             else:
-                os.environ[var_name] = str(var)
+                envs[var_name] = str(f.value)
 
-    def get_name(self) -> str:
-        return self._name
+        return envs
 
     def __str__(self) -> str:
         return self._name
@@ -147,13 +232,14 @@ class BaseEnv(metaclass=EnvMetaclass):
 
     def _repr(self, level: int = 0) -> str:
         ret = []
-        for f in fields(self):
-            attr = getattr(self, f.name)
-            intend = "    "
-            r = attr._repr(level + 1) if isinstance(attr, BaseEnv) else repr(attr)
-            ret.append(f"{intend * level}{f.name}: {type(attr).__name__} = {r}")
+        ret.append("# Variables")
 
-        return "\n" + "\n".join(ret)
+        for n, v in self.fields.items():
+            intend = "    "
+            r = v._repr(level + 1) if isinstance(v, BaseEnv) else repr(v)
+            ret.append(f"{intend * level}{n}: {type(v).__name__} = {r}")
+
+        return "\n".join(ret)
 
 
 class Env(BaseEnv):
@@ -168,6 +254,7 @@ class Env(BaseEnv):
     root: Path
     stage: str
     envo_stage: Raw[str]
+    pythonpath: Raw[str]
 
     def __init__(self) -> None:
         self.meta = self.Meta()
@@ -180,7 +267,15 @@ class Env(BaseEnv):
         self.stage = self.meta.stage
         self.envo_stage = self.stage
 
+        if "PYTHONPATH" not in os.environ:
+            self.pythonpath = ""
+        else:
+            self.pythonpath = os.environ["PYTHONPATH"]
+        self.pythonpath = str(self.root) + ":" + self.pythonpath
+
         self._parent: Optional["Env"] = None
+        self._commands: List[Command] = []
+        self._collect_commands()
 
         if self.meta.parent:
             self._init_parent()
@@ -188,14 +283,10 @@ class Env(BaseEnv):
     def as_string(self, add_export: bool = False) -> List[str]:
         lines: List[str] = []
 
-        for key, value in os.environ.items():
-            if key in self._environ_before and value == self._environ_before[key]:
-                continue
-
-            if "BASH_FUNC_" not in key:
-                line = "export " if add_export else ""
-                line += f'{key}="{value}"'
-                lines.append(line)
+        for key, value in self.get_envs().items():
+            line = "export " if add_export else ""
+            line += f'{key}="{value}"'
+            lines.append(line)
 
         return lines
 
@@ -203,9 +294,8 @@ class Env(BaseEnv):
         if self.meta.stage == "comm":
             raise RuntimeError('Cannot activate env with "comm" stage!')
 
-        super().activate(owner_namespace)
-
-        self._set_pythonpath()
+        self.validate()
+        os.environ.update(**self.get_envs())
 
     def print_envs(self) -> None:
         self.activate()
@@ -236,26 +326,56 @@ class Env(BaseEnv):
         env: "Env" = import_module_from_file(cls.Meta.root / f"env_{stage}.py").Env()  # type: ignore
         return env
 
+    def _collect_commands(self) -> None:
+        for f in dir(self):
+            if f.startswith("_"):
+                continue
+
+            if hasattr(self.__class__, f) and inspect.isdatadescriptor(
+                getattr(self.__class__, f)
+            ):
+                continue
+
+            attr = getattr(self, f)
+
+            if hasattr(attr, "__cmd__"):
+                cmd = attr.__cmd__
+                cmd.env = self
+                setattr(self, f, cmd)
+                self._commands.append(attr.__cmd__)
+
+    def get_commands(self) -> List[Command]:
+        return self._commands
+
     def get_parent(self) -> Optional["Env"]:
         return self._parent
 
     def _init_parent(self) -> None:
         assert self.meta.parent
+        # unload modules
+        for m in list(sys.modules.keys())[:]:
+            if m.startswith("env_"):
+                sys.modules.pop(m)
+
         env_dir = self.root.parents[len(self.meta.parent) - 2].absolute()
+        sys.path.insert(0, str(env_dir))
         self._parent = import_module_from_file(env_dir / f"env_{self.stage}.py").Env()
+        sys.path.pop(0)
         assert self._parent
         self._parent.activate()
 
-    def _set_pythonpath(self) -> None:
-        if "PYTHONPATH" not in os.environ:
-            os.environ["PYTHONPATH"] = ""
+    def __repr__(self) -> str:
+        ret = []
+        ret.append("\n# Commands")
+        for c in self._commands:
+            s = f"{c.decl}"
 
-        os.environ["PYTHONPATH"] = (
-            str(self.root.parent) + ":" + os.environ["PYTHONPATH"]
-        )
+            if c.glob:
+                s += " # Global"
 
-        if self._parent:
-            self._parent._set_pythonpath()
+            ret.append(s)
+
+        return super()._repr() + "\n".join(ret)
 
 
 class VenvEnv(BaseEnv):

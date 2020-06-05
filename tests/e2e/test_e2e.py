@@ -7,12 +7,12 @@ import pexpect
 import pytest
 from pexpect import run
 
-from tests.utils import change_file
+from tests.utils import change_file, replace_in_code
 
 
 class TestE2e:
     @pytest.fixture(autouse=True)
-    def setup(self, mock_exit, sandbox, prompt, init):
+    def setup(self, mock_exit, sandbox, init):
         pass
 
     def test_shell(self, shell, envo_prompt):
@@ -114,7 +114,7 @@ class TestE2e:
             r'Reloading.*Detected errors!.*Variable "sandbox\.test_var" is unset!',
             timeout=5,
         )
-        shell.expect("❌".encode("utf-8") + envo_prompt, timeout=2)
+        shell.expect("❌".encode("utf-8"), timeout=2)
 
         Path("env_comm.py").write_text(file_before)
         shell.expect(envo_prompt, timeout=2)
@@ -129,7 +129,7 @@ class TestE2e:
         shell.expect(envo_prompt)
 
         shell.sendcontrol("d")
-        shell.expect(pexpect.EOF, timeout=6)
+        shell.expect(pexpect.EOF, timeout=10)
 
     def test_autodiscovery(self, envo_prompt):
         from envo.comm.test_utils import shell
@@ -153,7 +153,7 @@ class TestE2e:
         new_content = Path("env_comm.py").read_text() + "\n"
         change_file(Path("env_comm.py"), 0.5, new_content)
 
-        [s.expect(envo_prompt, timeout=8) for s in shells]
+        [s.expect(envo_prompt, timeout=10) for s in shells]
 
     def test_env_persists_in_bash_scripts(self, shell):
         file = Path("script.sh")
@@ -163,10 +163,206 @@ class TestE2e:
         shell.sendline("bash script.sh")
         shell.expect(str(Path(".").absolute()))
 
+    def test_access_to_env_in_shell(self, shell):
+        shell.sendline("script.sh")
+
+
+class TestCommands:
+    @pytest.fixture(autouse=True)
+    def setup(self, mock_exit, sandbox, init):
+        pass
+
+    def test_command_no_prop_no_glob(self, envo_prompt):
+        from envo.comm.test_utils import shell
+
+        replace_in_code(
+            "    # Define your commands, handles and properties here",
+            """
+            @command(prop=False, glob=False)
+            def flake(self) -> None:
+                print("All good")
+            """,
+            indent=4,
+        )
+        s = shell()
+
+        s.sendline("env.flake")
+        s.expect(r"envo\.env\.Command object at")
+        s.expect(envo_prompt)
+
+        s.sendline("env.flake()")
+        s.expect("All good")
+        s.expect(envo_prompt)
+
+        s.sendline("flake")
+        s.expect("not found")
+        s.expect(envo_prompt)
+
+        s.sendline("flake()")
+        s.expect("NameError: name 'flake' is not defined")
+        s.expect(envo_prompt)
+
+    def test_command_prop_no_glob(self, envo_prompt):
+        from envo.comm.test_utils import shell
+
+        replace_in_code(
+            "    # Define your commands, handles and properties here",
+            """
+            @command(prop=True, glob=False)
+            def flake(self) -> None:
+                print("All good")
+            """,
+            indent=4,
+        )
+        s = shell()
+
+        s.sendline("env.flake")
+        s.expect("All good")
+        s.expect(envo_prompt)
+
+        s.sendline("env.flake()")
+        s.expect("All good")
+        s.expect(envo_prompt)
+
+        s.sendline("flake")
+        s.expect("not found")
+        s.expect(envo_prompt)
+
+        s.sendline("flake()")
+        s.expect("NameError: name 'flake' is not defined")
+        s.expect(envo_prompt)
+
+    def test_command_no_prop_glob(self, envo_prompt):
+        from envo.comm.test_utils import shell
+
+        replace_in_code(
+            "    # Define your commands, handles and properties here",
+            """
+            @command(prop=False, glob=True)
+            def flake(self) -> None:
+                print("All good")
+            """,
+            indent=4,
+        )
+        s = shell()
+
+        s.sendline("env.flake")
+        s.expect(r"envo\.env\.Command object at")
+        s.expect(envo_prompt)
+
+        s.sendline("env.flake()")
+        s.expect("All good")
+        s.expect(envo_prompt)
+
+        s.sendline("flake")
+        s.expect(r"envo\.env\.Command object at")
+        s.expect(envo_prompt)
+
+        s.sendline("flake()")
+        s.expect("All good")
+        s.expect(envo_prompt)
+
+    def test_command_prop_glob(self, envo_prompt):
+        from envo.comm.test_utils import shell
+
+        replace_in_code(
+            "    # Define your commands, handles and properties here",
+            """
+            @command(prop=True, glob=True)
+            def flake(self) -> None:
+                print("All good")
+            """,
+            indent=4,
+        )
+        s = shell()
+
+        s.sendline("env.flake")
+        s.expect("All good")
+        s.expect(envo_prompt)
+
+        s.sendline("env.flake()")
+        s.expect("All good")
+        s.expect(envo_prompt)
+
+        s.sendline("flake")
+        s.expect("All good")
+        s.expect(envo_prompt)
+
+        s.sendline("flake()")
+        s.expect("All good")
+        s.expect(envo_prompt)
+
+    def test_multiple_cmds(self, envo_prompt):
+        from envo.comm.test_utils import shell
+
+        replace_in_code(
+            "    # Define your commands, handles and properties here",
+            """
+            @command(glob=True)
+            def flake(self) -> None:
+                print("flake good")
+
+            @command(glob=True)
+            def mypy(self) -> None:
+                print("mypy good")
+            """,
+            indent=4,
+        )
+        s = shell()
+
+        s.sendline("flake")
+        s.expect("flake good")
+        s.expect(envo_prompt)
+
+        s.sendline("mypy")
+        s.expect("mypy good")
+        s.expect(envo_prompt)
+
+    def test_cmd_in_non_root_dir(self, envo_prompt):
+        from envo.comm.test_utils import shell
+
+        replace_in_code(
+            "    # Define your commands, handles and properties here",
+            """
+            @command(glob=True)
+            def flake(self) -> None:
+                print("flake good")
+            """,
+            indent=4,
+        )
+        s = shell()
+
+        child_dir = Path("child_dir")
+        child_dir.mkdir()
+
+        os.chdir(str(child_dir))
+
+        s.sendline("flake")
+        s.expect("flake good")
+        s.expect(envo_prompt)
+
+    def test_single_command(self):
+        from envo.comm.test_utils import spawn
+
+        s = spawn("envo test -c print('teest')")
+        s.expect("teest")
+        s.expect(pexpect.EOF)
+        s.close()
+        assert s.exitstatus == 0
+
+    def test_single_command_fail(self):
+        from envo.comm.test_utils import spawn
+
+        s = spawn("""envo test -c "import sys;print('some msg');sys.exit(2)" """)
+        s.expect("some msg")
+        s.expect(pexpect.EOF)
+        s.close()
+        assert s.exitstatus == 2
+
 
 class TestParentChild:
     @pytest.fixture(autouse=True)
-    def setup(self, mock_exit, sandbox, prompt, init):
+    def setup(self, mock_exit, sandbox, init):
         pass
 
     def test_init(self, envo_prompt, init_child_env):
@@ -174,7 +370,7 @@ class TestParentChild:
 
         os.chdir("child")
 
-        s = spawn("envo test")
+        s = spawn("envo test --shell=simple")
         nested_prompt = envo_prompt.replace(b"sandbox", b"sandbox.child")
 
         s.expect(nested_prompt)
@@ -184,7 +380,7 @@ class TestParentChild:
 
         os.chdir("child")
 
-        s = spawn("envo test")
+        s = spawn("envo test --shell=simple")
         s.expect(r"🛠\(sandbox.child\).*".encode("utf-8"))
 
     def test_hot_reload(self, envo_prompt, init_child_env):
@@ -192,7 +388,7 @@ class TestParentChild:
 
         os.chdir("child")
 
-        s = spawn("envo test")
+        s = spawn("envo test --shell=simple")
         nested_prompt = envo_prompt.replace(b"sandbox", b"sandbox.child")
         s.expect(nested_prompt)
 
@@ -219,7 +415,7 @@ class TestParentChild:
         os.chdir("child")
         Path("__init__.py").touch()
 
-        s = spawn("envo test")
+        s = spawn("envo test --shell=simple")
         nested_prompt = envo_prompt.replace(b"sandbox", b"sandbox.child")
         s.expect(nested_prompt)
 
@@ -239,6 +435,6 @@ class TestParentChild:
 
         os.chdir(root_dir / "sandbox/sandbox")
 
-        s = spawn("envo test")
+        s = spawn("envo test --shell=simple")
         s.sendline('"sandbox.sandbox.sandbox" in $PROMPT')
         s.expect("True", timeout=3)

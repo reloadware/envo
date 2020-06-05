@@ -24,8 +24,12 @@ def init() -> None:
 def env() -> Env:
     init_file = Path("__init__.py")
     init_file.touch()
-    reload(import_module("sandbox.env_comm"))
-    env = reload(import_module("sandbox.env_test")).Env()
+
+    env_dir = Path(".").absolute()
+    sys.path.insert(0, str(env_dir))
+    reload(import_module("env_comm"))
+    env = reload(import_module("env_test")).Env()
+    sys.path.pop(0)
     init_file.unlink()
     return env
 

@@ -64,7 +64,8 @@ jobs:
       - *bootstrap
       - run:
           name: Flake8
-          command: poetry run flake8
+          command: flake
+          shell: poetry run envo
       - *save_cache
 
   mypy:
@@ -76,35 +77,55 @@ jobs:
       - run:
           name: Mypy
           command: poetry run mypy .
+          shell: poetry run envo ci
       - *save_cache
 
-  test-3-8: &test-template
+  test-3-6:
     <<: *defaults
+    image: circleci/python:3.6
     steps:
       - checkout
       - *restore_cache
       - *bootstrap
       - run:
           name: Test
-          command: poetry run pytest tests
+          command: test
+          shell: poetry run envo ci
       - *save_cache
+
+  test-3-7:
+    <<: *defaults
+    image: circleci/python:3.7
+    steps:
+      - checkout
+      - *restore_cache
+      - *bootstrap
+      - run:
+          name: Test
+          command: test
+          shell: poetry run envo ci
+      - *save_cache
+
+  test-3-8:
+    <<: *defaults
+    image: circleci/python:3.8
+    steps:
+      - checkout
+      - *restore_cache
+      - *bootstrap
+      - run:
+          name: Test
+          command: test
+          shell: poetry run envo ci
       - store_artifacts:
-          path: test-results
+          path: workspace
           destination: artifacts
       - store_test_results:
-          path: test-results
+          path: workspace
       - persist_to_workspace:
           root: workspace
           paths:
-            - test-results
-
-  test-3-7:
-    <<: *test-template
-    image: circleci/python:3.7
-
-  test-3-6:
-    <<: *test-template
-    image: circleci/python:3.6
+            - cov.xml
 
   publish:
     <<: *defaults
@@ -138,5 +159,5 @@ jobs:
             -t "${CODECOV_TOKEN}" \
             -n "${CIRCLE_BUILD_NUM}" \
             -y ".codecov.yml" \
-            -f "./workspace/test-results/coverage.xml" \
+            -f "./workspace/cov.xml" \
             -Z || echo 'Codecov upload failed'
