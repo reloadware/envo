@@ -65,7 +65,7 @@ jobs:
       - run:
           name: Flake8
           command: flake
-          shell: poetry run envo
+          shell: poetry run envo ci
       - *save_cache
 
   mypy:
@@ -76,7 +76,7 @@ jobs:
       - *bootstrap
       - run:
           name: Mypy
-          command: poetry run mypy .
+          command: mypy
           shell: poetry run envo ci
       - *save_cache
 
@@ -160,4 +160,4 @@ jobs:
             -n "${CIRCLE_BUILD_NUM}" \
             -y ".codecov.yml" \
             -f "./workspace/cov.xml" \
-            -Z || echo 'Codecov upload failed'
+            -Z

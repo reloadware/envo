@@ -7,7 +7,7 @@ from envo import command, Raw, run  # noqa: F401
 
 class {{ class_name }}Comm(envo.Env):
     class Meta(envo.Env.Meta):
-        root = Path(__file__).parent
+        root = Path(__file__).parent.absolute()
         name = "{{ name }}"
         version = "0.1.0"
         parent = None

@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import pexpect
 from pexpect import run
 from pytest import fixture
 
@@ -28,3 +29,24 @@ def init_2_same_childs() -> None:
 
     sandbox2 = Path("sandbox/sandbox")
     utils.init_child_env(sandbox2)
+
+
+@fixture
+def shell() -> pexpect.spawn:
+    from tests.e2e.utils import shell
+
+    return shell()
+
+
+@fixture
+def envo_prompt() -> bytes:
+    from tests.e2e.utils import envo_prompt
+
+    return envo_prompt
+
+
+@fixture
+def prompt() -> bytes:
+    from tests.e2e.utils import prompt
+
+    return prompt

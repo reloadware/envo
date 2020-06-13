@@ -1,41 +1,48 @@
 import os
+import re
 from pathlib import Path
 
 import pytest
 
 import envo.scripts
-from envo.comm.test_utils import flake8, mypy
-from tests.unit.utils import command, test_root
-from tests.utils import replace_in_code
+from tests.unit import utils
 
 environ_before = os.environ.copy()
 
 
-class TestMisc:
+class TestBase:
     @pytest.fixture(autouse=True)
     def setup(
         self,
-        mock_exit,
+        mock_logger_error,
         mock_threading,
         mock_shell,
         sandbox,
         init,
         version,
-        mocker,
         capsys,
     ):
-        mocker.patch("envo.scripts.Envo._start_files_watchdog")
         os.environ = environ_before.copy()
-        yield
-        out, err = capsys.readouterr()
-        assert err == ""
+        # mocker.patch("envo.scripts.Envo._start_files_watchdog")
+        self.mock_logger_error = mock_logger_error
 
+        yield
+
+        # some errors might acually test if this is called
+        # for those test self.mock_logger_error should be set to None
+        if self.mock_logger_error:
+            assert not mock_logger_error.called
+
+        assert capsys.readouterr() == ("", "")
+
+
+class TestMisc(TestBase):
     def test_init(self):
         assert Path("env_comm.py").exists()
         assert Path("env_test.py").exists()
 
-        flake8()
-        mypy()
+        utils.flake8()
+        utils.mypy()
 
     @pytest.mark.parametrize(
         "dir_name", ["my-sandbox", "my sandbox", ".sandbox", ".san.d- b  ox"]
@@ -44,13 +51,13 @@ class TestMisc:
         env_dir = Path(dir_name)
         env_dir.mkdir()
         os.chdir(str(env_dir))
-        command("test", "--init")
+        utils.command("test --init")
 
         assert Path("env_comm.py").exists()
         assert Path("env_test.py").exists()
-        command("test")
+        utils.command("test")
 
-        flake8()
+        utils.flake8()
 
     def test_importing(self, shell, env):
         assert str(env) == "sandbox"
@@ -58,12 +65,12 @@ class TestMisc:
         assert env.meta.emoji == envo.scripts.stage_emoji_mapping[env.meta.stage]
 
     def test_version(self, caplog):
-        command("--version")
+        utils.command("--version")
         assert caplog.messages[0] == "1.2.3"
         assert len(caplog.messages) == 1
 
     def test_shell(self):
-        command("test")
+        utils.command("test")
 
     def test_stage(self, env):
         env.activate()
@@ -73,22 +80,19 @@ class TestMisc:
     def test_get_name(self, env):
         assert env.get_name() == "sandbox"
 
-    def test_get_namespace(self, env):
-        assert env.get_namespace() == "SANDBOX"
-
     def test_shell_module_with_the_same_name(self):
         Path("sandbox").mkdir()
         Path("sandbox/__init__.py").touch()
-        command("test")
+        utils.command("test")
 
     def test_dry_run(self, capsys, caplog):
-        command("test", "--dry-run")
+        utils.command("test --dry-run")
         captured = capsys.readouterr()
         assert captured.out != ""
         assert len(caplog.messages) == 0
 
     def test_save(self, caplog, capsys):
-        command("test", "--save")
+        utils.command("test --save")
 
         assert len(caplog.messages) == 1
         assert caplog.messages[0] == "Saved envs to .env_test 💾"
@@ -104,14 +108,14 @@ class TestMisc:
 
     def test_init_py_created(self, mocker):
         mocker.patch("envo.scripts.Path.unlink")
-        command("test")
+        utils.command("test")
         assert Path("__init__.py").exists()
 
     def test_existing_init_py_recovered(self):
         init_file = Path("__init__.py")
         init_file.touch()
         init_file.write_text("import flask")
-        command("test")
+        utils.command("test")
 
         assert init_file.read_text() == "import flask"
         assert not Path("__init__.py.tmp").exists()
@@ -123,41 +127,32 @@ class TestMisc:
         file = Path("__init__.py")
         file.touch()
         file.write_text("a = 1")
-        command("test", "--init")
 
         assert file.read_text() == "a = 1"
 
     def test_nested(self):
-        from tests.unit.utils import env
-
-        replace_in_code(
-            "    # Declare your variables here",
+        utils.add_declaration(
             """
             class Python(envo.BaseEnv):
                 version: str
 
             python: Python
-            """,
-            indent=4,
+            """
         )
-        replace_in_code(
-            "# Define your variables here",
-            'self.python = self.Python(version="3.8.2")',
-            file=Path("env_test.py"),
+        utils.add_definition(
+            'self.python = self.Python(version="3.8.2")', file=Path("env_test.py"),
         )
 
-        e = env()
+        e = utils.env()
         e.activate()
 
         assert os.environ["SANDBOX_STAGE"] == "test"
         assert os.environ["SANDBOX_PYTHON_VERSION"] == "3.8.2"
 
     def test_verify_unset_variable(self):
-        from tests.unit.utils import env
+        utils.add_declaration("test_var: int")
 
-        replace_in_code("# Declare your variables here", "test_var: int")
-
-        e = env()
+        e = utils.env()
 
         with pytest.raises(envo.BaseEnv.EnvException) as exc:
             e.activate()
@@ -167,11 +162,9 @@ class TestMisc:
         )
 
     def test_verify_variable_undeclared(self):
-        from tests.unit.utils import env
+        utils.add_definition("self.test_var = 12")
 
-        replace_in_code("# Define your variables here", "self.test_var = 12")
-
-        e = env()
+        e = utils.env()
 
         with pytest.raises(envo.BaseEnv.EnvException) as exc:
             e.activate()
@@ -181,102 +174,204 @@ class TestMisc:
         )
 
     def test_verify_property(self):
-        from tests.unit.utils import env
-
-        replace_in_code("# Declare your variables here", "value: str")
-        replace_in_code("# Define your variables here", "self.value = 'test_value'")
-        replace_in_code(
-            "    # Define your commands, handles and properties here",
-            """@property
-                            def prop(self) -> str:
-                                return self.value + "_modified"
-                        """,
-            indent=4,
+        utils.add_declaration("value: str")
+        utils.add_definition("self.value = 'test_value'")
+        utils.add_command(
+            """
+            @property
+            def prop(self) -> str:
+                return self.value + "_modified"
+            """
         )
 
-        e = env()
+        e = utils.env()
 
         assert e.prop == "test_value_modified"
 
     def test_raw(self):
-        from tests.unit.utils import env
+        utils.add_declaration(
+            """
+            class Python(envo.BaseEnv):
+                version: Raw[str]
 
-        replace_in_code("# Declare your variables here", "value: Raw[str]")
-        replace_in_code("# Define your variables here", "self.value = 'test_value'")
+            python: Python
+            """
+        )
+        utils.add_definition(
+            'self.python = self.Python(version="3.8.2")', file=Path("env_test.py"),
+        )
 
-        e = env()
+        utils.add_declaration("version: Raw[str]")
+
+        utils.add_definition(
+            """
+            self.python = self.Python(version="3.8.2")
+            self.version = self.python.version + ".1"
+            """,
+            file=Path("env_test.py"),
+        )
+
+        e = utils.env()
+        e.activate()
+        assert os.environ["VERSION"] == "3.8.2.1"
+
+    def test_nested_raw(self):
+        utils.add_declaration("value: Raw[str]")
+        utils.add_definition("self.value = 'test_value'")
+
+        e = utils.env()
         e.activate()
         assert os.environ["VALUE"] == "test_value"
 
     def test_venv_addon(self):
-        from tests.unit.utils import shell, env
-
         Path("env_comm.py").unlink()
         Path("env_test.py").unlink()
 
-        command("test", "--init=venv")
+        utils.command("test --init=venv")
 
-        shell()
-        e = env()
+        e = utils.env()
 
         assert hasattr(e, "venv")
         e.activate()
         assert "SANDBOX_VENV_BIN" in os.environ
         assert f"{Path('.').absolute()}/.venv/bin" in os.environ["PATH"]
 
-        flake8()
-        mypy()
+        utils.flake8()
+        utils.mypy()
 
     def test_get_current_stage(self, env_comm):
-        command("local", "--init")
-        command("stage", "--init")
-        command("local")
+        utils.command("local --init")
+        utils.command("stage --init")
+        utils.command("local")
 
-        assert env_comm.get_current_stage().meta.stage == "local"
+        assert env_comm.get_current_env().meta.stage == "local"
+
+    def test_cant_find_env(self):
+        utils.command("prod")
+
+        assert re.match(
+            r".*Couldn.*find.*env", str(self.mock_logger_error.call_args_list[0].args)
+        )
+
+        self.mock_logger_error = None
 
 
-class TestParentChild:
-    @pytest.fixture(autouse=True)
-    def setup(self, mock_exit, mock_shell, sandbox, init, version, mocker, capsys):
-        mocker.patch("envo.scripts.Envo._start_files_watchdog")
-        os.environ = environ_before.copy()
-        yield
-        out, err = capsys.readouterr()
-        assert err == ""
+class TestCommands(TestBase):
+    def test_repr(self):
+        utils.init()
+        utils.flake_cmd(prop=False, glob=False)
+        utils.mypy_cmd(prop=False, glob=False)
+        e = utils.env()
+        assert re.match(
+            (
+                r"# Variables\n"
+                r"root: Field = PosixPath\('.*'\)\n"
+                r"stage: Field = 'test'\n"
+                r"envo_stage: Field = 'test'\n"
+                r"pythonpath: Field = .*\n"
+                r"# Commands\n"
+                r'flake\(test_arg: str = ""\) -> None  # property=False, global=False\n'
+                r'mypy\(test_arg: str = ""\) -> None  # property=False, global=False'
+            ),
+            repr(e),
+        )
 
-    def test_parents_basic_functionality(self, child_env):
-        os.chdir(test_root)
-        parent_dir = Path(".").absolute() / "parent_env"
-        child_dir = Path(".").absolute() / "parent_env/child_env"
+        utils.init()
+        utils.flake_cmd(prop=True, glob=False)
+        utils.mypy_cmd(prop=True, glob=False)
+        e = utils.env()
+        assert re.match(
+            (
+                r"# Variables\n"
+                r"root: Field = PosixPath\('.*'\)\n"
+                r"stage: Field = 'test'\n"
+                r"envo_stage: Field = 'test'\n"
+                r"pythonpath: Field = .*\n"
+                r"# Commands\n"
+                r'flake\(test_arg: str = ""\) -> None  # property=True, global=False\n'
+                r'mypy\(test_arg: str = ""\) -> None  # property=True, global=False'
+            ),
+            repr(e),
+        )
 
-        os.chdir(str(child_dir))
-        command("test")
+        utils.init()
+        utils.mypy_cmd(prop=True, glob=False)
+
+
+class TestParentChild(TestBase):
+    def test_parents_basic_functionality(self, init_child_env):
+        sandbox_dir = Path(".").absolute()
+        child_dir = sandbox_dir / "child"
+
+        utils.replace_in_code('name = "sandbox"', 'name = "pa"')
+        utils.add_declaration("test_parent_var: str")
+        utils.add_definition('self.test_parent_var = "test_parent_value"')
+
+        utils.replace_in_code(
+            'name = "child"', 'name = "ch"', file=child_dir / "env_comm.py"
+        )
+        utils.add_declaration(
+            "test_var: str", file=child_dir / "env_comm.py",
+        )
+        utils.add_definition(
+            'self.test_var = "test_value"', file=child_dir / "env_comm.py",
+        )
+
+        child_env = utils.env(child_dir)
+
         assert child_env.get_parent() is not None
-        assert child_env.test_var == "test_var_value"
-        assert child_env.get_parent().test_parent_var == "test_value"
+        assert child_env.test_var == "test_value"
+        assert child_env.get_parent().test_parent_var == "test_parent_value"
         assert child_env.get_parent().get_name() == "pa"
 
-        assert os.environ["PA_TESTPARENTVAR"] == "test_value"
-        assert os.environ["CH_TESTVAR"] == "test_var_value"
+        child_env.activate()
+        assert os.environ["PA_TESTPARENTVAR"] == "test_parent_value"
+        assert os.environ["CH_TESTVAR"] == "test_value"
 
-        assert (child_dir / Path("__init__.py")).exists()
-        assert not (child_dir / Path("__init__.py.tmp")).exists()
+    def test_get_full_name(self, init_child_env):
+        sandbox_dir = Path(".").absolute()
+        child_dir = sandbox_dir / "child"
 
-        assert (parent_dir / Path("__init__.py")).exists()
-        assert not (parent_dir / Path("__init__.py.tmp")).exists()
+        utils.replace_in_code('name = "sandbox"', 'name = "pa"')
+        utils.replace_in_code(
+            'name = "child"', 'name = "ch"', file=child_dir / "env_comm.py"
+        )
 
-        flake8()
-        os.chdir(str(parent_dir))
+        child_env = utils.env(child_dir)
 
-    def test_get_full_name(self, child_env):
         assert child_env.get_full_name() == "pa.ch"
 
-    def test_parents_variables_passed_through(self, child_env):
-        os.chdir(test_root)
-        child_dir = Path(".").absolute() / "parent_env/child_env"
-        os.chdir(str(child_dir))
+    def test_parents_variables_passed_through(self, init_child_env):
+        sandbox_dir = Path(".").absolute()
+        child_dir = sandbox_dir / "child"
 
-        command("test")
+        utils.replace_in_code('name = "sandbox"', 'name = "pa"')
+        utils.add_declaration("path: Raw[str]")
+        utils.add_definition(
+            """
+            import os
+            self.path = os.environ["PATH"]
+            self.path = "/parent_bin_dir:" + self.path
+            """
+        )
+
+        utils.replace_in_code(
+            'name = "child"', 'name = "ch"', file=child_dir / "env_comm.py"
+        )
+        utils.add_declaration(
+            "path: Raw[str]", file=child_dir / "env_comm.py",
+        )
+        utils.add_definition(
+            """
+            import os
+            self.path = os.environ["PATH"]
+            self.path = "/child_bin_dir:" + self.path
+            """,
+            file=child_dir / "env_comm.py",
+        )
+
+        child_env = utils.env(child_dir)
+        child_env.activate()
 
         assert "child_bin_dir" in os.environ["PATH"]
         assert "parent_bin_dir" in os.environ["PATH"]

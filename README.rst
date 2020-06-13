@@ -106,4 +106,20 @@ Example usage:
 
 
 TODO:
-add bootstrap feature
+Major:
+* Add command hooks
+* Add file hooks
+* Add bootstrap (versioning etc)
+* Fix git log bug
+* Add context
+
+Minor:
+* Shell should highlight envo commands on green
+* Unnecessary prompt rendered again aftet Ctr-d
+* work on public/private fields and methods
+* add examples
+
+Bugs:
+
+Improvements:
+* type checking ?

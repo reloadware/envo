@@ -348,7 +348,7 @@ version = "0.10.0"
 flake8-polyfill = ">=1.0.2,<2"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "Pexpect allows easy control of interactive console applications."
 name = "pexpect"
 optional = false
@@ -425,7 +425,7 @@ version = "3.0.5"
 wcwidth = "*"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "Run a subprocess in a pseudo terminal"
 name = "ptyprocess"
 optional = false
@@ -663,7 +663,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["jaraco.itertools", "func-timeout"]
 
 [metadata]
-content-hash = "13640ea72da23a56e949bb1f4929d35cd7382875515b0f12f95d20bd8a117dbf"
+content-hash = "e10e48cd4c85a1a65c73a59b603e74e370ca8d3895b32f3ff1cf9b18d540580f"
 python-versions = ">=3.6.1, <4.0"
 
 [metadata.files]

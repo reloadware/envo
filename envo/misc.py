@@ -10,6 +10,7 @@ __all__ = [
     "setup_logger",
     "render_py_file",
     "render_file",
+    "import_from_file",
 ]
 
 
@@ -87,7 +88,7 @@ def render_py_file(template_path: Path, output: Path, context: Dict[str, Any]) -
         pass
 
 
-def import_module_from_file(path: Path) -> Any:
+def import_from_file(path: Path) -> Any:
     if not path.is_absolute():
         frame = inspect.stack()[1]
         caller_path_dir = Path(frame[1]).parent

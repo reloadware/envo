@@ -26,6 +26,11 @@ class EnvoEnvComm(envo.Env):
         run("flake8")
 
     @command(glob=True)
+    def autoflake(self) -> None:
+        logger.info("Running autoflake")
+        run("autoflake --remove-all-unused-imports -i .")
+
+    @command(glob=True)
     def mypy(self) -> None:
         logger.info("Running mypy")
         run("mypy envo")

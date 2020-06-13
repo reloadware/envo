@@ -1,22 +1,36 @@
 import os
 import shutil
-import time
+import sys
 from pathlib import Path
-from threading import Thread
 
+import pexpect
 from pexpect import run
+
+from tests.utils import add_command  # noqa F401
+from tests.utils import add_declaration  # noqa F401
+from tests.utils import add_definition  # noqa F401
+from tests.utils import change_file  # noqa F401
+from tests.utils import flake_cmd  # noqa F401
+from tests.utils import mypy_cmd  # noqa F401
+from tests.utils import replace_in_code  # noqa F401
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
 
+prompt = r"[\(.*\)]*.*".encode()
+envo_prompt = r"🛠\(sandbox\)".encode("utf-8") + prompt
 
-def change_file(file: Path, delay_s: float, new_content: str) -> None:
-    def fun(file: Path, delay_s: float, new_content: str) -> None:
-        time.sleep(delay_s)
-        file.write_text(new_content)
 
-    thread = Thread(target=fun, args=(file, delay_s, new_content))
-    thread.start()
+def spawn(command: str) -> pexpect.spawn:
+    s = pexpect.spawn(command, echo=False, timeout=4)
+    s.logfile = sys.stdout.buffer
+    return s
+
+
+def shell() -> pexpect.spawn:
+    p = spawn("envo test --shell=simple")
+    p.expect(envo_prompt)
+    return p
 
 
 def init_child_env(child_dir: Path) -> None:

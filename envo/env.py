@@ -19,7 +19,7 @@ from typing import (
 
 from loguru import logger
 
-from envo.comm import import_module_from_file, setup_logger
+from envo.misc import import_from_file, setup_logger
 
 setup_logger()
 
@@ -45,7 +45,7 @@ class Command:
     prop: bool
     decl: str
     start_in: str
-    env: Optional["Env"] = None
+    env: "Env"
 
     def __call__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> Any:
         return self.func(self=self.env, *args, **kwargs)
@@ -66,30 +66,41 @@ class Command:
         else:
             return "\b"
 
+    def __str__(self) -> str:
+        return f"{self.decl}  # property={str(self.prop)}, global={str(self.glob)}"
 
-# Decorator
+
 class command:  # noqa: N801
+    """
+    @command decorator class.
+    """
+
     def __init__(self, glob: bool = False, prop: bool = True, start_in: str = "."):
         self.glob = glob
         self.prop = prop
         self.start_in = start_in
 
     def __call__(self, func: Callable) -> Any:
-        search_result = re.search(r"def (.*):", inspect.getsource(func))
-        assert search_result is not None
-        decl = search_result.group(1)
+        """
+        Add kwargs to function object.
+        Those kwargs will be later consumed by Env class to create Command objects.
 
-        decl = re.sub(r"self,\s?", "", decl)
-        cmd = Command(
-            name=func.__name__,
-            func=func,
-            glob=self.glob,
-            prop=self.prop,
-            decl=decl,
-            start_in=self.start_in,
-        )
+        :param func:
+        :return:
+        """
+        search = re.search(r"def ((.|\s)*?):\n", inspect.getsource(func))
+        assert search is not None
+        decl = search.group(1)
+        decl = re.sub(r"self,?\s?", "", decl)
 
-        func.__cmd__ = cmd  # type: ignore
+        func.__cmd__ = {  # type: ignore
+            "name": func.__name__,
+            "func": func,
+            "glob": self.glob,
+            "prop": self.prop,
+            "decl": decl,
+            "start_in": self.start_in,
+        }
 
         return func
 
@@ -112,24 +123,34 @@ class BaseEnv(metaclass=EnvMetaclass):
     class EnvException(Exception):
         pass
 
-    def __init__(self, name: Optional[str] = None) -> None:
-        if name:
-            self._name = name
+    def __init__(self, _name: Optional[str] = None) -> None:
+        """
+        :param _name: with underscore so it doesn't conflict with possible field with name "name"
+        """
+        if _name:
+            self._name = _name
         else:
             self._name = str(self.__class__.__name__)
 
-    # Repeating this code to populate _name without calling super().__init__() in subclasses
     def __post_init__(self) -> None:
+        """
+        Repeating this code to populate _name when super().__init__() is not called in subclasses
+        """
         if not hasattr(self, "_name"):
             self._name = str(self.__class__.__name__)
 
     def validate(self) -> None:
+        """
+        Validate env
+        """
         errors = self.get_errors(self.get_name())
         if errors:
             raise self.EnvException("Detected errors!\n" + "\n".join(errors))
 
     def get_errors(self, parent_name: str = "") -> List[str]:
         """
+        Return list of detected errors (unset, undeclared)
+
         :param parent_name:
         :return: error messages
         """
@@ -180,18 +201,26 @@ class BaseEnv(metaclass=EnvMetaclass):
 
         return error_msgs
 
-    def get_namespace(self) -> str:
-        return self._name.replace("_", "").upper()
-
     def activate(self, owner_namespace: str = "") -> None:
+        """
+        Validate and activate environment (put env variables into os.environ)
+
+        :param owner_namespace:
+        """
         self.validate()
-        os.environ.update(**self.get_envs(owner_namespace))
+        os.environ.update(**self.get_env_vars(owner_namespace))
 
     def get_name(self) -> str:
+        """
+        Return env name
+        """
         return self._name
 
     @property
     def fields(self) -> Dict[str, Field]:
+        """
+        Return fields.
+        """
         ret = {}
         for f in fields(self):
             if hasattr(self, f.name):
@@ -206,20 +235,24 @@ class BaseEnv(metaclass=EnvMetaclass):
 
         return ret
 
-    def get_envs(self, owner_namespace: str = "") -> Dict[str, str]:
+    def get_env_vars(self, owner_name: str = "") -> Dict[str, str]:
+        """
+        Return environmental variables in following format:
+        {NAMESPACE_ENVNAME}
+
+        :param owner_name:
+        """
         envs = {}
         for f in self.fields.values():
-            namespace = ""
-
-            if f.type == Raw:
-                var_name = f.name.upper()
-            else:
-                namespace = f"{owner_namespace}{self.get_namespace()}_"
-                var_name = namespace + f.name.replace("_", "").upper()
-
+            namespace = f'{owner_name}{self._name.replace("_", "").upper()}_'
             if isinstance(f.value, BaseEnv):
-                envs.update(f.value.get_envs(owner_namespace=namespace))
+                envs.update(f.value.get_env_vars(owner_name=namespace))
             else:
+                if f.type == Raw:
+                    var_name = f.name.upper()
+                else:
+                    var_name = namespace + f.name.replace("_", "").upper()
+
                 envs[var_name] = str(f.value)
 
         return envs
@@ -236,14 +269,22 @@ class BaseEnv(metaclass=EnvMetaclass):
 
         for n, v in self.fields.items():
             intend = "    "
-            r = v._repr(level + 1) if isinstance(v, BaseEnv) else repr(v)
+            r = v._repr(level + 1) if isinstance(v, BaseEnv) else repr(v.value)
             ret.append(f"{intend * level}{n}: {type(v).__name__} = {r}")
 
         return "\n".join(ret)
 
 
 class Env(BaseEnv):
+    """
+    Defines environment.
+    """
+
     class Meta(BaseEnv):
+        """
+        Environment metadata.
+        """
+
         stage: str = field(default="comm", init=False)
         emoji: str = field(default="", init=False)
         name: str = field(init=False)
@@ -260,8 +301,6 @@ class Env(BaseEnv):
         self.meta = self.Meta()
         self.meta.validate()
         super().__init__(self.meta.name)
-
-        self._environ_before: Dict[str, Any] = os.environ.copy()  # type: ignore
 
         self.root = self.meta.root
         self.stage = self.meta.stage
@@ -280,53 +319,69 @@ class Env(BaseEnv):
         if self.meta.parent:
             self._init_parent()
 
-    def as_string(self, add_export: bool = False) -> List[str]:
-        lines: List[str] = []
-
-        for key, value in self.get_envs().items():
-            line = "export " if add_export else ""
-            line += f'{key}="{value}"'
-            lines.append(line)
-
-        return lines
-
     def activate(self, owner_namespace: str = "") -> None:
+        """
+        Validate env and send vars to os.environ
+
+        :param owner_namespace:
+        """
         if self.meta.stage == "comm":
             raise RuntimeError('Cannot activate env with "comm" stage!')
 
         self.validate()
-        os.environ.update(**self.get_envs())
-
-    def print_envs(self) -> None:
-        self.activate()
-        content = "".join([f"export {line}\n" for line in self.as_string()])
-        print(content)
+        os.environ.update(**self.get_env_vars())
 
     def dump_dot_env(self) -> None:
+        """
+        Dump .env file for the current environment.
+
+        File name follows env_{env_name} format.
+        """
         self.activate()
-        path = Path(f".env{'_' if self.meta.stage else ''}{self.meta.stage}")
-        content = "\n".join(self.as_string())
+        path = Path(f".env_{self.meta.stage}")
+        content = "\n".join(
+            [f'{key}="{value}"' for key, value in self.get_env_vars().items()]
+        )
         path.write_text(content)
         logger.info(f"Saved envs to {str(path)} 💾")
 
     def get_full_name(self) -> str:
+        """
+        Get full name.
+
+        :return: Return a full name in the following format {parent_name}.{env_name}
+        """
         if self._parent:
             return self._parent.get_full_name() + "." + self.get_name()
         else:
             return self.get_name()
 
     @classmethod
-    def get_current_stage(cls) -> "Env":
+    def get_current_env(cls) -> "Env":
+        """
+        Return current activated environment.
+
+        Useful in python scripts.
+        Import env_comm and run this function to retrieve current environment.
+        :return: Current environment object
+        """
         stage = os.environ["ENVO_STAGE"]
-        env: "Env" = cls.get_stage(stage)
+        env: "Env" = cls.get_env_by_stage(stage)
         return env
 
     @classmethod
-    def get_stage(cls, stage: str) -> "Env":
-        env: "Env" = import_module_from_file(cls.Meta.root / f"env_{stage}.py").Env()  # type: ignore
+    def get_env_by_stage(cls, stage: str) -> "Env":
+        """
+        Return env by stage
+        :param stage:
+        """
+        env: "Env" = import_from_file(cls.Meta.root / f"env_{stage}.py").Env()  # type: ignore
         return env
 
     def _collect_commands(self) -> None:
+        """
+        Go through fields and transform decorated functions to commands.
+        """
         for f in dir(self):
             if f.startswith("_"):
                 continue
@@ -339,10 +394,9 @@ class Env(BaseEnv):
             attr = getattr(self, f)
 
             if hasattr(attr, "__cmd__"):
-                cmd = attr.__cmd__
-                cmd.env = self
+                cmd = Command(**attr.__cmd__, env=self)  # type: ignore
                 setattr(self, f, cmd)
-                self._commands.append(attr.__cmd__)
+                self._commands.append(cmd)
 
     def get_commands(self) -> List[Command]:
         return self._commands
@@ -351,15 +405,18 @@ class Env(BaseEnv):
         return self._parent
 
     def _init_parent(self) -> None:
+        """
+        Initialize parent if exists.
+        """
         assert self.meta.parent
-        # unload modules
+        # unload modules just in case env with the same name has been already loaded
         for m in list(sys.modules.keys())[:]:
             if m.startswith("env_"):
                 sys.modules.pop(m)
 
         env_dir = self.root.parents[len(self.meta.parent) - 2].absolute()
         sys.path.insert(0, str(env_dir))
-        self._parent = import_module_from_file(env_dir / f"env_{self.stage}.py").Env()
+        self._parent = import_from_file(env_dir / f"env_{self.stage}.py").Env()
         sys.path.pop(0)
         assert self._parent
         self._parent.activate()
@@ -368,23 +425,22 @@ class Env(BaseEnv):
         ret = []
         ret.append("\n# Commands")
         for c in self._commands:
-            s = f"{c.decl}"
-
-            if c.glob:
-                s += " # Global"
-
-            ret.append(s)
+            ret.append(str(c))
 
         return super()._repr() + "\n".join(ret)
 
 
 class VenvEnv(BaseEnv):
+    """
+    Env that activates virtual environment.
+    """
+
     path: Raw[str]
     bin: Path
 
     def __init__(self, owner: Env) -> None:
         self._owner = owner
-        super().__init__(name="venv")
+        super().__init__(_name="venv")
 
         self.bin = self._owner.root / ".venv/bin"
         self.path = f"""{str(self.bin)}:{os.environ['PATH']}"""

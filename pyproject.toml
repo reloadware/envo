@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "envo"
-version = "0.7.2"
-description = "Smart Environment variables - Define environmental variables in python and activate hot reloaded shells for them."
+version = "0.7.3"
+description = "Smart Environments handling - Define command hooks, file hooks and env variables in python and activate hot reloaded shells."
 authors = ["Damian Krystkiewicz <damian.krystkiewicz@gmail.com>"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -19,6 +19,8 @@ classifiers = [
 license = "Apache 2.0"
 readme = "README.rst"
 
+include = ["envo/__version__.py"]
+
 [tool.poetry.urls]
 homepage = "https://gitlab.com/plasma-opensource/envo"
 
@@ -32,6 +34,7 @@ ilock = "^1"
 xonsh = "^0.9"
 prompt_toolkit = "^3"
 tqdm = "^4.46.1"
+pexpect = "^4.8.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.4.1"
@@ -40,7 +43,6 @@ pep8-naming = "^0.10.0"
 mypy = "^0.770"
 pygments = "^2.6.1"
 pytest-mock = "^3.1.0"
-pexpect = "^4.8.0"
 pre-commit = "^2.3.0"
 toml = "^0.10.0"
 loguru-caplog = "^0.1.3"

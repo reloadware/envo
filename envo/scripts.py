@@ -1,26 +1,19 @@
 #!/usr/bin/env python3
 import argparse
-import builtins
 import os
 import sys
-import time
-from copy import copy
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Thread
-from typing import Any, Dict, List
+from typing import Dict, List, Literal
 
 from ilock import ILock
 from inotify.adapters import Inotify  # type: ignore
 from jinja2 import Environment, Template
 from loguru import logger
-from xonsh.base_shell import BaseShell
-from xonsh.execer import Execer
-from xonsh.ptk_shell.shell import PromptToolkitShell
-from xonsh.readline_shell import ReadlineShell
 
-from envo import Env, comm
-from envo.comm import import_module_from_file
+from envo import Env, misc, shell
+from envo.misc import import_from_file
 
 __all__ = ["stage_emoji_mapping"]
 
@@ -37,105 +30,6 @@ stage_emoji_mapping: Dict[str, str] = {
 }
 
 
-class Shell(BaseShell):  # type: ignore
-    def __init__(self, execer: Execer) -> None:
-        super().__init__(execer=execer, ctx={})
-
-        self.environ = builtins.__xonsh__.env  # type: ignore
-        self.environ_before = copy(self.environ)
-        self.context: Dict[str, Any] = {}
-
-    def set_prompt_prefix(self, prefix: str) -> None:
-        from xonsh.prompt.base import DEFAULT_PROMPT
-
-        self.environ["PROMPT"] = prefix + str(DEFAULT_PROMPT)
-
-    def set_variable(self, name: str, value: Any) -> None:
-        self.context[name] = value
-
-        built_in_name = f"__envo_{name}__"
-        setattr(builtins, built_in_name, value)
-        self.default(f"{name} = {built_in_name}")
-
-    def start(self) -> None:
-        pass
-
-    def reset(self) -> None:
-        self.environ = copy(self.environ_before)
-        for n, v in self.context.items():
-            self.default(f"del {n}")
-
-        self.context = {}
-
-    @property
-    def formated_prompt(self) -> str:
-        from xonsh.ansi_colors import ansi_partial_color_format
-
-        return str(ansi_partial_color_format(self.prompt))
-
-    @classmethod
-    def create(cls) -> "Shell":
-        import signal
-        from xonsh.built_ins import load_builtins
-        from xonsh.built_ins import XonshSession
-        from xonsh.imphooks import install_import_hooks
-        from xonsh.xontribs import xontribs_load
-        import xonsh.history.main as xhm
-
-        ctx: Dict[str, Any] = {}
-
-        execer = Execer(xonsh_ctx=ctx)
-
-        builtins.__xonsh__ = XonshSession(ctx=ctx, execer=execer)  # type: ignore
-        load_builtins(ctx=ctx, execer=execer)
-        env = builtins.__xonsh__.env  # type: ignore
-        env.update({"XONSH_INTERACTIVE": True, "SHELL_TYPE": "prompt_toolkit"})
-        builtins.__xonsh__.history = xhm.construct_history(  # type: ignore
-            env=env.detype(), ts=[time.time(), None], locked=True
-        )
-
-        builtins.__xonsh__.history.gc.wait_for_shell = False  # type: ignore
-
-        install_import_hooks()
-        builtins.aliases.update({"ll": "ls -alF"})  # type: ignore
-        xontribs_load([""])
-
-        def func_sig_ttin_ttou(n: Any, f: Any) -> None:
-            pass
-
-        signal.signal(signal.SIGTTIN, func_sig_ttin_ttou)
-        signal.signal(signal.SIGTTOU, func_sig_ttin_ttou)
-
-        shell = cls(execer)
-        builtins.__xonsh__.shell = shell  # type: ignore
-        builtins.__xonsh__.shell.shell = shell  # type: ignore
-
-        return shell
-
-
-class FancyShell(Shell, PromptToolkitShell):  # type: ignore
-    @classmethod
-    def create(cls) -> "Shell":
-        from xonsh.main import _pprint_displayhook
-
-        shell = super().create()
-        setattr(sys, "displayhook", _pprint_displayhook)
-        return shell
-
-    def start(self) -> None:
-        self.cmdloop()
-        os._exit(0)
-
-
-class SimpleShell(Shell, ReadlineShell):  # type: ignore
-    def start(self) -> None:
-        self.cmdloop()
-        os._exit(0)
-
-
-shells = {"fancy": FancyShell, "simple": SimpleShell, "headless": Shell}
-
-
 class Envo:
     @dataclass
     class Sets:
@@ -143,12 +37,17 @@ class Envo:
         addons: List[str]
         init: bool
 
+    class EnvoError(Exception):
+        pass
+
+    environ_before = Dict[str, str]
     selected_addons: List[str]
     addons: List[str]
     files_watchdog_thread: Thread
-    shell: Shell
+    shell: shell.Shell
     inotify: Inotify
     env_dirs: List[Path]
+    quit: bool
 
     def __init__(self, sets: Sets) -> None:
         self.se = sets
@@ -157,21 +56,35 @@ class Envo:
 
         unknown_addons = [a for a in self.se.addons if a not in self.addons]
         if unknown_addons:
-            raise RuntimeError(f"Unknown addons {unknown_addons}")
+            raise self.EnvoError(f"Unknown addons {unknown_addons}")
 
         self.inotify = Inotify()
 
         self.env_dirs = self._get_env_dirs()
+        self.quit: bool = False
 
-    def spawn_shell(self, type: str) -> None:
-        self.shell = shells[type].create()
+        self.environ_before = os.environ.copy()  # type: ignore
+
+    def spawn_shell(self, type: Literal["fancy", "simple", "headless"]) -> None:
+        """
+
+        :param type: shell type
+        """
+        if not self.env_dirs:
+            raise self.EnvoError(
+                "Couldn't find any env!\n" 'Forgot to run envo --init" first?'
+            )
+
+        self.shell = shell.shells[type].create()
         self._start_files_watchdog()
-        self.send_env_to_shell()
+        self.restart()
         self.shell.start()
+        self._stop_files_watchdog()
 
-    def send_env_to_shell(self) -> None:
+    def restart(self) -> None:
         try:
-            env: Env = self.get_env()
+            os.environ = self.environ_before.copy()  # type: ignore
+            env: Env = self.create_env()
             env_prefix = f"{env.meta.emoji}({env.get_full_name()})"
             env.validate()
             env.activate()
@@ -183,7 +96,7 @@ class Envo:
             for c in glob_cmds:
                 self.shell.set_variable(c.name, c)
 
-            self.shell.environ.update(env.get_envs())
+            self.shell.environ.update(env.get_env_vars())
             self.shell.set_prompt_prefix(env_prefix)
 
         except Env.EnvException as exc:
@@ -197,12 +110,15 @@ class Envo:
 
     def _files_watchdog(self) -> None:
         for event in self.inotify.event_gen(yield_nones=False):
+            if self.quit:
+                return
+
             (_, type_names, path, filename) = event
             if "IN_CLOSE_WRITE" in type_names:
                 logger.info(f'\nDetected changes in "{str(path)}".')
                 logger.info("Reloading...")
-                self.send_env_to_shell()
-                print("\r" + self.shell.formated_prompt, end="")
+                self.restart()
+                print("\r" + self.shell.prompt, end="")
 
     def _start_files_watchdog(self) -> None:
         for d in self.env_dirs:
@@ -213,6 +129,12 @@ class Envo:
 
         self.files_watchdog_thread = Thread(target=self._files_watchdog)
         self.files_watchdog_thread.start()
+
+    def _stop_files_watchdog(self) -> None:
+        self.quit = True
+        env_comm = self.env_dirs[0] / "env_comm.py"
+        # Save the same content to trigger inotify event
+        env_comm.read_text()
 
     def _get_env_dirs(self) -> List[Path]:
         ret = []
@@ -229,6 +151,13 @@ class Envo:
         return ret
 
     def _create_init_files(self) -> None:
+        """
+        Create __init__.py files if not exist.
+
+        If exist save them to __init__.py.tmp to recover later.
+        This step is needed because there might be some content in existing that might crash envo.
+        """
+
         for d in self.env_dirs:
             init_file = d / "__init__.py"
 
@@ -243,6 +172,10 @@ class Envo:
             init_file.write_text("# __envo_delete__")
 
     def _delete_init_files(self) -> None:
+        """
+        Delete __init__.py files if crated otherwise recover.
+        :return:
+        """
         for d in self.env_dirs:
             init_file = d / Path("__init__.py")
             init_file_tmp = d / Path("__init__.py.tmp")
@@ -255,7 +188,7 @@ class Envo:
                 init_file.write_text(init_file_tmp.read_text())
                 init_file_tmp.unlink()
 
-    def get_env(self) -> Env:
+    def create_env(self) -> Env:
         env_dir = self.env_dirs[0]
         package = env_dir.name
         env_name = f"env_{self.se.stage}"
@@ -263,6 +196,7 @@ class Envo:
 
         module_name = f"{package}.{env_name}"
 
+        # We have to lock this part in case there's other shells concurrently executing this code
         with ILock("envo_lock"):
             self._create_init_files()
 
@@ -273,38 +207,44 @@ class Envo:
 
             try:
                 sys.path.insert(0, str(env_dir))
-                module = import_module_from_file(env_file)
+                module = import_from_file(env_file)
                 env: Env
                 env = module.Env()
                 sys.path.pop(0)
                 return env
             except ImportError as exc:
-                logger.error(f"""Couldn't import "{module_name}" ({exc}).""")
-                raise
+                raise self.EnvoError(f"""Couldn't import "{module_name}" ({exc}).""")
             finally:
                 self._delete_init_files()
 
     def _create_from_templ(
         self, templ_file: Path, output_file: Path, is_comm: bool = False
     ) -> None:
+        """
+        Create env file from template.
+
+        :param templ_file:
+        :param output_file:
+        :param is_comm:
+        :return:
+        """
         Environment(keep_trailing_newline=True)
         template = Template((templates_dir / templ_file).read_text())
         if output_file.exists():
-            logger.error(f"{str(output_file)} file already exists.")
-            os._exit(1)
+            raise self.EnvoError(f"{str(output_file)} file already exists.")
 
         output_file.touch()
         env_dir = Path(".").absolute()
-        package_name = comm.dir_name_to_pkg_name(env_dir.name)
-        class_name = comm.dir_name_to_class_name(package_name) + "Env"
+        package_name = misc.dir_name_to_pkg_name(env_dir.name)
+        class_name = misc.dir_name_to_class_name(package_name) + "Env"
 
-        if comm.is_valid_module_name(env_dir.name):
+        if misc.is_valid_module_name(env_dir.name):
             env_comm_import = f"from env_comm import {class_name}Comm"
         else:
             env_comm_import = (
                 "from pathlib import Path\n"
-                f"from envo.comm import import_module_from_file\n"
-                f'{class_name}Comm = import_module_from_file(Path("env_comm.py")).{class_name}Comm'
+                f"from envo.misc import import_from_file\n\n\n"
+                f'{class_name}Comm = import_from_file(Path("env_comm.py")).{class_name}Comm'
             )
 
         context = {
@@ -346,7 +286,7 @@ class Envo:
             return
 
         if args.save:
-            self.get_env().dump_dot_env()
+            self.create_env().dump_dot_env()
             return
 
         if args.command:
@@ -354,19 +294,24 @@ class Envo:
             try:
                 self.shell.default(args.command)
             except SystemExit as e:
-                os._exit(e.code)
+                sys.exit(e.code)
             else:
-                os._exit(0)
+                sys.exit(self.shell.history[-1].rtn)
 
         if args.dry_run:
-            self.get_env().print_envs()
+            content = "\n".join(
+                [
+                    f'export {k}="{v}"'
+                    for k, v in self.create_env().get_env_vars().items()
+                ]
+            )
+            print(content)
         else:
             self.spawn_shell(args.shell)
 
 
 def _main() -> None:
-    # os.environ["PYTHONPATH"] = ":".join(os.environ["PYTHONPATH"].split(":")[:-1])
-
+    sys.argv[0] = "/home/kwazar/Code/opensource/envo/.venv/bin/xonsh"
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "stage", type=str, default="local", help="Stage to activate.", nargs="?"
@@ -389,7 +334,10 @@ def _main() -> None:
     envo = Envo(
         Envo.Sets(stage=args.stage, addons=selected_addons, init=bool(args.init))
     )
-    envo.handle_command(args)
+    try:
+        envo.handle_command(args)
+    except Envo.EnvoError as e:
+        logger.error(e)
 
 
 if __name__ == "__main__":

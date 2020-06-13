@@ -3,19 +3,13 @@ import sys
 from importlib import import_module, reload
 from pathlib import Path
 from typing import Type
+from unittest.mock import MagicMock
 
 from pytest import fixture
 
 from envo import Env
-from tests.unit.parent_env.child_env.env_test import ChildEnv
 
 test_root = Path(os.path.realpath(__file__)).parent
-
-
-@fixture
-def child_env() -> ChildEnv:
-    env = ChildEnv()
-    return env
 
 
 @fixture
@@ -50,4 +44,16 @@ def env_comm() -> Type[Env]:
 
 @fixture
 def mock_shell(mocker) -> None:
-    mocker.patch("envo.scripts.Shell.create")
+    mocker.patch("envo.shell.Shell.create")
+
+
+@fixture
+def init_child_env() -> None:
+    from tests.unit.utils import init_child_env
+
+    init_child_env(Path(".").absolute() / "child")
+
+
+@fixture
+def mock_logger_error(mocker) -> MagicMock:
+    return mocker.patch("loguru.logger.error")
