@@ -4,11 +4,13 @@ import sys
 from pathlib import Path
 
 import pexpect
+import pytest
 from pexpect import run
 
 from tests.utils import add_command  # noqa F401
 from tests.utils import add_declaration  # noqa F401
 from tests.utils import add_definition  # noqa F401
+from tests.utils import add_hook  # noqa F401
 from tests.utils import change_file  # noqa F401
 from tests.utils import flake_cmd  # noqa F401
 from tests.utils import mypy_cmd  # noqa F401
@@ -21,15 +23,21 @@ prompt = r"[\(.*\)]*.*".encode()
 envo_prompt = r"🛠\(sandbox\)".encode("utf-8") + prompt
 
 
+class TestBase:
+    @pytest.fixture(autouse=True)
+    def setup(self, sandbox, init):
+        pass
+
+
 def spawn(command: str) -> pexpect.spawn:
     s = pexpect.spawn(command, echo=False, timeout=4)
     s.logfile = sys.stdout.buffer
     return s
 
 
-def shell() -> pexpect.spawn:
+def shell(prompt: str = envo_prompt) -> pexpect.spawn:
     p = spawn("envo test --shell=simple")
-    p.expect(envo_prompt)
+    p.expect(prompt)
     return p
 
 

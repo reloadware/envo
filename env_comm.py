@@ -1,9 +1,13 @@
 from pathlib import Path
 
+# from typing import List
+
 from loguru import logger
 
 import envo
-from envo import VenvEnv, command, run
+from envo import VenvEnv, command, precmd, run
+
+# onstdout, onstderr, postcmd
 
 
 class EnvoEnvComm(envo.Env):
@@ -19,6 +23,27 @@ class EnvoEnvComm(envo.Env):
         super().__init__()
 
         self.venv = VenvEnv(self)
+
+    # class Bootstrap:
+    #     watch_files = [
+    #         "poetry.lock"
+    #     ]
+    #
+    # class Precommit:
+    #     checks = [
+    #         CheckStaged(
+    #             name="Check flake",
+    #             files=r".*\.py",
+    #             exclude=r"env_.*\.py",
+    #             cmd=lambda f: f"flake {f}"
+    #         ),
+    #         CheckAll(
+    #             name="chec",
+    #             files=r".*\.py",
+    #             exclude=r"env_.*\.py",
+    #             cmd=lambda f: f"autoflake {f}"
+    #         ),
+    #     ]
 
     @command(glob=True)
     def flake(self) -> None:
@@ -37,7 +62,55 @@ class EnvoEnvComm(envo.Env):
 
     @command(glob=True)
     def black(self) -> None:
+        logger.info("Running black")
         run("black .")
+
+    # @command(glob=True)
+    # def bootstrap(self):
+    #     run(f"pip install poetry=={self.poetry_ver}")
+    #     run("poetry install")
+    #
+    # @precmd(cmd_regex=r"git commit.*")
+    # def pre_custom_ls(self) -> None:
+    #     checker = SanityChecker()
+    #     checker.add_checks([
+    #         CheckStaged(
+    #             name="Check flake",
+    #             files=r".*\.py",
+    #             exclude=r"env_.*\.py",
+    #             cmd=lambda f: f"flake {f}"
+    #         ),
+    #         CheckAll(
+    #             name="chec",
+    #             files=r".*\.py",
+    #             exclude=r"env_.*\.py",
+    #             cmd=lambda f: f"autoflake {f}"
+    #         ),
+    #     ])
+    #
+    #     checker.run()
+
+    @precmd(cmd_regex=r"git commit.*")
+    def pre_commit(self) -> None:
+        print("pre")
+
+    #
+    # @onstdout(cmd_regex=r"ls")
+    # def on_custom_ls_out(self, command: str, out: str) -> str:
+    #     out = "a" + out
+    #     return out
+    #
+    # @onstdout(cmd_regex=r"print\(.*\)")
+    # def on_print(self) -> str:
+    #     return "sweet"
+    #
+    # @onstderr(cmd_regex=r"print\(.*\)")
+    # def on_custom_ls_err(self, command: str, out: str) -> str:
+    #     return out
+    #
+    # @postcmd(cmd_regex=r"print\(.*\)")
+    # def post_custom_ls(self, command: str, stdout: List[str], stderr: List[str]) -> None:
+    #     print("post")
 
 
 Env = EnvoEnvComm

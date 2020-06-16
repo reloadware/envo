@@ -104,7 +104,7 @@ def run(
             rets.append(ret)
 
         if not ignore_errors:
-            if ret_code != 0:
+            if ret_code:
                 sys.exit(ret_code)
 
         if progress_bar:

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List
 
 import pexpect as pexpect
+import pytest
 
 from envo import Env
 from tests.utils import add_command  # noqa F401
@@ -20,11 +21,41 @@ envo_root = test_root.parent
 
 
 __all__ = [
+    "TestBase",
     "spawn",
     "shell",
     "flake8",
     "mypy",
 ]
+
+
+environ_before = os.environ.copy()
+
+
+class TestBase:
+    @pytest.fixture(autouse=True)
+    def setup(
+        self,
+        mock_logger_error,
+        mock_threading,
+        mock_shell,
+        sandbox,
+        init,
+        version,
+        capsys,
+    ):
+        os.environ = environ_before.copy()
+        # mocker.patch("envo.scripts.Envo._start_files_watchdog")
+        self.mock_logger_error = mock_logger_error
+
+        yield
+
+        # some errors might acually test if this is called
+        # for those test self.mock_logger_error should be set to None
+        if self.mock_logger_error:
+            assert not mock_logger_error.called
+
+        assert capsys.readouterr().err == ""
 
 
 def command(cmd: str):

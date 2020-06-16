@@ -107,7 +107,7 @@ Example usage:
 
 TODO:
 Major:
-* Add command hooks
+* Add on enter and exit hooks
 * Add file hooks
 * Add bootstrap (versioning etc)
 * Fix git log bug
@@ -118,6 +118,7 @@ Minor:
 * Unnecessary prompt rendered again aftet Ctr-d
 * work on public/private fields and methods
 * add examples
+* print hooks for repr
 
 Bugs:
 

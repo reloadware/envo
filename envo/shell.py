@@ -2,7 +2,7 @@ import builtins
 import sys
 import time
 from copy import copy
-from typing import Any, Dict
+from typing import Any, Dict, Callable, Optional, List, TextIO
 
 from xonsh.base_shell import BaseShell
 from xonsh.execer import Execer
@@ -22,6 +22,11 @@ class Shell(BaseShell):  # type: ignore
         self.history = builtins.__xonsh__.history  # type: ignore
         self.environ_before = copy(self.environ)
         self.context: Dict[str, Any] = {}
+
+        self.pre_cmd: Optional[Callable] = None
+        self.on_stdout: Optional[Callable] = None
+        self.on_stderr: Optional[Callable] = None
+        self.post_cmd: Optional[Callable] = None
 
     def set_prompt_prefix(self, prefix: str) -> None:
         from xonsh.prompt.base import DEFAULT_PROMPT
@@ -97,6 +102,56 @@ class Shell(BaseShell):  # type: ignore
         builtins.__xonsh__.shell.shell = shell  # type: ignore
 
         return shell
+
+    def default(self, line: str) -> Any:
+        class Stream:
+            device: TextIO
+
+            def __init__(self, command: str, on_write: Callable) -> None:
+                self.command = command
+                self.on_write = on_write
+                self.output: List[str] = []
+
+            def write(self, text: str) -> None:
+                if isinstance(text, bytes):
+                    text = text.decode("utf-8")
+
+                text = self.on_write(command=self.command, out=text)
+                self.output.append(text)
+                self.device.write(text)
+
+            def flush(self) -> None:
+                self.device.flush()
+
+        class StdOut(Stream):
+            device = sys.__stdout__
+
+        class StdErr(Stream):
+            device = sys.__stderr__
+
+        if self.pre_cmd:
+            line = self.pre_cmd(line)
+
+        if self.on_stdout:
+            out = StdOut(command=line, on_write=self.on_stdout)
+            sys.stdout = out  # type: ignore
+
+        if self.on_stderr:
+            err = StdErr(command=line, on_write=self.on_stderr)
+            sys.stderr = err  # type: ignore
+
+        ret = super().default(line)
+
+        if self.on_stdout:
+            sys.stdout = sys.__stdout__
+
+        if self.on_stderr:
+            sys.stderr = sys.__stderr__
+
+        if self.post_cmd:
+            self.post_cmd(command=line, stdout=out.output, stderr=err.output)
+
+        return ret
 
 
 class FancyShell(Shell, PromptToolkitShell):  # type: ignore

@@ -62,14 +62,18 @@ def add_command(code: str, file=Path("env_comm.py")) -> None:
     spaces = 4 * " "
     code = textwrap.dedent(code)
     replace_in_code(
-        f"{spaces}# Define your commands, handles and properties here",
+        f"{spaces}# Define your commands, hooks and properties here",
         f"""
         {code}
-        # Define your commands, handles and properties here
+        # Define your commands, hooks and properties here
         """,
         file=file,
         indent=4,
     )
+
+
+def add_hook(code: str, file=Path("env_comm.py")) -> None:
+    add_command(code, file)
 
 
 def mypy_cmd(prop: bool = False, glob: bool = False) -> None:
@@ -88,5 +92,6 @@ def flake_cmd(prop: bool = False, glob: bool = False) -> None:
         @command(prop={prop}, glob={glob})
         def flake(self, test_arg: str = "") -> None:
             print("Flake all good" + test_arg)
+            return "Flake was run"
         """
     )

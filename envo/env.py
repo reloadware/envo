@@ -23,7 +23,17 @@ from envo.misc import import_from_file, setup_logger
 
 setup_logger()
 
-__all__ = ["BaseEnv", "Env", "Raw", "VenvEnv", "command"]
+__all__ = [
+    "BaseEnv",
+    "Env",
+    "Raw",
+    "VenvEnv",
+    "command",
+    "precmd",
+    "postcmd",
+    "onstdout",
+    "onstderr",
+]
 
 
 T = TypeVar("T")
@@ -70,15 +80,11 @@ class Command:
         return f"{self.decl}  # property={str(self.prop)}, global={str(self.glob)}"
 
 
-class command:  # noqa: N801
-    """
-    @command decorator class.
-    """
+class FunctionModifier:
+    magic_attr_name: str
 
-    def __init__(self, glob: bool = False, prop: bool = True, start_in: str = "."):
-        self.glob = glob
-        self.prop = prop
-        self.start_in = start_in
+    def __init__(self, kwargs: Dict[str, Any]):
+        self.kwargs = kwargs
 
     def __call__(self, func: Callable) -> Any:
         """
@@ -93,16 +99,65 @@ class command:  # noqa: N801
         decl = search.group(1)
         decl = re.sub(r"self,?\s?", "", decl)
 
-        func.__cmd__ = {  # type: ignore
-            "name": func.__name__,
-            "func": func,
-            "glob": self.glob,
-            "prop": self.prop,
-            "decl": decl,
-            "start_in": self.start_in,
-        }
+        # set magic attribute for the function so env get find it and collet
+        setattr(
+            func,
+            f"__{self.magic_attr_name}__",
+            {"name": func.__name__, "func": func, "decl": decl, **self.kwargs},
+        )
 
         return func
+
+
+# decorators
+class command(FunctionModifier):  # noqa: N801
+    """
+    @command decorator class.
+    """
+
+    magic_attr_name = "command"
+
+    def __init__(self, glob: bool = False, prop: bool = True, start_in: str = "."):
+        kwargs = {"glob": glob, "prop": prop, "start_in": start_in}
+        super().__init__(kwargs)
+
+
+class hook(FunctionModifier):  # noqa: N801
+    def __init__(self, cmd_regex: str, priority: int = 1):
+        kwargs = {"cmd_regex": cmd_regex, "priority": priority}
+        super().__init__(kwargs)
+
+
+class precmd(hook):  # noqa: N801
+    magic_attr_name = "precmd"
+
+
+class onstdout(hook):  # noqa: N801
+    magic_attr_name = "onstdout"
+
+
+class onstderr(hook):  # noqa: N801
+    magic_attr_name = "onstderr"
+
+
+class postcmd(hook):  # noqa: N801
+    magic_attr_name = "postcmd"
+
+
+@dataclass
+class Hook:
+    name: str
+    cmd_regex: str
+    func: Callable
+    decl: str
+    env: "Env"
+    priority: int
+
+    def __call__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> Any:
+        return self.func(self=self.env, *args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.decl}"
 
 
 class EnvMetaclass(type):
@@ -313,8 +368,15 @@ class Env(BaseEnv):
         self.pythonpath = str(self.root) + ":" + self.pythonpath
 
         self._parent: Optional["Env"] = None
+
         self._commands: List[Command] = []
-        self._collect_commands()
+        self._hooks: Dict[str, List[Hook]] = {
+            "precmd": [],
+            "onstdout": [],
+            "onstderr": [],
+            "postcmd": [],
+        }
+        self._collect_commands_and_hooks()
 
         if self.meta.parent:
             self._init_parent()
@@ -378,7 +440,7 @@ class Env(BaseEnv):
         env: "Env" = import_from_file(cls.Meta.root / f"env_{stage}.py").Env()  # type: ignore
         return env
 
-    def _collect_commands(self) -> None:
+    def _collect_commands_and_hooks(self) -> None:
         """
         Go through fields and transform decorated functions to commands.
         """
@@ -393,13 +455,25 @@ class Env(BaseEnv):
 
             attr = getattr(self, f)
 
-            if hasattr(attr, "__cmd__"):
-                cmd = Command(**attr.__cmd__, env=self)  # type: ignore
+            if hasattr(attr, "__command__"):
+                cmd = Command(**attr.__command__, env=self)  # type: ignore
                 setattr(self, f, cmd)
                 self._commands.append(cmd)
 
+            for n in self._hooks.keys():
+                if hasattr(attr, f"__{n}__"):
+                    hook_kwargs = getattr(attr, f"__{n}__")
+                    hook = Hook(**hook_kwargs, env=self)  # type: ignore
+                    self._hooks[n].append(hook)
+
+        for n in self._hooks.keys():
+            self._hooks[n] = sorted(self._hooks[n], key=lambda h: h.priority)
+
     def get_commands(self) -> List[Command]:
         return self._commands
+
+    def get_hooks(self) -> Dict[str, List[Hook]]:
+        return self._hooks
 
     def get_parent(self) -> Optional["Env"]:
         return self._parent

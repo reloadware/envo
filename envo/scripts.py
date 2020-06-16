@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 import argparse
+import inspect
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Thread
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, Any
 
 from ilock import ILock
 from inotify.adapters import Inotify  # type: ignore
-from jinja2 import Environment, Template
+from jinja2 import Environment
 from loguru import logger
 
 from envo import Env, misc, shell
@@ -67,7 +69,6 @@ class Envo:
 
     def spawn_shell(self, type: Literal["fancy", "simple", "headless"]) -> None:
         """
-
         :param type: shell type
         """
         if not self.env_dirs:
@@ -84,19 +85,24 @@ class Envo:
     def restart(self) -> None:
         try:
             os.environ = self.environ_before.copy()  # type: ignore
-            env: Env = self.create_env()
-            env_prefix = f"{env.meta.emoji}({env.get_full_name()})"
-            env.validate()
-            env.activate()
+            self.env: Env = self.create_env()
+            env_prefix = f"{self.env.meta.emoji}({self.env.get_full_name()})"
+            self.env.validate()
+            self.env.activate()
             self.shell.reset()
-            self.shell.set_variable("env", env)
+            self.shell.set_variable("env", self.env)
             self.shell.set_variable("environ", self.shell.environ)
 
-            glob_cmds = [c for c in env.get_commands() if c.glob]
+            glob_cmds = [c for c in self.env.get_commands() if c.glob]
             for c in glob_cmds:
                 self.shell.set_variable(c.name, c)
 
-            self.shell.environ.update(env.get_env_vars())
+            self.shell.pre_cmd = self._on_precmd
+            self.shell.on_stdout = self._on_stdout
+            self.shell.on_stderr = self._on_stderr
+            self.shell.post_cmd = self._on_postcmd
+
+            self.shell.environ.update(self.env.get_env_vars())
             self.shell.set_prompt_prefix(env_prefix)
 
         except Env.EnvException as exc:
@@ -107,6 +113,59 @@ class Envo:
 
             print_exc()
             self.shell.set_prompt_prefix("❌")
+
+    def _on_precmd(self, command: str) -> str:
+        for h in self.env.get_hooks()["precmd"]:
+            if re.match(h.cmd_regex, command):
+                func_args = inspect.getfullargspec(h.func).args
+                kwargs = {}
+                if "command" in func_args:
+                    kwargs["command"] = command
+                ret = h.func(self=self.env, **kwargs)
+                if ret:
+                    command = ret
+        return command
+
+    def _on_stdout(self, command: str, out: str) -> str:
+        for h in self.env.get_hooks()["onstdout"]:
+            if re.match(h.cmd_regex, command):
+                func_args = inspect.getfullargspec(h.func).args
+                kwargs = {}
+                if "command" in func_args:
+                    kwargs["command"] = command
+                if "out" in func_args:
+                    kwargs["out"] = out
+                ret = h.func(self=self.env, **kwargs)
+                if ret:
+                    out = ret
+        return out
+
+    def _on_stderr(self, command: str, out: str) -> str:
+        for h in self.env.get_hooks()["onstderr"]:
+            if re.match(h.cmd_regex, command):
+                func_args = inspect.getfullargspec(h.func).args
+                kwargs = {}
+                if "command" in func_args:
+                    kwargs["command"] = command
+                if "out" in func_args:
+                    kwargs["out"] = out
+                ret = h.func(self=self.env, **kwargs)
+                if ret:
+                    out = ret
+        return out
+
+    def _on_postcmd(self, command: str, stdout: List[str], stderr: List[str]) -> None:
+        for h in self.env.get_hooks()["postcmd"]:
+            func_args = inspect.getfullargspec(h.func).args
+            if re.match(h.cmd_regex, command):
+                kwargs: Dict[str, Any] = {}
+                if "command" in func_args:
+                    kwargs["command"] = command
+                if "stdout" in func_args:
+                    kwargs["stdout"] = stdout
+                if "stderr" in func_args:
+                    kwargs["stderr"] = stderr
+                h.func(self=self.env, **kwargs)
 
     def _files_watchdog(self) -> None:
         for event in self.inotify.event_gen(yield_nones=False):
@@ -229,11 +288,9 @@ class Envo:
         :return:
         """
         Environment(keep_trailing_newline=True)
-        template = Template((templates_dir / templ_file).read_text())
         if output_file.exists():
             raise self.EnvoError(f"{str(output_file)} file already exists.")
 
-        output_file.touch()
         env_dir = Path(".").absolute()
         package_name = misc.dir_name_to_pkg_name(env_dir.name)
         class_name = misc.dir_name_to_class_name(package_name) + "Env"
@@ -260,7 +317,9 @@ class Envo:
         if not is_comm:
             context["stage"] = self.se.stage
 
-        output_file.write_text(template.render(**context))
+        misc.render_py_file(
+            templates_dir / templ_file, output=output_file, context=context
+        )
 
     def init_files(self) -> None:
         env_comm_file = Path("env_comm.py")
