@@ -5,7 +5,7 @@ from pathlib import Path
 from loguru import logger
 
 import envo
-from envo import VenvEnv, command, precmd, run
+from envo import VenvEnv, command, run
 
 # onstdout, onstderr, postcmd
 
@@ -45,25 +45,32 @@ class EnvoEnvComm(envo.Env):
     #         ),
     #     ]
 
-    @command(glob=True)
+    @command
     def flake(self) -> None:
         logger.info("Running flake8")
         run("flake8")
 
-    @command(glob=True)
-    def autoflake(self) -> None:
-        logger.info("Running autoflake")
-        run("autoflake --remove-all-unused-imports -i .")
+    # @command(glob=True, prop=True)
+    # def flake(self, test_arg: str = "") -> str:
+    #     print("Flake all good" + test_arg)
+    #     return "Flake return value"
+
+    # @command(glob=False, prop=False)
+    # def autoflake(self) -> None:
+    #     print("test")
+    #     return "test ret"
+        # logger.info("Running autoflake")
+        # run("autoflake --remove-all-unused-imports -i .")
 
     @command(glob=True)
     def mypy(self) -> None:
         logger.info("Running mypy")
         run("mypy envo")
 
-    @command(glob=True)
-    def black(self) -> None:
-        logger.info("Running black")
-        run("black .")
+    # @command(glob=True)
+    # def black(self) -> None:
+    #     logger.info("Running black")
+    #     run("black .")
 
     # @command(glob=True)
     # def bootstrap(self):
@@ -90,9 +97,9 @@ class EnvoEnvComm(envo.Env):
     #
     #     checker.run()
 
-    @precmd(cmd_regex=r"git commit.*")
-    def pre_commit(self) -> None:
-        print("pre")
+    # @precmd(cmd_regex=r"git commit.*")
+    # def pre_commit(self) -> None:
+    #     print("pre")
 
     #
     # @onstdout(cmd_regex=r"ls")

@@ -90,8 +90,8 @@ def flake_cmd(prop: bool = False, glob: bool = False) -> None:
     add_command(
         f"""
         @command(prop={prop}, glob={glob})
-        def flake(self, test_arg: str = "") -> None:
+        def flake(self, test_arg: str = "") -> str:
             print("Flake all good" + test_arg)
-            return "Flake was run"
+            return "Flake return value"
         """
     )

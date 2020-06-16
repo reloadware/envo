@@ -57,8 +57,12 @@ class Command:
     start_in: str
     env: "Env"
 
-    def __call__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> Any:
-        return self.func(self=self.env, *args, **kwargs)
+    def __call__(self, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
+        if args:
+            args = (self, *args)  # type: ignore
+        else:
+            kwargs["self"] = self  # type: ignore
+        return self.func(*args, **kwargs)
 
     def __repr__(self) -> str:
         if not self.prop:
@@ -82,11 +86,10 @@ class Command:
 
 class FunctionModifier:
     magic_attr_name: str
+    kwargs: Dict[str, Any] = {"glob": True, "prop": True, "start_in": "."}
 
-    def __init__(self, kwargs: Dict[str, Any]):
-        self.kwargs = kwargs
-
-    def __call__(self, func: Callable) -> Any:
+    @classmethod
+    def __call__(cls, func: Callable) -> Callable:
         """
         Add kwargs to function object.
         Those kwargs will be later consumed by Env class to create Command objects.
@@ -102,8 +105,8 @@ class FunctionModifier:
         # set magic attribute for the function so env get find it and collet
         setattr(
             func,
-            f"__{self.magic_attr_name}__",
-            {"name": func.__name__, "func": func, "decl": decl, **self.kwargs},
+            f"__{cls.magic_attr_name}__",
+            {"name": func.__name__, "func": func, "decl": decl, **cls.kwargs},
         )
 
         return func
@@ -117,15 +120,22 @@ class command(FunctionModifier):  # noqa: N801
 
     magic_attr_name = "command"
 
-    def __init__(self, glob: bool = False, prop: bool = True, start_in: str = "."):
-        kwargs = {"glob": glob, "prop": prop, "start_in": start_in}
-        super().__init__(kwargs)
+    def __new__(cls, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
+        # handle case when command decorator is used without arguments and ()
+        if not kwargs and args and callable(args[0]):
+            cls.kwargs = {"glob": True, "prop": True, "start_in": "."}
+            func: Callable = args[0]  # type: ignore
+            return cls.__call__(func)
+        else:
+            return super().__new__(cls)
+
+    def __init__(self, glob: bool = True, prop: bool = True, start_in: str = ".") -> None:
+        FunctionModifier.kwargs = {"glob": glob, "prop": prop, "start_in": start_in}
 
 
 class hook(FunctionModifier):  # noqa: N801
     def __init__(self, cmd_regex: str, priority: int = 1):
-        kwargs = {"cmd_regex": cmd_regex, "priority": priority}
-        super().__init__(kwargs)
+        FunctionModifier.kwargs = {"cmd_regex": cmd_regex, "priority": priority}
 
 
 class precmd(hook):  # noqa: N801

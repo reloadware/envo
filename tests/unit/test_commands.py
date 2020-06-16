@@ -19,7 +19,7 @@ class TestCommands(utils.TestBase):
                 r"envo_stage: Field = 'test'\n"
                 r"pythonpath: Field = .*\n"
                 r"# Commands\n"
-                r'flake\(test_arg: str = ""\) -> None  # property=False, global=False\n'
+                r'flake\(test_arg: str = ""\) -> str  # property=False, global=False\n'
                 r'mypy\(test_arg: str = ""\) -> None  # property=False, global=False'
             ),
             repr(e),
@@ -37,7 +37,7 @@ class TestCommands(utils.TestBase):
                 r"envo_stage: Field = 'test'\n"
                 r"pythonpath: Field = .*\n"
                 r"# Commands\n"
-                r'flake\(test_arg: str = ""\) -> None  # property=True, global=False\n'
+                r'flake\(test_arg: str = ""\) -> str  # property=True, global=False\n'
                 r'mypy\(test_arg: str = ""\) -> None  # property=True, global=False'
             ),
             repr(e),
@@ -51,7 +51,7 @@ class TestCommands(utils.TestBase):
         utils.flake_cmd(prop=True, glob=False)
 
         e = utils.env()
-        assert repr(e.flake) == "Flake was run"
+        assert repr(e.flake) == "Flake return value"
         assert capsys.readouterr().out == "Flake all good\n"
 
     def test_call_cmd(self, capsys):
@@ -59,7 +59,7 @@ class TestCommands(utils.TestBase):
         utils.flake_cmd(prop=False, glob=False)
 
         e = utils.env()
-        assert e.flake() == "Flake was run"
+        assert e.flake() == "Flake return value"
         assert capsys.readouterr().out == "Flake all good\n"
 
     def test_property_cmd_no_ret(self, capsys):
