@@ -47,6 +47,10 @@ class Shell(BaseShell):  # type: ignore
         setattr(builtins, built_in_name, value)
         self.default(f"{name} = {built_in_name}")
 
+    def set_context(self, context: Dict[str, Any]) -> None:
+        for k, v in context.items():
+            self.set_variable(k, v)
+
     def start(self) -> None:
         pass
 

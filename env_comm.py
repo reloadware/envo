@@ -5,7 +5,7 @@ from pathlib import Path
 from loguru import logger
 
 import envo
-from envo import VenvEnv, command, run
+from envo import VenvEnv, command, context, run
 
 # onstdout, onstderr, postcmd
 
@@ -49,6 +49,12 @@ class EnvoEnvComm(envo.Env):
     def flake(self) -> None:
         logger.info("Running flake8")
         run("flake8")
+
+    @context
+    def susa(self) -> None:
+        return {
+            "susa": 1
+        }
 
     # @command(glob=True, prop=True)
     # def flake(self, test_arg: str = "") -> str:

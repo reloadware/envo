@@ -15,6 +15,7 @@ from tests.utils import change_file  # noqa F401
 from tests.utils import flake_cmd  # noqa F401
 from tests.utils import mypy_cmd  # noqa F401
 from tests.utils import replace_in_code  # noqa F401
+from tests.utils import add_context  # noqa F401
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent

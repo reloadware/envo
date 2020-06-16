@@ -92,6 +92,7 @@ class Envo:
             self.shell.reset()
             self.shell.set_variable("env", self.env)
             self.shell.set_variable("environ", self.shell.environ)
+            self.shell.set_context(self.env.get_context())
 
             glob_cmds = [c for c in self.env.get_commands() if c.glob]
             for c in glob_cmds:

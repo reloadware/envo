@@ -59,13 +59,13 @@ class TestHotReload(utils.TestBase):
         env_comm_file = Path("env_comm.py")
 
         for i in range(5):
-            time.sleep(0.2)
+            time.sleep(0.3)
             env_comm_file.write_text(env_comm_file.read_text() + "\n")
 
         shell.expect(envo_prompt)
 
         shell.sendcontrol("d")
-        shell.expect(pexpect.EOF, timeout=10)
+        shell.expect(pexpect.EOF, timeout=15)
 
     def test_if_reproductible(self, envo_prompt):
         os.environ["PATH"] = "/already_existing_path:" + os.environ["PATH"]

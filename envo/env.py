@@ -29,6 +29,7 @@ __all__ = [
     "Raw",
     "VenvEnv",
     "command",
+    "context",
     "precmd",
     "postcmd",
     "onstdout",
@@ -133,6 +134,22 @@ class command(FunctionModifier):  # noqa: N801
         FunctionModifier.kwargs = {"glob": glob, "prop": prop, "start_in": start_in}
 
 
+@dataclass
+class Hook:
+    name: str
+    cmd_regex: str
+    func: Callable
+    decl: str
+    env: "Env"
+    priority: int
+
+    def __call__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> Any:
+        return self.func(self=self.env, *args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.decl}"
+
+
 class hook(FunctionModifier):  # noqa: N801
     def __init__(self, cmd_regex: str, priority: int = 1):
         FunctionModifier.kwargs = {"cmd_regex": cmd_regex, "priority": priority}
@@ -155,19 +172,23 @@ class postcmd(hook):  # noqa: N801
 
 
 @dataclass
-class Hook:
+class Context:
     name: str
-    cmd_regex: str
     func: Callable
     decl: str
     env: "Env"
-    priority: int
 
-    def __call__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> Any:
-        return self.func(self=self.env, *args, **kwargs)
 
-    def __str__(self) -> str:
-        return f"{self.decl}"
+class context(FunctionModifier):  # noqa: N801
+    magic_attr_name = "ctx"
+
+    def __new__(cls, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
+        if not kwargs and args and callable(args[0]):
+            func: Callable = args[0]  # type: ignore
+            cls.kwargs = {}
+            return cls.__call__(func)
+        else:
+            return super().__new__(cls)
 
 
 class EnvMetaclass(type):
@@ -380,6 +401,7 @@ class Env(BaseEnv):
         self._parent: Optional["Env"] = None
 
         self._commands: List[Command] = []
+        self._contexts: List[Context] = []
         self._hooks: Dict[str, List[Hook]] = {
             "precmd": [],
             "onstdout": [],
@@ -476,11 +498,21 @@ class Env(BaseEnv):
                     hook = Hook(**hook_kwargs, env=self)  # type: ignore
                     self._hooks[n].append(hook)
 
+            if hasattr(attr, "__ctx__"):
+                ctx = Context(**attr.__ctx__, env=self)  # type: ignore
+                self._contexts.append(ctx)
+
         for n in self._hooks.keys():
             self._hooks[n] = sorted(self._hooks[n], key=lambda h: h.priority)
 
     def get_commands(self) -> List[Command]:
         return self._commands
+
+    def get_context(self) -> Dict[str, Any]:
+        context: Dict[str, Any] = {}
+        for c in self._contexts:
+            context.update(**c.func(self=self))
+        return context
 
     def get_hooks(self) -> Dict[str, List[Hook]]:
         return self._hooks

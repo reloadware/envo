@@ -1,8 +1,10 @@
+import json
 import os
 import textwrap
 import time
 from pathlib import Path
 from threading import Thread
+from typing import Dict, Any
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
@@ -94,4 +96,16 @@ def flake_cmd(prop: bool = False, glob: bool = False) -> None:
             print("Flake all good" + test_arg)
             return "Flake return value"
         """
+    )
+
+
+def add_context(context: Dict[str, Any], name: str = "some_context", file=Path("env_comm.py")) -> None:
+    context_str = json.dumps(context)
+    add_command(
+        f"""
+        @context
+        def {name}(self) -> Dict[str, Any]:
+            return {context_str}
+        """,
+        file=file
     )
