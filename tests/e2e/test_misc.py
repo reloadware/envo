@@ -100,3 +100,15 @@ class TestMisc(utils.TestBase):
 
     def test_access_to_env_in_shell(self, shell):
         shell.sendline("script.sh")
+
+    def test_venv_addon(self):
+        Path("env_comm.py").unlink()
+        Path("env_test.py").unlink()
+        utils.run("poetry run python -m venv .venv")
+        utils.run("./.venv/bin/pip install rhei==0.5.2")
+        utils.run("envo test --init=venv")
+
+        s = utils.shell()
+        s.sendline("import rhei")
+        s.sendline("print(rhei.stopwatch)")
+        s.expect(r"module 'rhei\.stopwatch'")

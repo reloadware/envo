@@ -200,6 +200,7 @@ class TestMisc(utils.TestBase):
     def test_venv_addon(self):
         Path("env_comm.py").unlink()
         Path("env_test.py").unlink()
+        Path(".venv/lib/python3.8/site-packages").mkdir(parents=True)
 
         utils.command("test --init=venv")
 

@@ -551,6 +551,8 @@ class VenvEnv(BaseEnv):
     Env that activates virtual environment.
     """
 
+    # TODO: change it to a mixin?
+
     path: Raw[str]
     bin: Path
 
@@ -560,3 +562,6 @@ class VenvEnv(BaseEnv):
 
         self.bin = self._owner.root / ".venv/bin"
         self.path = f"""{str(self.bin)}:{os.environ['PATH']}"""
+        site_packages = next(Path(".venv/lib").glob("*")) / "site-packages"
+
+        sys.path.insert(0, str(site_packages))
