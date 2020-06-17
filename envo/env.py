@@ -178,6 +178,9 @@ class Context:
     decl: str
     env: "Env"
 
+    def __call__(self, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
+        return self.func(self=self.env)
+
 
 class context(FunctionModifier):  # noqa: N801
     magic_attr_name = "ctx"
@@ -508,11 +511,8 @@ class Env(BaseEnv):
     def get_commands(self) -> List[Command]:
         return self._commands
 
-    def get_context(self) -> Dict[str, Any]:
-        context: Dict[str, Any] = {}
-        for c in self._contexts:
-            context.update(**c.func(self=self))
-        return context
+    def get_contexts(self) -> List[Context]:
+        return self._contexts
 
     def get_hooks(self) -> Dict[str, List[Hook]]:
         return self._hooks

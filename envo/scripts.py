@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Thread
-from typing import Dict, List, Literal, Any
+from typing import Dict, List, Literal, Any, Optional
 
 from ilock import ILock
 from inotify.adapters import Inotify  # type: ignore
@@ -67,6 +67,8 @@ class Envo:
 
         self.environ_before = os.environ.copy()  # type: ignore
 
+        self._set_context_thread: Optional[Thread] = None
+
     def spawn_shell(self, type: Literal["fancy", "simple", "headless"]) -> None:
         """
         :param type: shell type
@@ -86,13 +88,14 @@ class Envo:
         try:
             os.environ = self.environ_before.copy()  # type: ignore
             self.env: Env = self.create_env()
-            env_prefix = f"{self.env.meta.emoji}({self.env.get_full_name()})"
             self.env.validate()
             self.env.activate()
             self.shell.reset()
             self.shell.set_variable("env", self.env)
             self.shell.set_variable("environ", self.shell.environ)
-            self.shell.set_context(self.env.get_context())
+
+            self._set_context_thread = Thread(target=self._set_context)
+            self._set_context_thread.start()
 
             glob_cmds = [c for c in self.env.get_commands() if c.glob]
             for c in glob_cmds:
@@ -104,7 +107,7 @@ class Envo:
             self.shell.post_cmd = self._on_postcmd
 
             self.shell.environ.update(self.env.get_env_vars())
-            self.shell.set_prompt_prefix(env_prefix)
+            self.shell.set_prompt_prefix(self._get_prompt_prefix(loading=self._set_context_thread.is_alive()))
 
         except Env.EnvException as exc:
             logger.error(exc)
@@ -114,6 +117,19 @@ class Envo:
 
             print_exc()
             self.shell.set_prompt_prefix("❌")
+
+    def _get_prompt_prefix(self, loading: bool = False) -> str:
+        env_prefix = f"{self.env.meta.emoji}({self.env.get_full_name()})"
+
+        if loading:
+            env_prefix = "⏳" + env_prefix
+
+        return env_prefix
+
+    def _set_context(self) -> None:
+        for c in self.env.get_contexts():
+            self.shell.update_context(c())
+        self.shell.set_prompt_prefix(self._get_prompt_prefix(loading=False))
 
     def _on_precmd(self, command: str) -> str:
         for h in self.env.get_hooks()["precmd"]:

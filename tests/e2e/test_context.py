@@ -1,4 +1,7 @@
 from pathlib import Path
+from time import sleep
+
+import pytest
 
 from tests.e2e import utils
 
@@ -80,3 +83,29 @@ class TestCommands(utils.TestBase):
 
         s.sendline("print(other_var)")
         s.expect(r"other var value")
+
+    def test_slow_context(self, envo_prompt):
+        utils.add_command(
+            """
+            @context
+            def some_context(self) -> Dict[str, Any]:
+                from time import sleep
+                sleep(1)
+                return {"slow_var": "slow var value"}
+            """
+        )
+        s = utils.shell("⏳".encode("utf-8") + envo_prompt)
+
+        s.sendline("print(slow_var)")
+        s.expect(r"is not defined")
+
+        sleep(1)
+
+        s.sendline("print(slow_var)")
+        s.expect(r"slow var value")
+
+        from pexpect import TIMEOUT
+        with pytest.raises(TIMEOUT):
+            s.expect("⏳".encode("utf-8") + envo_prompt, timeout=0.1)
+
+        s.expect(envo_prompt)

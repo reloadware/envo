@@ -36,7 +36,7 @@ def spawn(command: str) -> pexpect.spawn:
     return s
 
 
-def shell(prompt: str = envo_prompt) -> pexpect.spawn:
+def shell(prompt: bytes = envo_prompt) -> pexpect.spawn:
     p = spawn("envo test --shell=simple")
     p.expect(prompt)
     return p

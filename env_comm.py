@@ -51,9 +51,9 @@ class EnvoEnvComm(envo.Env):
         run("flake8")
 
     @context
-    def susa(self) -> None:
+    def test_context(self) -> None:
         return {
-            "susa": 1
+            "context_value": 1
         }
 
     # @command(glob=True, prop=True)

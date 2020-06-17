@@ -2,6 +2,7 @@ import builtins
 import sys
 import time
 from copy import copy
+from threading import Lock
 from typing import Any, Dict, Callable, Optional, List, TextIO
 
 from xonsh.base_shell import BaseShell
@@ -28,6 +29,8 @@ class Shell(BaseShell):  # type: ignore
         self.on_stderr: Optional[Callable] = None
         self.post_cmd: Optional[Callable] = None
 
+        self.cmd_lock = Lock()
+
     def set_prompt_prefix(self, prefix: str) -> None:
         from xonsh.prompt.base import DEFAULT_PROMPT
 
@@ -47,9 +50,11 @@ class Shell(BaseShell):  # type: ignore
         setattr(builtins, built_in_name, value)
         self.default(f"{name} = {built_in_name}")
 
-    def set_context(self, context: Dict[str, Any]) -> None:
+    def update_context(self, context: Dict[str, Any]) -> None:
         for k, v in context.items():
             self.set_variable(k, v)
+
+        self.context.update(**context)
 
     def start(self) -> None:
         pass
@@ -60,6 +65,10 @@ class Shell(BaseShell):  # type: ignore
             self.default(f"del {n}")
 
         self.context = {}
+        self.pre_cmd = None
+        self.on_stdout = None
+        self.on_stderr = None
+        self.post_cmd = None
 
     @property
     def prompt(self) -> str:
@@ -108,6 +117,8 @@ class Shell(BaseShell):  # type: ignore
         return shell
 
     def default(self, line: str) -> Any:
+        self.cmd_lock.acquire()
+
         class Stream:
             device: TextIO
 
@@ -136,24 +147,28 @@ class Shell(BaseShell):  # type: ignore
         if self.pre_cmd:
             line = self.pre_cmd(line)
 
+        out = None
         if self.on_stdout:
             out = StdOut(command=line, on_write=self.on_stdout)
             sys.stdout = out  # type: ignore
 
+        err = None
         if self.on_stderr:
             err = StdErr(command=line, on_write=self.on_stderr)
             sys.stderr = err  # type: ignore
 
-        ret = super().default(line)
+        try:
+            ret = super().default(line)
+            if self.on_stdout:
+                sys.stdout = sys.__stdout__
 
-        if self.on_stdout:
-            sys.stdout = sys.__stdout__
+            if self.on_stderr:
+                sys.stderr = sys.__stderr__
 
-        if self.on_stderr:
-            sys.stderr = sys.__stderr__
-
-        if self.post_cmd:
-            self.post_cmd(command=line, stdout=out.output, stderr=err.output)
+            if self.post_cmd and out and err:
+                self.post_cmd(command=line, stdout=out.output, stderr=err.output)
+        finally:
+            self.cmd_lock.release()
 
         return ret
 
