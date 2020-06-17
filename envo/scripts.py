@@ -73,11 +73,6 @@ class Envo:
         """
         :param type: shell type
         """
-        if not self.env_dirs:
-            raise self.EnvoError(
-                "Couldn't find any env!\n" 'Forgot to run envo --init" first?'
-            )
-
         self.shell = shell.shells[type].create()
         self._start_files_watchdog()
         self.restart()
@@ -128,7 +123,8 @@ class Envo:
 
     def _set_context(self) -> None:
         for c in self.env.get_contexts():
-            self.shell.update_context(c())
+            context = c()
+            self.shell.update_context(context)
         self.shell.set_prompt_prefix(self._get_prompt_prefix(loading=False))
 
     def _on_precmd(self, command: str) -> str:
@@ -282,11 +278,9 @@ class Envo:
                     sys.modules.pop(m)
 
             try:
-                sys.path.insert(0, str(env_dir))
                 module = import_from_file(env_file)
                 env: Env
                 env = module.Env()
-                sys.path.pop(0)
                 return env
             except ImportError as exc:
                 raise self.EnvoError(f"""Couldn't import "{module_name}" ({exc}).""")
@@ -340,7 +334,6 @@ class Envo:
 
     def init_files(self) -> None:
         env_comm_file = Path("env_comm.py")
-
         if not env_comm_file.exists():
             self._create_from_templ(
                 Path("env_comm.py.templ"), env_comm_file, is_comm=True
@@ -360,6 +353,12 @@ class Envo:
         if args.init:
             self.init_files()
             return
+
+        if not self.env_dirs:
+            raise self.EnvoError(
+                "Couldn't find any env!\n" 'Forgot to run envo --init" first?'
+            )
+        sys.path.insert(0, str(self.env_dirs[0]))
 
         if args.save:
             self.create_env().dump_dot_env()
@@ -410,6 +409,7 @@ def _main() -> None:
     envo = Envo(
         Envo.Sets(stage=args.stage, addons=selected_addons, init=bool(args.init))
     )
+
     try:
         envo.handle_command(args)
     except Envo.EnvoError as e:
