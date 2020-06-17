@@ -4,8 +4,22 @@ from pathlib import Path
 
 from loguru import logger
 
+from typing import List, Dict, Any  # noqa: F401
+
 import envo
-from envo import VenvEnv, command, context, run
+from envo import (  # noqa: F401
+    command,
+    VenvEnv,
+    context,
+    Raw,
+    run,
+    precmd,
+    onstdout,
+    onstderr,
+    postcmd,
+    onload,
+    onunload,
+)
 
 # onstdout, onstderr, postcmd
 
@@ -50,11 +64,19 @@ class EnvoEnvComm(envo.Env):
         logger.info("Running flake8")
         run("flake8")
 
-    @context
-    def test_context(self) -> None:
-        return {
-            "context_value": 1
-        }
+    @onload
+    def init_sth(self) -> None:
+        print("on load")
+
+    @onunload
+    def deinit_sth(self) -> None:
+        print("on unload")
+
+    # @context
+    # def test_context(self) -> None:
+    #     return {
+    #         "context_value": 1
+    #     }
 
     # @command(glob=True, prop=True)
     # def flake(self, test_arg: str = "") -> str:
@@ -65,18 +87,18 @@ class EnvoEnvComm(envo.Env):
     # def autoflake(self) -> None:
     #     print("test")
     #     return "test ret"
-        # logger.info("Running autoflake")
-        # run("autoflake --remove-all-unused-imports -i .")
+    # logger.info("Running autoflake")
+    # run("autoflake --remove-all-unused-imports -i .")
 
     @command(glob=True)
     def mypy(self) -> None:
         logger.info("Running mypy")
         run("mypy envo")
 
-    # @command(glob=True)
-    # def black(self) -> None:
-    #     logger.info("Running black")
-    #     run("black .")
+    @command(glob=True)
+    def black(self) -> None:
+        logger.info("Running black")
+        run("black .")
 
     # @command(glob=True)
     # def bootstrap(self):
@@ -103,27 +125,28 @@ class EnvoEnvComm(envo.Env):
     #
     #     checker.run()
 
-    # @precmd(cmd_regex=r"git commit.*")
-    # def pre_commit(self) -> None:
-    #     print("pre")
+    @precmd(cmd_regex=r"git commit.*")
+    def pre_commit(self) -> None:
+        print("pre")
 
-    #
-    # @onstdout(cmd_regex=r"ls")
-    # def on_custom_ls_out(self, command: str, out: str) -> str:
-    #     out = "a" + out
-    #     return out
-    #
-    # @onstdout(cmd_regex=r"print\(.*\)")
-    # def on_print(self) -> str:
-    #     return "sweet"
-    #
-    # @onstderr(cmd_regex=r"print\(.*\)")
-    # def on_custom_ls_err(self, command: str, out: str) -> str:
-    #     return out
-    #
-    # @postcmd(cmd_regex=r"print\(.*\)")
-    # def post_custom_ls(self, command: str, stdout: List[str], stderr: List[str]) -> None:
-    #     print("post")
+    @onstdout(cmd_regex=r"ls")
+    def on_custom_ls_out(self, command: str, out: str) -> str:
+        out = "a" + out
+        return out
+
+    @onstdout(cmd_regex=r"print\(.*\)")
+    def on_print(self) -> str:
+        return "sweet"
+
+    @onstderr(cmd_regex=r"print\(.*\)")
+    def on_custom_ls_err(self, command: str, out: str) -> str:
+        return out
+
+    @postcmd(cmd_regex=r"print\(.*\)")
+    def post_custom_ls(
+        self, command: str, stdout: List[str], stderr: List[str]
+    ) -> None:
+        print("post")
 
 
 Env = EnvoEnvComm

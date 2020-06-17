@@ -99,7 +99,9 @@ def flake_cmd(prop: bool = False, glob: bool = False) -> None:
     )
 
 
-def add_context(context: Dict[str, Any], name: str = "some_context", file=Path("env_comm.py")) -> None:
+def add_context(
+    context: Dict[str, Any], name: str = "some_context", file=Path("env_comm.py")
+) -> None:
     context_str = json.dumps(context)
     add_command(
         f"""
@@ -107,5 +109,5 @@ def add_context(context: Dict[str, Any], name: str = "some_context", file=Path("
         def {name}(self) -> Dict[str, Any]:
             return {context_str}
         """,
-        file=file
+        file=file,
     )

@@ -50,6 +50,7 @@ class Envo:
     inotify: Inotify
     env_dirs: List[Path]
     quit: bool
+    env: Env
 
     def __init__(self, sets: Sets) -> None:
         self.se = sets
@@ -75,16 +76,29 @@ class Envo:
         """
         self.shell = shell.shells[type].create()
         self._start_files_watchdog()
+
         self.restart()
         self.shell.start()
+
+        self._on_unload()
         self._stop_files_watchdog()
+
+        self._on_destroy()
 
     def restart(self) -> None:
         try:
             os.environ = self.environ_before.copy()  # type: ignore
-            self.env: Env = self.create_env()
+
+            if not hasattr(self, "env"):
+                self.env = self.create_env()
+                self._on_create()
+            else:
+                self._on_unload()
+                self.env = self.create_env()
+
             self.env.validate()
             self.env.activate()
+            self._on_load()
             self.shell.reset()
             self.shell.set_variable("env", self.env)
             self.shell.set_variable("environ", self.shell.environ)
@@ -92,7 +106,9 @@ class Envo:
             self._set_context_thread = Thread(target=self._set_context)
             self._set_context_thread.start()
 
-            glob_cmds = [c for c in self.env.get_commands() if c.glob]
+            glob_cmds = [
+                c for c in self.env.get_magic_functions()["command"] if c.kwargs["glob"]
+            ]
             for c in glob_cmds:
                 self.shell.set_variable(c.name, c)
 
@@ -102,7 +118,9 @@ class Envo:
             self.shell.post_cmd = self._on_postcmd
 
             self.shell.environ.update(self.env.get_env_vars())
-            self.shell.set_prompt_prefix(self._get_prompt_prefix(loading=self._set_context_thread.is_alive()))
+            self.shell.set_prompt_prefix(
+                self._get_prompt_prefix(loading=self._set_context_thread.is_alive())
+            )
 
         except Env.EnvException as exc:
             logger.error(exc)
@@ -122,55 +140,71 @@ class Envo:
         return env_prefix
 
     def _set_context(self) -> None:
-        for c in self.env.get_contexts():
+        for c in self.env.get_magic_functions()["context"]:
             context = c()
             self.shell.update_context(context)
         self.shell.set_prompt_prefix(self._get_prompt_prefix(loading=False))
 
+    def _on_create(self) -> None:
+        for h in self.env.get_magic_functions()["oncreate"]:
+            h()
+
+    def _on_destroy(self) -> None:
+        for h in self.env.get_magic_functions()["ondestroy"]:
+            h()
+
+    def _on_load(self) -> None:
+        for h in self.env.get_magic_functions()["onload"]:
+            h()
+
+    def _on_unload(self) -> None:
+        for h in self.env.get_magic_functions()["onunload"]:
+            h()
+
     def _on_precmd(self, command: str) -> str:
-        for h in self.env.get_hooks()["precmd"]:
-            if re.match(h.cmd_regex, command):
+        for h in self.env.get_magic_functions()["precmd"]:
+            if re.match(h.kwargs["cmd_regex"], command):
                 func_args = inspect.getfullargspec(h.func).args
-                kwargs = {}
+                kwargs: Dict[str, Any] = {}
                 if "command" in func_args:
                     kwargs["command"] = command
-                ret = h.func(self=self.env, **kwargs)
+                ret = h(**kwargs)
                 if ret:
                     command = ret
         return command
 
     def _on_stdout(self, command: str, out: str) -> str:
-        for h in self.env.get_hooks()["onstdout"]:
-            if re.match(h.cmd_regex, command):
+        for h in self.env.get_magic_functions()["onstdout"]:
+            if re.match(h.kwargs["cmd_regex"], command):
                 func_args = inspect.getfullargspec(h.func).args
-                kwargs = {}
+                kwargs: Dict[str, Any] = {}
                 if "command" in func_args:
                     kwargs["command"] = command
                 if "out" in func_args:
                     kwargs["out"] = out
-                ret = h.func(self=self.env, **kwargs)
+                ret = h(**kwargs)
                 if ret:
                     out = ret
         return out
 
     def _on_stderr(self, command: str, out: str) -> str:
-        for h in self.env.get_hooks()["onstderr"]:
-            if re.match(h.cmd_regex, command):
+        for h in self.env.get_magic_functions()["onstderr"]:
+            if re.match(h.kwargs["cmd_regex"], command):
                 func_args = inspect.getfullargspec(h.func).args
-                kwargs = {}
+                kwargs: Dict[str, Any] = {}
                 if "command" in func_args:
                     kwargs["command"] = command
                 if "out" in func_args:
                     kwargs["out"] = out
-                ret = h.func(self=self.env, **kwargs)
+                ret = h(**kwargs)
                 if ret:
                     out = ret
         return out
 
     def _on_postcmd(self, command: str, stdout: List[str], stderr: List[str]) -> None:
-        for h in self.env.get_hooks()["postcmd"]:
+        for h in self.env.get_magic_functions()["postcmd"]:
             func_args = inspect.getfullargspec(h.func).args
-            if re.match(h.cmd_regex, command):
+            if re.match(h.kwargs["cmd_regex"], command):
                 kwargs: Dict[str, Any] = {}
                 if "command" in func_args:
                     kwargs["command"] = command
@@ -178,7 +212,7 @@ class Envo:
                     kwargs["stdout"] = stdout
                 if "stderr" in func_args:
                     kwargs["stderr"] = stderr
-                h.func(self=self.env, **kwargs)
+                h(**kwargs)
 
     def _files_watchdog(self) -> None:
         for event in self.inotify.event_gen(yield_nones=False):

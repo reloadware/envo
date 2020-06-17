@@ -18,9 +18,18 @@ class TestCommands(utils.TestBase):
                 r"stage: Field = 'test'\n"
                 r"envo_stage: Field = 'test'\n"
                 r"pythonpath: Field = .*\n"
-                r"# Commands\n"
-                r'flake\(test_arg: str = ""\) -> str  # property=False, global=False\n'
-                r'mypy\(test_arg: str = ""\) -> None  # property=False, global=False'
+                r"# context\n"
+                r"# command\n"
+                r"""flake\(test_arg: str = ""\) -> str   {glob=False, prop=False, start_in='.'}\n"""
+                r"""mypy\(test_arg: str = ""\) -> None   {glob=False, prop=False, start_in='.'}\n"""
+                r"# precmd\n"
+                r"# onstdout\n"
+                r"# onstderr\n"
+                r"# postcmd\n"
+                r"# onload\n"
+                r"# oncreate\n"
+                r"# ondestroy\n"
+                r"# onunload"
             ),
             repr(e),
         )
@@ -36,9 +45,18 @@ class TestCommands(utils.TestBase):
                 r"stage: Field = 'test'\n"
                 r"envo_stage: Field = 'test'\n"
                 r"pythonpath: Field = .*\n"
-                r"# Commands\n"
-                r'flake\(test_arg: str = ""\) -> str  # property=True, global=False\n'
-                r'mypy\(test_arg: str = ""\) -> None  # property=True, global=False'
+                r"# context\n"
+                r"# command\n"
+                r"""flake\(test_arg: str = ""\) -> str   {glob=False, prop=True, start_in='.'}\n"""
+                r"""mypy\(test_arg: str = ""\) -> None   {glob=False, prop=True, start_in='.'}\n"""
+                r"# precmd\n"
+                r"# onstdout\n"
+                r"# onstderr\n"
+                r"# postcmd\n"
+                r"# onload\n"
+                r"# oncreate\n"
+                r"# ondestroy\n"
+                r"# onunload"
             ),
             repr(e),
         )

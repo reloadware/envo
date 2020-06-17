@@ -49,7 +49,8 @@ def init_child_env(child_dir: Path) -> None:
 
     child_dir.mkdir()
     os.chdir(str(child_dir))
-    run("envo test --init")
+    result = run("envo test --init")
+    assert result == b"\x1b[1mCreated test environment \xf0\x9f\x8d\xb0!\x1b[0m\r\n"
 
     comm_file = Path("env_comm.py")
     content = comm_file.read_text()

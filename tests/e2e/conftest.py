@@ -13,7 +13,8 @@ envo_root = test_root.parent / "envo"
 
 @fixture
 def init() -> None:
-    run("envo test --init")
+    result = run("envo test --init")
+    assert result == b"\x1b[1mCreated test environment \xf0\x9f\x8d\xb0!\x1b[0m\r\n"
 
 
 @fixture

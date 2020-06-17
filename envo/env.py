@@ -34,6 +34,10 @@ __all__ = [
     "postcmd",
     "onstdout",
     "onstderr",
+    "oncreate",
+    "onload",
+    "onunload",
+    "ondestroy",
 ]
 
 
@@ -49,14 +53,19 @@ else:
 
 
 @dataclass
-class Command:
+class MagicFunction:
     name: str
+    type: str
     func: Callable
-    glob: bool
-    prop: bool
-    decl: str
-    start_in: str
-    env: "Env"
+    kwargs: Dict[str, Any]
+    env: Optional["Env"] = None
+
+    def __post_init__(self) -> None:
+        search = re.search(r"def ((.|\s)*?):\n", inspect.getsource(self.func))
+        assert search is not None
+        decl = search.group(1)
+        decl = re.sub(r"self,?\s?", "", decl)
+        self.decl = decl
 
     def __call__(self, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
         if args:
@@ -65,13 +74,20 @@ class Command:
             kwargs["self"] = self  # type: ignore
         return self.func(*args, **kwargs)
 
+    def __str__(self) -> str:
+        kwargs_str = ", ".join([f"{k}={repr(v)}" for k, v in self.kwargs.items()])
+        return f"{self.decl}   {{{kwargs_str}}}"
+
+
+@dataclass
+class Command(MagicFunction):
     def __repr__(self) -> str:
-        if not self.prop:
+        if not self.kwargs["prop"]:
             return super().__repr__()
 
         assert self.env is not None
         cwd = Path(".").absolute()
-        os.chdir(str(self.env.root / self.start_in))
+        os.chdir(str(self.env.root / self.kwargs["start_in"]))
 
         ret = self.func(self=self.env)
 
@@ -81,117 +97,80 @@ class Command:
         else:
             return "\b"
 
-    def __str__(self) -> str:
-        return f"{self.decl}  # property={str(self.prop)}, global={str(self.glob)}"
 
+class magic_function:  # noqa: N801
+    klass = MagicFunction
+    default_kwargs: Dict[str, Any] = {}
 
-class FunctionModifier:
-    magic_attr_name: str
-    kwargs: Dict[str, Any] = {"glob": True, "prop": True, "start_in": "."}
+    def __call__(self, func: Callable) -> Callable:
+        kwargs = self.default_kwargs.copy()
+        kwargs.update(self.kwargs)
 
-    @classmethod
-    def __call__(cls, func: Callable) -> Callable:
-        """
-        Add kwargs to function object.
-        Those kwargs will be later consumed by Env class to create Command objects.
-
-        :param func:
-        :return:
-        """
-        search = re.search(r"def ((.|\s)*?):\n", inspect.getsource(func))
-        assert search is not None
-        decl = search.group(1)
-        decl = re.sub(r"self,?\s?", "", decl)
-
-        # set magic attribute for the function so env get find it and collet
-        setattr(
-            func,
-            f"__{cls.magic_attr_name}__",
-            {"name": func.__name__, "func": func, "decl": decl, **cls.kwargs},
+        return self.klass(
+            name=func.__name__, kwargs=kwargs, func=func, type=self.__class__.__name__
         )
-
-        return func
-
-
-# decorators
-class command(FunctionModifier):  # noqa: N801
-    """
-    @command decorator class.
-    """
-
-    magic_attr_name = "command"
 
     def __new__(cls, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
         # handle case when command decorator is used without arguments and ()
         if not kwargs and args and callable(args[0]):
-            cls.kwargs = {"glob": True, "prop": True, "start_in": "."}
             func: Callable = args[0]  # type: ignore
-            return cls.__call__(func)
+            return cls.klass(
+                name=func.__name__,
+                kwargs=cls.default_kwargs,
+                func=func,
+                type=cls.__name__,
+            )
         else:
             return super().__new__(cls)
 
-    def __init__(self, glob: bool = True, prop: bool = True, start_in: str = ".") -> None:
-        FunctionModifier.kwargs = {"glob": glob, "prop": prop, "start_in": start_in}
+    def __init__(self, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> None:
+        self.kwargs = kwargs
 
 
-@dataclass
-class Hook:
-    name: str
-    cmd_regex: str
-    func: Callable
-    decl: str
-    env: "Env"
-    priority: int
+# decorators
+class command(magic_function):  # noqa: N801
+    """
+    @command decorator class.
+    """
 
-    def __call__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> Any:
-        return self.func(self=self.env, *args, **kwargs)
-
-    def __str__(self) -> str:
-        return f"{self.decl}"
+    klass = Command
+    default_kwargs = {"glob": True, "prop": True, "start_in": "."}
 
 
-class hook(FunctionModifier):  # noqa: N801
-    def __init__(self, cmd_regex: str, priority: int = 1):
-        FunctionModifier.kwargs = {"cmd_regex": cmd_regex, "priority": priority}
+class onload(magic_function):  # noqa: N801
+    pass
 
 
-class precmd(hook):  # noqa: N801
-    magic_attr_name = "precmd"
+class oncreate(magic_function):  # noqa: N801
+    pass
 
 
-class onstdout(hook):  # noqa: N801
-    magic_attr_name = "onstdout"
+class ondestroy(magic_function):  # noqa: N801
+    pass
 
 
-class onstderr(hook):  # noqa: N801
-    magic_attr_name = "onstderr"
+class onunload(magic_function):  # noqa: N801
+    pass
 
 
-class postcmd(hook):  # noqa: N801
-    magic_attr_name = "postcmd"
+class precmd(magic_function):  # noqa: N801
+    pass
 
 
-@dataclass
-class Context:
-    name: str
-    func: Callable
-    decl: str
-    env: "Env"
-
-    def __call__(self, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
-        return self.func(self=self.env)
+class onstdout(magic_function):  # noqa: N801
+    pass
 
 
-class context(FunctionModifier):  # noqa: N801
-    magic_attr_name = "ctx"
+class onstderr(magic_function):  # noqa: N801
+    pass
 
-    def __new__(cls, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
-        if not kwargs and args and callable(args[0]):
-            func: Callable = args[0]  # type: ignore
-            cls.kwargs = {}
-            return cls.__call__(func)
-        else:
-            return super().__new__(cls)
+
+class postcmd(magic_function):  # noqa: N801
+    pass
+
+
+class context(magic_function):  # noqa: N801
+    pass
 
 
 class EnvMetaclass(type):
@@ -262,7 +241,7 @@ class BaseEnv(metaclass=EnvMetaclass):
                 or f.startswith("_")
                 or inspect.isclass(attr)
                 or f == "meta"
-                or isinstance(attr, Command)
+                or isinstance(attr, MagicFunction)
             ):
                 continue
 
@@ -361,7 +340,7 @@ class BaseEnv(metaclass=EnvMetaclass):
             r = v._repr(level + 1) if isinstance(v, BaseEnv) else repr(v.value)
             ret.append(f"{intend * level}{n}: {type(v).__name__} = {r}")
 
-        return "\n".join(ret)
+        return "\n".join(ret) + "\n"
 
 
 class Env(BaseEnv):
@@ -403,13 +382,22 @@ class Env(BaseEnv):
 
         self._parent: Optional["Env"] = None
 
-        self._commands: List[Command] = []
-        self._contexts: List[Context] = []
-        self._hooks: Dict[str, List[Hook]] = {
+        # self._commands: List[Command] = []
+        # self._contexts: List[Context] = []
+        # self._hooks: Dict[str, List[Hook]] = {
+        # }
+
+        self._magic_functions: Dict[str, List[MagicFunction]] = {
+            "context": [],
+            "command": [],
             "precmd": [],
             "onstdout": [],
             "onstderr": [],
             "postcmd": [],
+            "onload": [],
+            "oncreate": [],
+            "ondestroy": [],
+            "onunload": [],
         }
         self._collect_commands_and_hooks()
 
@@ -427,6 +415,9 @@ class Env(BaseEnv):
 
         self.validate()
         os.environ.update(**self.get_env_vars())
+
+    def get_magic_functions(self) -> Dict[str, List[MagicFunction]]:
+        return self._magic_functions
 
     def dump_dot_env(self) -> None:
         """
@@ -490,32 +481,36 @@ class Env(BaseEnv):
 
             attr = getattr(self, f)
 
-            if hasattr(attr, "__command__"):
-                cmd = Command(**attr.__command__, env=self)  # type: ignore
-                setattr(self, f, cmd)
-                self._commands.append(cmd)
+            if isinstance(attr, MagicFunction):
+                attr.env = self
+                self._magic_functions[attr.type].append(attr)
 
-            for n in self._hooks.keys():
-                if hasattr(attr, f"__{n}__"):
-                    hook_kwargs = getattr(attr, f"__{n}__")
-                    hook = Hook(**hook_kwargs, env=self)  # type: ignore
-                    self._hooks[n].append(hook)
+            # if hasattr(attr, "__command__"):
+            #     cmd = Command(**attr.__command__, env=self)  # type: ignore
+            #     setattr(self, f, cmd)
+            #     self._commands.append(cmd)
+            #
+            # for n in self._hooks.keys():
+            #     if hasattr(attr, f"__{n}__"):
+            #         hook_kwargs = getattr(attr, f"__{n}__")
+            #         hook = Hook(kwargs=hook_kwargs, env=self)  # type: ignore
+            #         self._hooks[n].append(hook)
+            #
+            # if hasattr(attr, "__ctx__"):
+            #     ctx = Context(**attr.__ctx__, env=self)  # type: ignore
+            #     self._contexts.append(ctx)
 
-            if hasattr(attr, "__ctx__"):
-                ctx = Context(**attr.__ctx__, env=self)  # type: ignore
-                self._contexts.append(ctx)
+        # for n in self._hooks.keys():
+        #     self._hooks[n] = sorted(self._hooks[n], key=lambda h: h.priority)
 
-        for n in self._hooks.keys():
-            self._hooks[n] = sorted(self._hooks[n], key=lambda h: h.priority)
-
-    def get_commands(self) -> List[Command]:
-        return self._commands
-
-    def get_contexts(self) -> List[Context]:
-        return self._contexts
-
-    def get_hooks(self) -> Dict[str, List[Hook]]:
-        return self._hooks
+    # def get_commands(self) -> List[Command]:
+    #     return self._commands
+    #
+    # def get_contexts(self) -> List[Context]:
+    #     return self._contexts
+    #
+    # def get_hooks(self) -> Dict[str, List[Hook]]:
+    #     return self._hooks
 
     def get_parent(self) -> Optional["Env"]:
         return self._parent
@@ -539,9 +534,11 @@ class Env(BaseEnv):
 
     def __repr__(self) -> str:
         ret = []
-        ret.append("\n# Commands")
-        for c in self._commands:
-            ret.append(str(c))
+
+        for type, functions in self._magic_functions.items():
+            ret.append(f"# {type}")
+            for f in functions:
+                ret.append(str(f))
 
         return super()._repr() + "\n".join(ret)
 
@@ -562,6 +559,8 @@ class VenvEnv(BaseEnv):
 
         self.bin = self._owner.root / ".venv/bin"
         self.path = f"""{str(self.bin)}:{os.environ['PATH']}"""
-        site_packages = next(Path(".venv/lib").glob("*")) / "site-packages"
+        site_packages = (
+            next((self._owner.root / ".venv/lib").glob("*")) / "site-packages"
+        )
 
         sys.path.insert(0, str(site_packages))

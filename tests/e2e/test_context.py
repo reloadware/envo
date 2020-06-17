@@ -11,9 +11,7 @@ class TestCommands(utils.TestBase):
         context = {
             "str_var": "str test value",
             "int_var": 8,
-            "dict_var": {
-                "nested_var": "some nested value"
-            }
+            "dict_var": {"nested_var": "some nested value"},
         }
         utils.add_context(context)
         s = utils.shell()
@@ -105,6 +103,7 @@ class TestCommands(utils.TestBase):
         s.expect(r"slow var value")
 
         from pexpect import TIMEOUT
+
         with pytest.raises(TIMEOUT):
             s.expect("⏳".encode("utf-8") + envo_prompt, timeout=0.1)
 

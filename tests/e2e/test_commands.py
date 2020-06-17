@@ -12,7 +12,7 @@ class TestCommands(utils.TestBase):
         s = utils.shell()
 
         s.sendline("repr(env.flake)")
-        s.expect(r"envo\.env\.Command object at")
+        s.expect(r"Command\(name=\\'flake\\', type=\\'command\\'")
         s.expect(envo_prompt)
 
         s.sendline("env.flake()")
@@ -69,7 +69,7 @@ class TestCommands(utils.TestBase):
         s = utils.shell()
 
         s.sendline("repr(env.flake)")
-        s.expect(r"envo\.env\.Command object at")
+        s.expect(r"Command\(name=\\'flake\\', type=\\'command\\'")
         s.expect(envo_prompt)
 
         s.sendline("env.flake()")
@@ -82,7 +82,7 @@ class TestCommands(utils.TestBase):
         s.expect(envo_prompt)
 
         s.sendline("repr(flake)")
-        s.expect(r"envo\.env\.Command object at")
+        s.expect(r"Command\(name=\\'flake\\', type=\\'command\\'")
         s.expect(envo_prompt)
 
         s.sendline("flake()")

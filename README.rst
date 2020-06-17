@@ -111,7 +111,7 @@ Major:
 * Add file hooks
 * Add bootstrap (versioning etc)
 * Fix git log bug
-* Add context
+* Add reload command
 
 Minor:
 * Shell should highlight envo commands on green
