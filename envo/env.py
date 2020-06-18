@@ -211,7 +211,7 @@ class cmd_hook(magic_function):  # noqa: N801
     default_kwargs = {"cmd_regex": ".*"}
 
     def __init__(self, cmd_regex: str = ".*") -> None:
-        super().__init__(kwargs={"cmd_regex": cmd_regex})
+        super().__init__(cmd_regex=cmd_regex)  # type: ignore
 
 
 class precmd(cmd_hook):  # noqa: N801

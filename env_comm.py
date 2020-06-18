@@ -58,36 +58,31 @@ class EnvoEnvComm(envo.Env):
     #             cmd=lambda f: f"autoflake {f}"
     #         ),
     #     ]
-
+    #
     @command
     def flake(self) -> None:
         logger.info("Running flake8")
         run("black .", print_output=False)
         run("flake8")
-
-    @command(prop=False, glob=True)
-    def flake2(self, test_arg: str = "") -> str:
-        print("Flake all good" + test_arg)
-        return "Flake return value"
-
-    @onload
-    def init_sth(self) -> None:
-        print("on load")
-
-    @onunload
-    def deinit_sth(self) -> None:
-        print("on unload")
+    #
+    # @command(prop=False, glob=True)
+    # def flake2(self, test_arg: str = "") -> str:
+    #     print("Flake all good" + test_arg)
+    #     return "Flake return value"
+    #
+    # @onload
+    # def init_sth(self) -> None:
+    #     print("on load")
+    #
+    # @onunload
+    # def deinit_sth(self) -> None:
+    #     print("on unload")
 
     # @context
     # def test_context(self) -> None:
     #     return {
     #         "context_value": 1
     #     }
-
-    # @command(glob=True, prop=True)
-    # def flake(self, test_arg: str = "") -> str:
-    #     print("Flake all good" + test_arg)
-    #     return "Flake return value"
 
     # @command(glob=False, prop=False)
     # def autoflake(self) -> None:
@@ -100,11 +95,11 @@ class EnvoEnvComm(envo.Env):
     def mypy(self) -> None:
         logger.info("Running mypy")
         run("mypy envo")
-
-    @command(glob=True)
-    def black(self) -> None:
-        logger.info("Running black")
-        run("black .")
+    #
+    # @command(glob=True)
+    # def black(self) -> None:
+    #     logger.info("Running black")
+    #     run("black .")
 
     # @command(glob=True)
     # def bootstrap(self):
@@ -131,18 +126,18 @@ class EnvoEnvComm(envo.Env):
     #
     #     checker.run()
 
-    # @precmd(cmd_regex=r"git commit.*")
-    # def pre_commit(self) -> None:
-    #     print("pre")
+    @precmd(cmd_regex=r"git commit.*")
+    def pre_commit(self, command) -> None:
+        print("preee")
 
-    # @onstdout(cmd_regex=r"ls")
-    # def on_custom_ls_out(self, command: str, out: str) -> str:
-    #     out = "a" + out
-    #     return out
-    #
-    # @onstdout(cmd_regex=r"print\(.*\)")
-    # def on_print(self) -> str:
-    #     return "sweet"
+    @onstdout(cmd_regex=r"ls")
+    def on_custom_ls_out(self, command: str, out: str) -> str:
+        out = "a" + out
+        return out
+
+    @onstdout(cmd_regex=r"print\(.*\)")
+    def on_print(self, out, command) -> str:
+        return "sweet"
 
     @onstderr(cmd_regex=r"print\(.*\)")
     def on_custom_ls_err(self, command: str, out: str) -> str:

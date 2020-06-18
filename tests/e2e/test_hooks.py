@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from pexpect import EOF
+import pytest
+from pexpect import EOF, TIMEOUT
 
 from tests.e2e import utils
 
@@ -61,6 +62,24 @@ class TestHooks(utils.TestBase):
                 r"Line number: \d\d.*.*❌".encode("utf-8"),
             )
         )
+
+    def test_precmd_not_matching_not_run(self):
+        utils.add_hook(
+            r"""
+            @precmd(cmd_regex=r"some_cmd\(.*\)")
+            def pre_cmd(self, command: str) -> str:
+                print("pre")
+                return command
+            """
+        )
+
+        s = utils.shell()
+
+        s.sendline('print("pancake");')
+        with pytest.raises(TIMEOUT):
+            s.expect(r"pre\r\n", timeout=0.5)
+
+        s.expect(r"pancake\r\n")
 
     def test_precmd_access_env_vars(self):
         utils.add_hook(
