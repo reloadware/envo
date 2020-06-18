@@ -47,8 +47,7 @@ class TestHotReload(utils.TestBase):
         utils.change_file(Path("env_comm.py"), 0.5, new_content)
 
         shell.expect(
-            r'Reloading.*Detected errors!.*Variable "sandbox\.test_var" is unset!',
-            timeout=5,
+            r'Reloading.*Variable "sandbox\.test_var" is unset!', timeout=5,
         )
         shell.expect("❌".encode("utf-8"), timeout=2)
 

@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 import argparse
-import inspect
 import os
 import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Thread
-from typing import Dict, List, Literal, Any, Optional
+from typing import Dict, List, Literal, Optional
 
 from ilock import ILock
 from inotify.adapters import Inotify  # type: ignore
@@ -15,7 +14,7 @@ from jinja2 import Environment
 from loguru import logger
 
 from envo import Env, misc, shell
-from envo.misc import import_from_file
+from envo.misc import import_from_file, EnvoError
 
 __all__ = ["stage_emoji_mapping"]
 
@@ -39,9 +38,6 @@ class Envo:
         addons: List[str]
         init: bool
 
-    class EnvoError(Exception):
-        pass
-
     environ_before = Dict[str, str]
     selected_addons: List[str]
     addons: List[str]
@@ -59,7 +55,7 @@ class Envo:
 
         unknown_addons = [a for a in self.se.addons if a not in self.addons]
         if unknown_addons:
-            raise self.EnvoError(f"Unknown addons {unknown_addons}")
+            raise EnvoError(f"Unknown addons {unknown_addons}")
 
         self.inotify = Inotify()
 
@@ -122,7 +118,7 @@ class Envo:
                 self._get_prompt_prefix(loading=self._set_context_thread.is_alive())
             )
 
-        except Env.EnvException as exc:
+        except EnvoError as exc:
             logger.error(exc)
             self.shell.set_prompt_prefix("❌")
         except Exception:
@@ -164,11 +160,7 @@ class Envo:
     def _on_precmd(self, command: str) -> str:
         for h in self.env.get_magic_functions()["precmd"]:
             if re.match(h.kwargs["cmd_regex"], command):
-                func_args = inspect.getfullargspec(h.func).args
-                kwargs: Dict[str, Any] = {}
-                if "command" in func_args:
-                    kwargs["command"] = command
-                ret = h(**kwargs)
+                ret = h(command=command)  # type: ignore
                 if ret:
                     command = ret
         return command
@@ -176,13 +168,7 @@ class Envo:
     def _on_stdout(self, command: str, out: str) -> str:
         for h in self.env.get_magic_functions()["onstdout"]:
             if re.match(h.kwargs["cmd_regex"], command):
-                func_args = inspect.getfullargspec(h.func).args
-                kwargs: Dict[str, Any] = {}
-                if "command" in func_args:
-                    kwargs["command"] = command
-                if "out" in func_args:
-                    kwargs["out"] = out
-                ret = h(**kwargs)
+                ret = h(command=command, out=out)  # type: ignore
                 if ret:
                     out = ret
         return out
@@ -190,29 +176,15 @@ class Envo:
     def _on_stderr(self, command: str, out: str) -> str:
         for h in self.env.get_magic_functions()["onstderr"]:
             if re.match(h.kwargs["cmd_regex"], command):
-                func_args = inspect.getfullargspec(h.func).args
-                kwargs: Dict[str, Any] = {}
-                if "command" in func_args:
-                    kwargs["command"] = command
-                if "out" in func_args:
-                    kwargs["out"] = out
-                ret = h(**kwargs)
+                ret = h(command=command, out=out)  # type: ignore
                 if ret:
                     out = ret
         return out
 
     def _on_postcmd(self, command: str, stdout: List[str], stderr: List[str]) -> None:
         for h in self.env.get_magic_functions()["postcmd"]:
-            func_args = inspect.getfullargspec(h.func).args
             if re.match(h.kwargs["cmd_regex"], command):
-                kwargs: Dict[str, Any] = {}
-                if "command" in func_args:
-                    kwargs["command"] = command
-                if "stdout" in func_args:
-                    kwargs["stdout"] = stdout
-                if "stderr" in func_args:
-                    kwargs["stderr"] = stderr
-                h(**kwargs)
+                h(command=command, stdout=stdout, stderr=stderr)  # type: ignore
 
     def _files_watchdog(self) -> None:
         for event in self.inotify.event_gen(yield_nones=False):
@@ -317,7 +289,7 @@ class Envo:
                 env = module.Env()
                 return env
             except ImportError as exc:
-                raise self.EnvoError(f"""Couldn't import "{module_name}" ({exc}).""")
+                raise EnvoError(f"""Couldn't import "{module_name}" ({exc}).""")
             finally:
                 self._delete_init_files()
 
@@ -334,7 +306,7 @@ class Envo:
         """
         Environment(keep_trailing_newline=True)
         if output_file.exists():
-            raise self.EnvoError(f"{str(output_file)} file already exists.")
+            raise EnvoError(f"{str(output_file)} file already exists.")
 
         env_dir = Path(".").absolute()
         package_name = misc.dir_name_to_pkg_name(env_dir.name)
@@ -389,7 +361,7 @@ class Envo:
             return
 
         if not self.env_dirs:
-            raise self.EnvoError(
+            raise EnvoError(
                 "Couldn't find any env!\n" 'Forgot to run envo --init" first?'
             )
         sys.path.insert(0, str(self.env_dirs[0]))
@@ -446,7 +418,7 @@ def _main() -> None:
 
     try:
         envo.handle_command(args)
-    except Envo.EnvoError as e:
+    except EnvoError as e:
         logger.error(e)
 
 

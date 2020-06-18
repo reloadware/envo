@@ -128,24 +128,20 @@ class TestMisc(utils.TestBase):
 
         e = utils.env()
 
-        with pytest.raises(envo.BaseEnv.EnvException) as exc:
+        with pytest.raises(envo.EnvoError) as exc:
             e.activate()
 
-        assert str(exc.value) == (
-            "Detected errors!\n" 'Variable "sandbox.test_var" is unset!'
-        )
+        assert str(exc.value) == ('Variable "sandbox.test_var" is unset!')
 
     def test_verify_variable_undeclared(self):
         utils.add_definition("self.test_var = 12")
 
         e = utils.env()
 
-        with pytest.raises(envo.BaseEnv.EnvException) as exc:
+        with pytest.raises(envo.EnvoError) as exc:
             e.activate()
 
-        assert str(exc.value) == (
-            "Detected errors!\n" 'Variable "sandbox.test_var" is undeclared!'
-        )
+        assert str(exc.value) == ('Variable "sandbox.test_var" is undeclared!')
 
     def test_verify_property(self):
         utils.add_declaration("value: str")

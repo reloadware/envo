@@ -20,7 +20,7 @@ from tests.utils import add_context  # noqa F401
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
 
-prompt = r"[\(.*\)]*.*".encode()
+prompt = r"[\(.*\)]*.*\$".encode()
 envo_prompt = r"🛠\(sandbox\)".encode("utf-8") + prompt
 
 

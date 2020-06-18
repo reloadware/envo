@@ -6,7 +6,7 @@ import pytest
 from tests.e2e import utils
 
 
-class TestCommands(utils.TestBase):
+class TestContext(utils.TestBase):
     def test_simple_context(self):
         context = {
             "str_var": "str test value",

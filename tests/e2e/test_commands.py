@@ -32,6 +32,22 @@ class TestCommands(utils.TestBase):
         s.expect("NameError: name 'flake' is not defined")
         s.expect(envo_prompt)
 
+    def test_decorator_kwargs_validation(self, envo_prompt):
+        utils.add_command(
+            """
+            @command(unexistent_arg1=False, unexistent_arg2=False, prop=True)
+            def flake(self) -> None:
+                print("Flake all good")
+                return "Flake return value"
+            """
+        )
+        utils.shell(
+            envo_prompt.replace(
+                r"🛠\(sandbox\)".encode("utf-8"),
+                r"got an unexpected keyword argument.*❌".encode("utf-8"),
+            )
+        )
+
     def test_command_prop_no_glob(self, envo_prompt):
         utils.flake_cmd(prop=True, glob=False)
         utils.mypy_cmd(prop=True, glob=False)

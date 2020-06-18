@@ -66,8 +66,9 @@ class TestMisc(utils.TestBase):
         assert Path("env_comm.py").exists()
         assert Path("env_test.py").exists()
         s = utils.spawn("envo test")
-        prompt = envo_prompt.replace(b"sandbox", dir_name.encode("utf-8"))
-        prompt = prompt.replace(b".", rb"\.")
+        prompt = envo_prompt.replace(
+            b"sandbox", dir_name.encode("utf-8").replace(b".", rb"\.")
+        )
         s.expect(prompt)
 
     def test_autodiscovery(self, envo_prompt):

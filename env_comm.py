@@ -62,7 +62,13 @@ class EnvoEnvComm(envo.Env):
     @command
     def flake(self) -> None:
         logger.info("Running flake8")
+        run("black .", print_output=False)
         run("flake8")
+
+    @command(prop=False, glob=True)
+    def flake2(self, test_arg: str = "") -> str:
+        print("Flake all good" + test_arg)
+        return "Flake return value"
 
     @onload
     def init_sth(self) -> None:
@@ -125,18 +131,18 @@ class EnvoEnvComm(envo.Env):
     #
     #     checker.run()
 
-    @precmd(cmd_regex=r"git commit.*")
-    def pre_commit(self) -> None:
-        print("pre")
+    # @precmd(cmd_regex=r"git commit.*")
+    # def pre_commit(self) -> None:
+    #     print("pre")
 
-    @onstdout(cmd_regex=r"ls")
-    def on_custom_ls_out(self, command: str, out: str) -> str:
-        out = "a" + out
-        return out
-
-    @onstdout(cmd_regex=r"print\(.*\)")
-    def on_print(self) -> str:
-        return "sweet"
+    # @onstdout(cmd_regex=r"ls")
+    # def on_custom_ls_out(self, command: str, out: str) -> str:
+    #     out = "a" + out
+    #     return out
+    #
+    # @onstdout(cmd_regex=r"print\(.*\)")
+    # def on_print(self) -> str:
+    #     return "sweet"
 
     @onstderr(cmd_regex=r"print\(.*\)")
     def on_custom_ls_err(self, command: str, out: str) -> str:

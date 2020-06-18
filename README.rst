@@ -107,11 +107,13 @@ Example usage:
 
 TODO:
 Major:
-* Add on enter and exit hooks
+* Refactor start_in
+* restore wordking dir
 * Add file hooks
 * Add bootstrap (versioning etc)
 * Fix git log bug
 * Add reload command
+* magic function args validator
 
 Minor:
 * Shell should highlight envo commands on green

@@ -11,7 +11,12 @@ __all__ = [
     "render_py_file",
     "render_file",
     "import_from_file",
+    "EnvoError",
 ]
+
+
+class EnvoError(Exception):
+    pass
 
 
 def dir_name_to_class_name(dir_name: str) -> str:

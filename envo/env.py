@@ -19,7 +19,7 @@ from typing import (
 
 from loguru import logger
 
-from envo.misc import import_from_file, setup_logger
+from envo.misc import import_from_file, setup_logger, EnvoError
 
 setup_logger()
 
@@ -54,10 +54,17 @@ else:
 
 @dataclass
 class MagicFunction:
+    class UnexpectedArgs(Exception):
+        pass
+
+    class MissingArgs(Exception):
+        pass
+
     name: str
     type: str
     func: Callable
     kwargs: Dict[str, Any]
+    expected_fun_args: List[str]
     env: Optional["Env"] = None
 
     def __post_init__(self) -> None:
@@ -67,16 +74,42 @@ class MagicFunction:
         decl = re.sub(r"self,?\s?", "", decl)
         self.decl = decl
 
+        self._validate_fun_args()
+
     def __call__(self, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
         if args:
-            args = (self, *args)  # type: ignore
+            args = (self.env, *args)  # type: ignore
         else:
-            kwargs["self"] = self  # type: ignore
+            kwargs["self"] = self.env  # type: ignore
         return self.func(*args, **kwargs)
 
     def __str__(self) -> str:
         kwargs_str = ", ".join([f"{k}={repr(v)}" for k, v in self.kwargs.items()])
         return f"{self.decl}   {{{kwargs_str}}}"
+
+    def _validate_fun_args(self) -> None:
+        args = inspect.getfullargspec(self.func).args
+        args.remove("self")
+        unexpected_args = set(args) - set(self.expected_fun_args)
+        missing_args = set(self.expected_fun_args) - set(args)
+
+        func_info = (
+            f"{self.decl}\n"
+            f'In file "{inspect.getfile(self.func)}"\n'
+            f"Line number: {inspect.getsourcelines(self.func)[1]}"
+        )
+
+        if unexpected_args:
+            raise EnvoError(
+                f"Unexpected magic function args {list(unexpected_args)}, "
+                f"should be {self.expected_fun_args}\n"
+                f"{func_info}"
+            )
+
+        if missing_args:
+            raise EnvoError(
+                f"Missing magic function args {list(missing_args)}:\n" f"{func_info}"
+            )
 
 
 @dataclass
@@ -87,7 +120,7 @@ class Command(MagicFunction):
 
         assert self.env is not None
         cwd = Path(".").absolute()
-        os.chdir(str(self.env.root / self.kwargs["start_in"]))
+        os.chdir(str(self.env.root))
 
         ret = self.func(self=self.env)
 
@@ -97,17 +130,29 @@ class Command(MagicFunction):
         else:
             return "\b"
 
+    def _validate_fun_args(self) -> None:
+        """
+        Commands have user defined arguments so we disable this
+        :return:
+        """
+        pass
+
 
 class magic_function:  # noqa: N801
     klass = MagicFunction
     default_kwargs: Dict[str, Any] = {}
+    expected_fun_args: List[str] = []
 
     def __call__(self, func: Callable) -> Callable:
         kwargs = self.default_kwargs.copy()
-        kwargs.update(self.kwargs)
+        kwargs.update(**self.kwargs)
 
         return self.klass(
-            name=func.__name__, kwargs=kwargs, func=func, type=self.__class__.__name__
+            name=func.__name__,
+            kwargs=kwargs,
+            func=func,
+            type=self.__class__.__name__,
+            expected_fun_args=self.expected_fun_args,
         )
 
     def __new__(cls, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
@@ -119,6 +164,7 @@ class magic_function:  # noqa: N801
                 kwargs=cls.default_kwargs,
                 func=func,
                 type=cls.__name__,
+                expected_fun_args=cls.expected_fun_args,
             )
         else:
             return super().__new__(cls)
@@ -134,43 +180,59 @@ class command(magic_function):  # noqa: N801
     """
 
     klass = Command
-    default_kwargs = {"glob": True, "prop": True, "start_in": "."}
+    default_kwargs = {"glob": True, "prop": True}
+
+    def __init__(self, glob: bool = True, prop: bool = True) -> None:
+        super().__init__(glob=glob, prop=prop)  # type: ignore
 
 
-class onload(magic_function):  # noqa: N801
+class event(magic_function):  # noqa: N801
+    def __init__(self, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> None:
+        super().__init__(*args, **kwargs)
+
+
+class onload(event):  # noqa: N801
     pass
 
 
-class oncreate(magic_function):  # noqa: N801
+class oncreate(event):  # noqa: N801
     pass
 
 
-class ondestroy(magic_function):  # noqa: N801
+class ondestroy(event):  # noqa: N801
     pass
 
 
-class onunload(magic_function):  # noqa: N801
+class onunload(event):  # noqa: N801
     pass
 
 
-class precmd(magic_function):  # noqa: N801
-    pass
+class cmd_hook(magic_function):  # noqa: N801
+    default_kwargs = {"cmd_regex": ".*"}
+
+    def __init__(self, cmd_regex: str = ".*") -> None:
+        super().__init__(kwargs={"cmd_regex": cmd_regex})
 
 
-class onstdout(magic_function):  # noqa: N801
-    pass
+class precmd(cmd_hook):  # noqa: N801
+    expected_fun_args = ["command"]
 
 
-class onstderr(magic_function):  # noqa: N801
-    pass
+class onstdout(cmd_hook):  # noqa: N801
+    expected_fun_args = ["command", "out"]
 
 
-class postcmd(magic_function):  # noqa: N801
-    pass
+class onstderr(cmd_hook):  # noqa: N801
+    expected_fun_args = ["command", "out"]
+
+
+class postcmd(cmd_hook):  # noqa: N801
+    expected_fun_args = ["command", "stdout", "stderr"]
 
 
 class context(magic_function):  # noqa: N801
-    pass
+    def __init__(self) -> None:
+        super().__init__()
 
 
 class EnvMetaclass(type):
@@ -188,9 +250,6 @@ class Field:
 
 
 class BaseEnv(metaclass=EnvMetaclass):
-    class EnvException(Exception):
-        pass
-
     def __init__(self, _name: Optional[str] = None) -> None:
         """
         :param _name: with underscore so it doesn't conflict with possible field with name "name"
@@ -213,7 +272,7 @@ class BaseEnv(metaclass=EnvMetaclass):
         """
         errors = self.get_errors(self.get_name())
         if errors:
-            raise self.EnvException("Detected errors!\n" + "\n".join(errors))
+            raise EnvoError("\n".join(errors))
 
     def get_errors(self, parent_name: str = "") -> List[str]:
         """

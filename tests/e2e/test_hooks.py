@@ -6,7 +6,7 @@ from tests.e2e import utils
 
 
 class TestHooks(utils.TestBase):
-    def test_pre_hook_print_and_modify(self):
+    def test_precmd_print_and_modify(self):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"print\(.*\)")
@@ -23,18 +23,58 @@ class TestHooks(utils.TestBase):
         s.expect(r"pancake\r\n")
         s.expect(r"pancake\r\n")
 
-    def test_pre_hook_args_optional(self):
+    def test_fun_args_validation(self, envo_prompt):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"print\(.*\)")
-            def pre_print(self) -> None:
+            def pre_print(self, cmd: str) -> str:
+                assert command == 'print("pancake");'
                 print("pre")
+                return command * 2
+            """
+        )
+        utils.shell(
+            envo_prompt.replace(
+                r"🛠\(sandbox\)".encode("utf-8"),
+                r"Unexpected magic function args \['cmd'\], should be \['command'\].*"
+                r"pre_print\(cmd: str\) -> str.*"
+                r'In file ".*".*'
+                r"Line number: \d\d.*.*❌".encode("utf-8"),
+            )
+        )
+
+    def test_fun_args_validation_missing_arg(self, envo_prompt):
+        utils.add_hook(
+            r"""
+            @precmd(cmd_regex=r"print\(.*\)")
+            def pre_print(self) -> str:
+                print("test")
+                return "cmd"
+            """
+        )
+        utils.shell(
+            envo_prompt.replace(
+                r"🛠\(sandbox\)".encode("utf-8"),
+                r"Missing magic function args \['command'\].*"
+                r"pre_print\(\) -> str.*"
+                r'In file ".*".*'
+                r"Line number: \d\d.*.*❌".encode("utf-8"),
+            )
+        )
+
+    def test_precmd_access_env_vars(self):
+        utils.add_hook(
+            r"""
+            @precmd(cmd_regex=r"print\(.*\)")
+            def pre_print(self, command: str) -> str:
+                print(self.stage);
+                return command
             """
         )
 
         s = utils.shell()
         s.sendline('print("pancake");')
-        s.expect(r"pre\r\n")
+        s.expect(r"test\r\n")
         s.expect(r"pancake\r\n")
 
     def test_onstdout(self):
@@ -52,20 +92,6 @@ class TestHooks(utils.TestBase):
         s.expect(r" sweet pancake sweet \r\n")
         s.expect(r" sweet banana sweet \r\n")
 
-    def test_onstdout_args_optional(self):
-        utils.add_hook(
-            r"""
-            @onstdout(cmd_regex=r"print\(.*\)")
-            def on_print(self) -> str:
-                return "sweet "
-            """
-        )
-
-        s = utils.shell()
-        s.sendline('print("pancake");print("banana")')
-        s.expect(r"sweet sweet ")
-        s.expect(r"sweet sweet ")
-
     def test_onstderr(self):
         utils.add_hook(
             r"""
@@ -82,19 +108,6 @@ class TestHooks(utils.TestBase):
         s.expect(r"not good :/")
         s.expect(r"ZeroDivisionError: division by zero")
 
-    def test_onstderr_args_optional(self):
-        utils.add_hook(
-            r"""
-            @onstderr(cmd_regex=r"print\(.*\)")
-            def on_print(self) -> str:
-                return "sweet "
-            """
-        )
-
-        s = utils.shell()
-        s.sendline("print(1/0)")
-        s.expect(r"sweet sweet ")
-
     def test_post_hook_print(self):
         utils.add_hook(
             r"""
@@ -103,21 +116,6 @@ class TestHooks(utils.TestBase):
                 assert command == 'print("pancake");print("banana")'
                 assert stderr == []
                 assert stdout == ["pancake", "\n", "banana", "\n"]
-                print("post")
-            """
-        )
-
-        s = utils.shell()
-        s.sendline('print("pancake");print("banana")')
-        s.expect(r"pancake\r\n")
-        s.expect(r"banana\r\n")
-        s.expect(r"post\r\n")
-
-    def test_post_hook_print_args_optional(self):
-        utils.add_hook(
-            r"""
-            @postcmd(cmd_regex=r"print\(.*\)")
-            def post_print(self) -> None:
                 print("post")
             """
         )
