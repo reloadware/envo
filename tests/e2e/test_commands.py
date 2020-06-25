@@ -228,3 +228,9 @@ class TestCommands(utils.TestBase):
         s.expect(pexpect.EOF)
         s.close()
         assert s.exitstatus == 1
+
+    def test_cant_find_env(self):
+        utils.flake_cmd(prop=True, glob=True)
+        res = utils.single_command("flake")
+
+        assert res == b"Flake all good\r\nFlake return value\r\n"

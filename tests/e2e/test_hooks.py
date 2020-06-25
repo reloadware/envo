@@ -115,10 +115,14 @@ class TestHooks(utils.TestBase):
         utils.add_hook(
             r"""
             @onstderr(cmd_regex=r"print\(.*\)")
-            def post_print(self, command: str, out: str) -> str:
+            def on_stderr(self, command: str, out: str) -> str:
                 print("not good :/")
-                print(out)
                 return ""
+            @postcmd(cmd_regex=r"print\(.*\)")
+            def post_print(self, command: str, stdout: List[str], stderr: List[str]) -> None:
+                assert "ZeroDivisionError: division by zero\n" in stderr
+                assert stdout == ['not good :/', '\n', 'not good :/', '\n']
+                print("post command test")
             """
         )
 
@@ -126,6 +130,7 @@ class TestHooks(utils.TestBase):
         s.sendline("print(1/0)")
         s.expect(r"not good :/")
         s.expect(r"ZeroDivisionError: division by zero")
+        s.expect(r"post command test")
 
     def test_post_hook_print(self):
         utils.add_hook(
@@ -164,7 +169,7 @@ class TestHooks(utils.TestBase):
         )
 
         s = utils.shell(rb"on create.*on load.*" + envo_prompt)
-        s.sendcontrol("d")
+        s.sendline("exit")
         s.expect(r"on unload")
         s.expect(r"on destroy")
         s.expect(EOF)
@@ -185,6 +190,6 @@ class TestHooks(utils.TestBase):
         Path("env_comm.py").write_text(Path("env_comm.py").read_text())
         s.expect(r"on unload")
         s.expect(r"on load")
-        s.sendcontrol("d")
+        s.sendline("exit")
         s.expect(r"on unload")
         s.expect(EOF)

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from typing import List, Dict, Any  # noqa: F401
+from typing import List, Dict, Any, Tuple  # noqa: F401
 
 import envo
 from envo import (  # noqa: F401
@@ -29,6 +29,8 @@ class EnvoEnvComm(envo.Env):
         root = Path(__file__).parent
         name = "envo"
         version = "0.1.0"
+        watch_files: Tuple[str] = ()
+        ignore_files: Tuple[str] = ("tests",)
         parent = None
 
     venv: VenvEnv
@@ -59,12 +61,18 @@ class EnvoEnvComm(envo.Env):
     #         ),
     #     ]
     #
+
     @command
     def flake(self) -> None:
         logger.info("Running flake8")
         run("black .", print_output=False)
+        run("autoflake --remove-all-unused-imports -i .")
         run("flake8")
-    #
+
+    # @onfilevent(file=r"envo*.py", events=[])
+    # def on_save(self, event, file: Path):
+    #     pass
+
     # @command(prop=False, glob=True)
     # def flake2(self, test_arg: str = "") -> str:
     #     print("Flake all good" + test_arg)
@@ -84,17 +92,16 @@ class EnvoEnvComm(envo.Env):
     #         "context_value": 1
     #     }
 
-    # @command(glob=False, prop=False)
-    # def autoflake(self) -> None:
-    #     print("test")
-    #     return "test ret"
-    # logger.info("Running autoflake")
-    # run("autoflake --remove-all-unused-imports -i .")
+    @command(glob=False, prop=False)
+    def autoflake(self) -> None:
+        logger.info("Running autoflake")
+        run("autoflake --remove-all-unused-imports -i .")
 
     @command(glob=True)
     def mypy(self) -> None:
         logger.info("Running mypy")
         run("mypy envo")
+
     #
     # @command(glob=True)
     # def black(self) -> None:

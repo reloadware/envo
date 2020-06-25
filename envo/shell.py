@@ -7,8 +7,43 @@ from typing import Any, Dict, Callable, Optional, List, TextIO
 
 from xonsh.base_shell import BaseShell
 from xonsh.execer import Execer
+from xonsh.prompt.base import DEFAULT_PROMPT
 from xonsh.ptk_shell.shell import PromptToolkitShell
 from xonsh.readline_shell import ReadlineShell
+
+
+class Prompt:
+    _prompt: str
+    _template: str
+
+    def __init__(self) -> None:
+        self._prompt = ""
+        self._template = "{emergency}{loading}{emoji}{name}{default}"
+        self.emergency: bool = False
+        self.loading: bool = False
+        self.emoji: str = ""
+        self.name: str = ""
+        self.default: str = str(DEFAULT_PROMPT)
+
+        self.context: Dict[str, Callable] = {
+            "emergency": lambda: "❌" if self.emergency else "",
+            "loading": lambda: "⏳" if self.loading else "",
+            "emoji": lambda: self.emoji,
+            "name": lambda: f"({self.name})" if self.name else "",
+            "default": lambda: str(DEFAULT_PROMPT),
+        }
+
+    def reset(self) -> None:
+        self._prompt = self._template
+        self.emergency = False
+        self.loading = False
+        self.emoji = ""
+        self.name = ""
+        self.default = str(DEFAULT_PROMPT)
+
+    def __str__(self) -> str:
+        prompt = self._prompt.format(**{k: v() for k, v in self.context.items()})
+        return prompt
 
 
 class Shell(BaseShell):  # type: ignore
@@ -31,10 +66,8 @@ class Shell(BaseShell):  # type: ignore
 
         self.cmd_lock = Lock()
 
-    def set_prompt_prefix(self, prefix: str) -> None:
-        from xonsh.prompt.base import DEFAULT_PROMPT
-
-        self.environ["PROMPT"] = prefix + str(DEFAULT_PROMPT)
+    def set_prompt(self, prompt: str) -> None:
+        self.environ["PROMPT"] = prompt
 
     def set_variable(self, name: str, value: Any) -> None:
         """
@@ -158,7 +191,9 @@ class Shell(BaseShell):  # type: ignore
             sys.stderr = err  # type: ignore
 
         try:
+            # W want to catch all exceptions just in case the command fails so we can handle std_err and post_cmd
             ret = super().default(line)
+        finally:
             if self.on_stdout:
                 sys.stdout = sys.__stdout__
 
@@ -167,7 +202,7 @@ class Shell(BaseShell):  # type: ignore
 
             if self.post_cmd and out and err:
                 self.post_cmd(command=line, stdout=out.output, stderr=err.output)
-        finally:
+
             self.cmd_lock.release()
 
         return ret

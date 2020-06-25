@@ -35,7 +35,7 @@ defaults: &defaults
     - image: circleci/python:3.8.2
 
 cache-key: &cache-key
-  deps9-{{ .Branch }}-{{ checksum "poetry.lock" }}
+  deps-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "poetry.lock" }}
 
 restore_cache: &restore_cache
   restore_cache:
@@ -82,7 +82,9 @@ jobs:
 
   test-3-6:
     <<: *defaults
-    image: circleci/python:3.6
+    docker:
+      - image: circleci/python:3.6
+
     steps:
       - checkout
       - *restore_cache
@@ -95,7 +97,8 @@ jobs:
 
   test-3-7:
     <<: *defaults
-    image: circleci/python:3.7
+    docker:
+      - image: circleci/python:3.7
     steps:
       - checkout
       - *restore_cache
@@ -108,7 +111,8 @@ jobs:
 
   test-3-8:
     <<: *defaults
-    image: circleci/python:3.8
+    docker:
+      - image: circleci/python:3.8.2
     steps:
       - checkout
       - *restore_cache

@@ -126,3 +126,4 @@ Bugs:
 
 Improvements:
 * type checking ?
+* .venv issue

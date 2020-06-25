@@ -20,7 +20,7 @@ from tests.utils import add_context  # noqa F401
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
 
-prompt = r"[\(.*\)]*.*\$".encode()
+prompt = r"[\(.*\)]*.*?\$".encode()
 envo_prompt = r"🛠\(sandbox\)".encode("utf-8") + prompt
 
 
@@ -42,10 +42,14 @@ def shell(prompt: bytes = envo_prompt) -> pexpect.spawn:
     return p
 
 
+def single_command(command: str) -> str:
+    return run(f'envo test -c "{command}"')
+
+
 def init_child_env(child_dir: Path) -> None:
     cwd = Path(".").absolute()
     if child_dir.exists():
-        shutil.rmtree(child_dir)
+        shutil.rmtree(child_dir, ignore_errors=True)
 
     child_dir.mkdir()
     os.chdir(str(child_dir))
@@ -54,7 +58,7 @@ def init_child_env(child_dir: Path) -> None:
 
     comm_file = Path("env_comm.py")
     content = comm_file.read_text()
-    content = content.replace("parent = None", 'parent = ".."')
+    content = content.replace("parent: Optional[str] = None", 'parent = ".."')
     comm_file.write_text(content)
 
     os.chdir(str(cwd))

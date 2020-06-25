@@ -9,12 +9,12 @@ class TestParentChild(utils.TestBase):
         sandbox_dir = Path(".").absolute()
         child_dir = sandbox_dir / "child"
 
-        utils.replace_in_code('name = "sandbox"', 'name = "pa"')
+        utils.replace_in_code('name: str = "sandbox"', 'name: str = "pa"')
         utils.add_declaration("test_parent_var: str")
         utils.add_definition('self.test_parent_var = "test_parent_value"')
 
         utils.replace_in_code(
-            'name = "child"', 'name = "ch"', file=child_dir / "env_comm.py"
+            'name: str = "child"', 'name: str = "ch"', file=child_dir / "env_comm.py"
         )
         utils.add_declaration(
             "test_var: str", file=child_dir / "env_comm.py",
@@ -38,9 +38,9 @@ class TestParentChild(utils.TestBase):
         sandbox_dir = Path(".").absolute()
         child_dir = sandbox_dir / "child"
 
-        utils.replace_in_code('name = "sandbox"', 'name = "pa"')
+        utils.replace_in_code('name: str = "sandbox"', 'name: str = "pa"')
         utils.replace_in_code(
-            'name = "child"', 'name = "ch"', file=child_dir / "env_comm.py"
+            'name: str = "child"', 'name: str = "ch"', file=child_dir / "env_comm.py"
         )
 
         child_env = utils.env(child_dir)
@@ -51,7 +51,7 @@ class TestParentChild(utils.TestBase):
         sandbox_dir = Path(".").absolute()
         child_dir = sandbox_dir / "child"
 
-        utils.replace_in_code('name = "sandbox"', 'name = "pa"')
+        utils.replace_in_code('name: str = "sandbox"', 'name: str = "pa"')
         utils.add_declaration("path: Raw[str]")
         utils.add_definition(
             """
@@ -62,7 +62,7 @@ class TestParentChild(utils.TestBase):
         )
 
         utils.replace_in_code(
-            'name = "child"', 'name = "ch"', file=child_dir / "env_comm.py"
+            'name: str = "child"', 'name: str = "ch"', file=child_dir / "env_comm.py"
         )
         utils.add_declaration(
             "path: Raw[str]", file=child_dir / "env_comm.py",

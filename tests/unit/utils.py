@@ -102,7 +102,7 @@ def init_child_env(child_dir: Path) -> None:
     os.chdir(str(child_dir))
     command("test --init")
 
-    replace_in_code("parent = None", 'parent = ".."')
+    replace_in_code("parent: Optional[str] = None", 'parent: Optional[str] = ".."')
 
     os.chdir(str(cwd))
 

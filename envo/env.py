@@ -412,12 +412,24 @@ class Env(BaseEnv):
         Environment metadata.
         """
 
-        stage: str = field(default="comm", init=False)
-        emoji: str = field(default="", init=False)
-        name: str = field(init=False)
         root: Path = field(init=False)
-        parent: Optional[str] = field(default=None, init=False)
+        name: str = field(init=False)
         version: str = field(default="0.1.0", init=False)
+        parent: Optional[str] = field(default=None, init=False)
+        watch_files: Tuple[str] = field(init=False)
+        ignore_files: Tuple[str] = field(init=False)
+        emoji: str = field(default="", init=False)
+        stage: str = field(default="comm", init=False)
+
+        def __post_init__(self) -> None:
+            super().__post_init__()
+            self.watch_files = (r"**/", r"**/__envo_lock__", *self.watch_files)  # type: ignore
+            self.ignore_files = (  # type: ignore
+                r"**/.*",
+                r"**/*~",
+                r"**/__pycache__",
+                *self.ignore_files,
+            )
 
     root: Path
     stage: str
@@ -544,35 +556,15 @@ class Env(BaseEnv):
                 attr.env = self
                 self._magic_functions[attr.type].append(attr)
 
-            # if hasattr(attr, "__command__"):
-            #     cmd = Command(**attr.__command__, env=self)  # type: ignore
-            #     setattr(self, f, cmd)
-            #     self._commands.append(cmd)
-            #
-            # for n in self._hooks.keys():
-            #     if hasattr(attr, f"__{n}__"):
-            #         hook_kwargs = getattr(attr, f"__{n}__")
-            #         hook = Hook(kwargs=hook_kwargs, env=self)  # type: ignore
-            #         self._hooks[n].append(hook)
-            #
-            # if hasattr(attr, "__ctx__"):
-            #     ctx = Context(**attr.__ctx__, env=self)  # type: ignore
-            #     self._contexts.append(ctx)
-
-        # for n in self._hooks.keys():
-        #     self._hooks[n] = sorted(self._hooks[n], key=lambda h: h.priority)
-
-    # def get_commands(self) -> List[Command]:
-    #     return self._commands
-    #
-    # def get_contexts(self) -> List[Context]:
-    #     return self._contexts
-    #
-    # def get_hooks(self) -> Dict[str, List[Hook]]:
-    #     return self._hooks
-
     def get_parent(self) -> Optional["Env"]:
         return self._parent
+
+    def get_root_env(self) -> "Env":
+        parent = self.get_parent()
+        if parent:
+            return parent.get_root_env()
+        else:
+            return self
 
     def _init_parent(self) -> None:
         """

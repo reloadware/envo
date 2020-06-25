@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from typing import List, Dict, Any  # noqa: F401
+from typing import List, Dict, Any, Optional, Tuple  # noqa: F401
 
 import envo
 from loguru import logger  # noqa: F401
@@ -23,9 +23,11 @@ from envo import (  # noqa: F401
 class {{ class_name }}Comm(envo.Env):
     class Meta(envo.Env.Meta):
         root = Path(__file__).parent.absolute()
-        name = "{{ name }}"
-        version = "0.1.0"
-        parent = None
+        name: str = "{{ name }}"
+        version: str = "0.1.0"
+        watch_files: Tuple[str] = ()  # type: ignore
+        ignore_files: Tuple[str] = ()  # type: ignore
+        parent: Optional[str] = None
 
     {%- if "venv" in selected_addons%}
     venv: envo.VenvEnv

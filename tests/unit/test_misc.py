@@ -1,5 +1,4 @@
 import os
-import re
 from pathlib import Path
 
 import pytest
@@ -216,12 +215,3 @@ class TestMisc(utils.TestBase):
         utils.command("local")
 
         assert env_comm.get_current_env().meta.stage == "local"
-
-    def test_cant_find_env(self):
-        utils.command("prod")
-
-        assert re.match(
-            r".*Couldn.*find.*env", str(self.mock_logger_error.call_args_list[0].args)
-        )
-
-        self.mock_logger_error = None

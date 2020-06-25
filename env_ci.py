@@ -22,5 +22,10 @@ class EnvoEnv(EnvoEnvComm):  # type: ignore
         run("mkdir -p workspace")
         run("pytest -v tests --cov-report xml:workspace/cov.xml --cov=envo ./workspace")
 
+    @command
+    def flake(self) -> None:
+        logger.info("Running flake8")
+        run("flake8")
+
 
 Env = EnvoEnv
