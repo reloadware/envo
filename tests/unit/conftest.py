@@ -27,6 +27,13 @@ def shell() -> None:
 
 
 @fixture
+def bash() -> None:
+    from tests.unit.utils import bash
+
+    bash()
+
+
+@fixture
 def env() -> Env:
     from tests.unit.utils import env
 

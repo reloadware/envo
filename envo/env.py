@@ -17,17 +17,14 @@ from typing import (
     Union,
 )
 
-from loguru import logger
+from envo import logger
 
-from envo.misc import import_from_file, setup_logger, EnvoError
-
-setup_logger()
+from envo.misc import import_from_file, EnvoError
 
 __all__ = [
     "BaseEnv",
     "Env",
     "Raw",
-    "VenvEnv",
     "command",
     "context",
     "precmd",
@@ -40,12 +37,12 @@ __all__ = [
     "ondestroy",
 ]
 
-
 T = TypeVar("T")
 
 
 if TYPE_CHECKING:
     Raw = Union[T]
+    from envo.shell import Shell
 else:
 
     class Raw(Generic[T]):
@@ -107,9 +104,7 @@ class MagicFunction:
             )
 
         if missing_args:
-            raise EnvoError(
-                f"Missing magic function args {list(missing_args)}:\n" f"{func_info}"
-            )
+            raise EnvoError(f"Missing magic function args {list(missing_args)}:\n" f"{func_info}")
 
 
 @dataclass
@@ -125,10 +120,10 @@ class Command(MagicFunction):
         ret = self.func(self=self.env)
 
         os.chdir(str(cwd))
-        if ret:
+        if ret is not None:
             return str(ret)
         else:
-            return "\b"
+            return ""
 
     def _validate_fun_args(self) -> None:
         """
@@ -187,7 +182,7 @@ class command(magic_function):  # noqa: N801
 
 
 class event(magic_function):  # noqa: N801
-    def __init__(self, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
 
@@ -288,9 +283,7 @@ class BaseEnv(metaclass=EnvMetaclass):
         f: str
         for f in dir(self):
             # skip properties
-            if hasattr(self.__class__, f) and inspect.isdatadescriptor(
-                getattr(self.__class__, f)
-            ):
+            if hasattr(self.__class__, f) and inspect.isdatadescriptor(getattr(self.__class__, f)):
                 continue
 
             attr: Any = getattr(self, f)
@@ -315,9 +308,7 @@ class BaseEnv(metaclass=EnvMetaclass):
             error_msgs += [f'Variable "{parent_name}.{v}" is unset!' for v in unset]
 
         if undeclr:
-            error_msgs += [
-                f'Variable "{parent_name}.{v}" is undeclared!' for v in undeclr
-            ]
+            error_msgs += [f'Variable "{parent_name}.{v}" is undeclared!' for v in undeclr]
 
         fields_to_check = field_names - unset - undeclr
 
@@ -327,15 +318,6 @@ class BaseEnv(metaclass=EnvMetaclass):
                 error_msgs += attr2check.get_errors(parent_name=f"{parent_name}.{f}")
 
         return error_msgs
-
-    def activate(self, owner_namespace: str = "") -> None:
-        """
-        Validate and activate environment (put env variables into os.environ)
-
-        :param owner_namespace:
-        """
-        self.validate()
-        os.environ.update(**self.get_env_vars(owner_namespace))
 
     def get_name(self) -> str:
         """
@@ -416,34 +398,44 @@ class Env(BaseEnv):
         name: str = field(init=False)
         version: str = field(default="0.1.0", init=False)
         parent: Optional[str] = field(default=None, init=False)
-        watch_files: Tuple[str] = field(init=False)
-        ignore_files: Tuple[str] = field(init=False)
+        watch_files: Tuple[str, ...] = field(init=False)
+        ignore_files: Tuple[str, ...] = field(init=False)
         emoji: str = field(default="", init=False)
         stage: str = field(default="comm", init=False)
 
         def __post_init__(self) -> None:
             super().__post_init__()
-            self.watch_files = (r"**/", r"**/__envo_lock__", *self.watch_files)  # type: ignore
-            self.ignore_files = (  # type: ignore
+            self.watch_files = (r"**/", r"**/__envo_lock__", *self.watch_files)
+            self.ignore_files = (
                 r"**/.*",
                 r"**/*~",
                 r"**/__pycache__",
+                r"**/__envo_lock__",
                 *self.ignore_files,
             )
 
     root: Path
+    path: str
     stage: str
     envo_stage: Raw[str]
     pythonpath: Raw[str]
 
-    def __init__(self) -> None:
+    def __init__(self, shell: Optional["Shell"] = None) -> None:
         self.meta = self.Meta()
         self.meta.validate()
         super().__init__(self.meta.name)
 
+        self._shell = shell
+        if self._shell:
+            self._environ = self._shell.environ
+        else:
+            self._environ = os.environ
+
         self.root = self.meta.root
         self.stage = self.meta.stage
         self.envo_stage = self.stage
+
+        self.path = os.environ["PATH"]
 
         if "PYTHONPATH" not in os.environ:
             self.pythonpath = ""
@@ -452,11 +444,6 @@ class Env(BaseEnv):
         self.pythonpath = str(self.root) + ":" + self.pythonpath
 
         self._parent: Optional["Env"] = None
-
-        # self._commands: List[Command] = []
-        # self._contexts: List[Context] = []
-        # self._hooks: Dict[str, List[Hook]] = {
-        # }
 
         self._magic_functions: Dict[str, List[MagicFunction]] = {
             "context": [],
@@ -475,7 +462,7 @@ class Env(BaseEnv):
         if self.meta.parent:
             self._init_parent()
 
-    def activate(self, owner_namespace: str = "") -> None:
+    def activate(self) -> None:
         """
         Validate env and send vars to os.environ
 
@@ -484,8 +471,20 @@ class Env(BaseEnv):
         if self.meta.stage == "comm":
             raise RuntimeError('Cannot activate env with "comm" stage!')
 
-        self.validate()
-        os.environ.update(**self.get_env_vars())
+        self._environ.update(**self.get_env_vars())
+
+    def deactivate(self) -> None:
+        """
+        Validate env and send vars to os.environ
+
+        :param owner_namespace:
+        """
+        if self.meta.stage == "comm":
+            raise RuntimeError('Cannot deactivate env with "comm" stage!')
+
+        for k, v in self.get_env_vars().items():
+            if k in self._environ:
+                self._environ.pop(k)
 
     def get_magic_functions(self) -> Dict[str, List[MagicFunction]]:
         return self._magic_functions
@@ -496,11 +495,8 @@ class Env(BaseEnv):
 
         File name follows env_{env_name} format.
         """
-        self.activate()
         path = Path(f".env_{self.meta.stage}")
-        content = "\n".join(
-            [f'{key}="{value}"' for key, value in self.get_env_vars().items()]
-        )
+        content = "\n".join([f'{key}="{value}"' for key, value in self.get_env_vars().items()])
         path.write_text(content)
         logger.info(f"Saved envs to {str(path)} 💾")
 
@@ -542,12 +538,7 @@ class Env(BaseEnv):
         Go through fields and transform decorated functions to commands.
         """
         for f in dir(self):
-            if f.startswith("_"):
-                continue
-
-            if hasattr(self.__class__, f) and inspect.isdatadescriptor(
-                getattr(self.__class__, f)
-            ):
+            if hasattr(self.__class__, f) and inspect.isdatadescriptor(getattr(self.__class__, f)):
                 continue
 
             attr = getattr(self, f)
@@ -578,7 +569,7 @@ class Env(BaseEnv):
 
         env_dir = self.root.parents[len(self.meta.parent) - 2].absolute()
         sys.path.insert(0, str(env_dir))
-        self._parent = import_from_file(env_dir / f"env_{self.stage}.py").Env()
+        self._parent = import_from_file(env_dir / f"env_{self.stage}.py").Env(self._shell)
         sys.path.pop(0)
         assert self._parent
         self._parent.activate()
@@ -592,26 +583,3 @@ class Env(BaseEnv):
                 ret.append(str(f))
 
         return super()._repr() + "\n".join(ret)
-
-
-class VenvEnv(BaseEnv):
-    """
-    Env that activates virtual environment.
-    """
-
-    # TODO: change it to a mixin?
-
-    path: Raw[str]
-    bin: Path
-
-    def __init__(self, owner: Env) -> None:
-        self._owner = owner
-        super().__init__(_name="venv")
-
-        self.bin = self._owner.root / ".venv/bin"
-        self.path = f"""{str(self.bin)}:{os.environ['PATH']}"""
-        site_packages = (
-            next((self._owner.root / ".venv/lib").glob("*")) / "site-packages"
-        )
-
-        sys.path.insert(0, str(site_packages))

@@ -15,6 +15,7 @@ class TestCommands(utils.TestBase):
             (
                 r"# Variables\n"
                 r"root: Field = PosixPath\('.*'\)\n"
+                r"path: Field = '.*'\n"
                 r"stage: Field = 'test'\n"
                 r"envo_stage: Field = 'test'\n"
                 r"pythonpath: Field = .*\n"
@@ -42,6 +43,7 @@ class TestCommands(utils.TestBase):
             (
                 r"# Variables\n"
                 r"root: Field = PosixPath\('.*'\)\n"
+                r"path: Field = '.*'\n"
                 r"stage: Field = 'test'\n"
                 r"envo_stage: Field = 'test'\n"
                 r"pythonpath: Field = .*\n"
@@ -85,5 +87,5 @@ class TestCommands(utils.TestBase):
         utils.mypy_cmd(prop=True, glob=False)
 
         e = utils.env()
-        assert repr(e.mypy) == "\b"
+        assert repr(e.mypy) == ""
         assert capsys.readouterr().out == "Mypy all good\n"

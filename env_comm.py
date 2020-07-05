@@ -2,14 +2,12 @@ from pathlib import Path
 
 # from typing import List
 
-from loguru import logger
-
 from typing import List, Dict, Any, Tuple  # noqa: F401
 
 import envo
 from envo import (  # noqa: F401
     command,
-    VenvEnv,
+    VirtualEnv,
     context,
     Raw,
     run,
@@ -19,26 +17,23 @@ from envo import (  # noqa: F401
     postcmd,
     onload,
     onunload,
+    logger,
 )
 
 # onstdout, onstderr, postcmd
 
 
-class EnvoEnvComm(envo.Env):
+class EnvoEnvComm(VirtualEnv, envo.Env):
     class Meta(envo.Env.Meta):
         root = Path(__file__).parent
         name = "envo"
         version = "0.1.0"
-        watch_files: Tuple[str] = ()
-        ignore_files: Tuple[str] = ("tests",)
+        watch_files: Tuple[str, ...] = ()
+        ignore_files: Tuple[str, ...] = ("**/tests/**",)
         parent = None
 
-    venv: VenvEnv
-
-    def __init__(self) -> None:
-        super().__init__()
-
-        self.venv = VenvEnv(self)
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
 
     # class Bootstrap:
     #     watch_files = [
@@ -64,10 +59,11 @@ class EnvoEnvComm(envo.Env):
 
     @command
     def flake(self) -> None:
-        logger.info("Running flake8")
-        run("black .", print_output=False)
+        # logger.info("Running flake8")
+        run("black . --line-length=120", print_output=False)
         run("autoflake --remove-all-unused-imports -i .")
         run("flake8")
+        # return "Flake good"
 
     # @onfilevent(file=r"envo*.py", events=[])
     # def on_save(self, event, file: Path):
@@ -102,6 +98,11 @@ class EnvoEnvComm(envo.Env):
         logger.info("Running mypy")
         run("mypy envo")
 
+    # @context
+    # def cont(self):
+    #     sleep(5)
+    #     return {"a": 1}
+
     #
     # @command(glob=True)
     # def black(self) -> None:
@@ -133,28 +134,28 @@ class EnvoEnvComm(envo.Env):
     #
     #     checker.run()
 
-    @precmd(cmd_regex=r"git commit.*")
-    def pre_commit(self, command) -> None:
-        print("preee")
-
-    @onstdout(cmd_regex=r"ls")
-    def on_custom_ls_out(self, command: str, out: str) -> str:
-        out = "a" + out
-        return out
-
-    @onstdout(cmd_regex=r"print\(.*\)")
-    def on_print(self, out, command) -> str:
-        return "sweet"
-
-    @onstderr(cmd_regex=r"print\(.*\)")
-    def on_custom_ls_err(self, command: str, out: str) -> str:
-        return out
-
-    @postcmd(cmd_regex=r"print\(.*\)")
-    def post_custom_ls(
-        self, command: str, stdout: List[str], stderr: List[str]
-    ) -> None:
-        print("post")
+    # @precmd(cmd_regex=r"git commit.*")
+    # def pre_commit(self, command) -> None:
+    #     print("preee")
+    #
+    # @onstdout(cmd_regex=r"ls")
+    # def on_custom_ls_out(self, command: str, out: str) -> str:
+    #     out = "a" + out
+    #     return out
+    #
+    # @onstdout(cmd_regex=r"print\(.*\)")
+    # def on_print(self, out, command) -> str:
+    #     return "sweet"
+    #
+    # @onstderr(cmd_regex=r"print\(.*\)")
+    # def on_custom_ls_err(self, command: str, out: str) -> str:
+    #     return out
+    #
+    # @postcmd(cmd_regex=r"print\(.*\)")
+    # def post_custom_ls(
+    #     self, command: str, stdout: List[str], stderr: List[str]
+    # ) -> None:
+    #     print("post")
 
 
 Env = EnvoEnvComm

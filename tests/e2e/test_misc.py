@@ -3,126 +3,134 @@ import re
 from pathlib import Path
 from time import sleep
 
-import pexpect
 import pytest
-from pexpect import run
 from rhei import Stopwatch
 
 from tests.e2e import utils
 
 
 class TestMisc(utils.TestBase):
-    def test_shell(self, shell, envo_prompt):
+    def test_shell(self, shell):
+        e = shell.expecter
+        e.prompt().eval()
+
         shell.sendline("print('test')")
-        shell.expect(b"test")
-        shell.expect(envo_prompt)
+        e.output(r"test\n")
+        e.prompt().eval()
 
         assert Path("env_comm.py").exists()
         assert Path("env_test.py").exists()
 
-    def test_shell_exit(self, shell, envo_prompt):
-        shell.sendline("exit")
-        shell.expect(pexpect.EOF)
+        shell.exit()
+        e.exit().eval()
 
     def test_dry_run(self):
-        ret = run("envo test --dry-run")
-        assert ret != b""
+        ret = utils.run("envo test --dry-run")
+        assert re.match(
+            (
+                r'export SANDBOX_ROOT=".*sandbox"\r\n'
+                r'export SANDBOX_PATH=".*"\r\n'
+                r'export SANDBOX_STAGE="test"\r\n'
+                r'export ENVO_STAGE="test"\r\n'
+                r'export PYTHONPATH=".*"'
+            ),
+            ret,
+        )
 
     def test_save(self):
         utils.add_declaration("test_var: str")
         utils.add_definition('self.test_var = "test_value"')
 
-        s = utils.spawn("envo test --save")
-        s.expect(r"Saved envs to \.env_test")
-        s.expect(pexpect.EOF)
+        ret = utils.run("envo test --save")
+        assert "Saved envs to .env_test" in ret
 
         dot_env = Path(".env_test")
         assert dot_env.exists()
 
         # remove PYTHONPATH since it'll be different depending on the machine
         content = dot_env.read_text()
-        content = re.sub(r'PYTHONPATH.*"', "", content, 1)
-        content = re.sub(r'SANDBOX_ROOT.*"', "", content, 1)
-        content = content.replace("\n\n", "\n")
-        if content.startswith("\n"):
-            content = content[1:]
-
-        if content.endswith("\n"):
-            content = content[:-1]
-
-        assert (
-            content == 'SANDBOX_STAGE="test"\n'
-            'ENVO_STAGE="test"\n'
-            'SANDBOX_TESTVAR="test_value"'
+        assert re.match(
+            (
+                r'SANDBOX_ROOT=".*sandbox"\n'
+                r'SANDBOX_PATH=".*"\n'
+                r'SANDBOX_STAGE="test"\n'
+                r'ENVO_STAGE="test"\n'
+                r'PYTHONPATH=".*\n'
+                r'SANDBOX_TESTVAR="test_value"'
+            ),
+            content,
         )
 
-    @pytest.mark.parametrize(
-        "dir_name", ["my-sand-box", "my sandbox", ".sandbox", ".san.d- b  ox"]
-    )
-    def test_init_weird_dir_name(self, dir_name, envo_prompt):
+    @pytest.mark.parametrize("dir_name", ["my-sand-box", "my sandbox", ".sandbox", ".san.d- b  ox"])
+    def test_init_weird_dir_name(self, dir_name):
         env_dir = Path(dir_name)
         env_dir.mkdir()
         os.chdir(str(env_dir))
-        run("envo test --init")
+        utils.run("envo test --init")
 
         assert Path("env_comm.py").exists()
         assert Path("env_test.py").exists()
-        s = utils.spawn("envo test")
-        prompt = envo_prompt.replace(
-            b"sandbox", dir_name.encode("utf-8").replace(b".", rb"\.")
-        )
-        s.expect(prompt)
+        s = utils.shell()
+        e = s.expecter
 
-    def test_autodiscovery(self, envo_prompt):
+        e.prompt(name=dir_name).eval()
+
+        s.exit()
+        e.exit().eval()
+
+    def test_autodiscovery(self):
         Path("./test_dir").mkdir()
         os.chdir("./test_dir")
 
         s = utils.shell()
+        e = s.expecter
+
+        e.prompt().eval()
+
         s.sendline("print('test')")
-        s.expect(b"test")
-        s.expect(envo_prompt)
-        s.sendline("exit")
+        e.output(r"test\n")
+        e.prompt()
+
+        s.exit()
+        e.exit().eval()
 
         assert list(Path(".").glob(".*")) == []
 
-    def test_multiple_instances(self, envo_prompt):
-        shells = [utils.shell() for i in range(6)]
+    def test_multiple_instances(self,):
+        shells = []
+        for i in range(6):
+            shells.append(utils.shell())
+            sleep(0.2)
 
-        sleep(0.5)
+        utils.trigger_reload()
 
-        new_content = Path("env_comm.py").read_text() + "\n"
-        Path("env_comm.py").write_text(new_content)
-
-        [s.expect(envo_prompt, timeout=12) for s in shells]
+        for s in shells:
+            s.expecter.prompt().eval()
+            s.exit()
+            s.expecter.exit().eval()
 
     def test_env_persists_in_bash_scripts(self, shell):
+        e = shell.expecter
+        e.prompt().eval()
+
         file = Path("script.sh")
         file.touch()
-        file.write_text("$SANDBOX_ROOT\n")
+        file.write_text("echo $SANDBOX_ROOT\n")
 
         shell.sendline("bash script.sh")
-        shell.expect(str(Path(".").absolute()))
+        e.output(str(Path(".").absolute()) + r"\n")
 
-    def test_access_to_env_in_shell(self, shell):
-        shell.sendline("script.sh")
+        e.prompt().eval()
 
-    def test_venv_addon(self):
-        Path("env_comm.py").unlink()
-        Path("env_test.py").unlink()
-        utils.run("poetry run python -m venv .venv")
-        utils.run("./.venv/bin/pip install rhei==0.5.2")
-        utils.run("envo test --init=venv")
-
-        s = utils.shell()
-        s.sendline("import rhei")
-        s.sendline("print(rhei.stopwatch)")
-        s.expect(r"module 'rhei\.stopwatch'")
+        shell.exit()
+        e.exit().eval()
 
     def test_timing(self):
         stopwatch = Stopwatch()
 
         stopwatch.start()
-        utils.shell()
+        s = utils.shell()
+        s.exit()
         stopwatch.pause()
 
         assert stopwatch.value < 3.5

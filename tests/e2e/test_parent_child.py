@@ -4,41 +4,46 @@ from pathlib import Path
 
 
 class TestParentChild(utils.TestBase):
-    def test_init(self, envo_prompt, init_child_env):
+    def test_init(self, init_child_env):
         os.chdir("child")
 
-        nested_prompt = envo_prompt.replace(b"sandbox", b"sandbox.child")
-        utils.shell(nested_prompt)
+        s = utils.shell()
+        e = s.expecter
+        e.prompt(name=r"sandbox\.child").eval()
 
-    def test_hot_reload(self, envo_prompt, init_child_env):
+        s.exit()
+        e.exit().eval()
+
+    def test_hot_reload(self, init_child_env):
         os.chdir("child")
 
-        nested_prompt = envo_prompt.replace(b"sandbox", b"sandbox.child")
-        s = utils.shell(nested_prompt)
+        s = utils.shell()
+        e = s.expecter
+        e.prompt(name=r"sandbox\.child").eval()
 
-        child_file = Path("env_comm.py")
-        content = child_file.read_text()
-        content = content.replace("child", "ch")
-        child_file.write_text(content)
+        utils.replace_in_code("child", "ch")
 
-        new_prompt1 = nested_prompt.replace(b"child", b"ch")
-        s.expect(new_prompt1)
+        e.expected.pop()
+        e.prompt(name=r"sandbox\.child").eval()
 
-        parent_file = Path("../env_comm.py")
-        content = parent_file.read_text()
-        content = content.replace("sandbox", "sb")
-        parent_file.write_text(content)
+        e.expected.pop()
+        e.prompt(name=r"sandbox\.ch").eval()
 
-        new_prompt2 = new_prompt1.replace(b"sandbox", b"sb")
-        s.expect(new_prompt2)
+        utils.replace_in_code("sandbox", "sb", file=Path("../env_comm.py"))
+        e.expected.pop()
+        e.prompt(name=r"sb\.ch").eval()
 
-    def test_child_importable(self, envo_prompt, init_child_env):
+        s.exit()
+        e.exit().eval()
+
+    def test_child_importable(self, init_child_env):
         Path("__init__.py").touch()
         os.chdir("child")
         Path("__init__.py").touch()
 
-        nested_prompt = envo_prompt.replace(b"sandbox", b"sandbox.child")
-        s = utils.shell(nested_prompt)
+        s = utils.shell()
+        e = s.expecter
+        e.prompt(name=r"sandbox\.child").eval()
 
         test_script = Path("test_script.py")
         content = "from env_test import Env\n"
@@ -47,12 +52,19 @@ class TestParentChild(utils.TestBase):
         test_script.write_text(content)
 
         s.sendline("python3 test_script.py")
-        s.expect("ok")
+        e.output("ok\n")
+        e.prompt(name=r"sandbox\.child")
 
-    def test_same_child_names(self, envo_prompt, init_2_same_childs):
+        s.exit()
+        e.exit().eval()
+
+    def test_same_child_names(self, init_2_same_childs):
         root_dir = Path(".").absolute()
-
         os.chdir(root_dir / "sandbox/sandbox")
 
-        nested_prompt = envo_prompt.replace(b"sandbox", b"sandbox.sandbox.sandbox")
-        utils.shell(nested_prompt)
+        s = utils.shell()
+        e = s.expecter
+        e.prompt(name="sandbox.sandbox.sandbox")
+
+        s.exit()
+        e.exit().eval()

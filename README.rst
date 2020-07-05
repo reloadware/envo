@@ -112,18 +112,20 @@ Major:
 * Add file hooks
 * Add bootstrap (versioning etc)
 * Fix git log bug
-* Add reload command
-* magic function args validator
+* Silent reloading
 
 Minor:
 * Shell should highlight envo commands on green
-* Unnecessary prompt rendered again aftet Ctr-d
+* Unnecessary prompt rendered again aftet Ctr-d (only on xonsh?)
 * work on public/private fields and methods
 * add examples
 * print hooks for repr
+* Add reload command
 
 Bugs:
+* AttributeError on exit from emergency mode
+* Name error in context no emergency mode
+* .venv issue
 
 Improvements:
 * type checking ?
-* .venv issue

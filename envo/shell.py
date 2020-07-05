@@ -1,49 +1,49 @@
 import builtins
+import os
 import sys
 import time
 from copy import copy
+from enum import Enum
 from threading import Lock
 from typing import Any, Dict, Callable, Optional, List, TextIO
 
+from dataclasses import dataclass
+from prompt_toolkit.data_structures import Size
 from xonsh.base_shell import BaseShell
 from xonsh.execer import Execer
 from xonsh.prompt.base import DEFAULT_PROMPT
 from xonsh.ptk_shell.shell import PromptToolkitShell
 from xonsh.readline_shell import ReadlineShell
 
+from envo.misc import Callback
 
-class Prompt:
-    _prompt: str
-    _template: str
+
+class PromptState(Enum):
+    LOADING = 0
+    NORMAL = 1
+
+
+class PromptBase:
+    default: str = str(DEFAULT_PROMPT)
+    loading: bool = False
+    emoji: str = NotImplemented
+    state_prefix_map: Dict[PromptState, Callable[[], str]] = NotImplemented
 
     def __init__(self) -> None:
-        self._prompt = ""
-        self._template = "{emergency}{loading}{emoji}{name}{default}"
-        self.emergency: bool = False
-        self.loading: bool = False
-        self.emoji: str = ""
-        self.name: str = ""
-        self.default: str = str(DEFAULT_PROMPT)
-
-        self.context: Dict[str, Callable] = {
-            "emergency": lambda: "❌" if self.emergency else "",
-            "loading": lambda: "⏳" if self.loading else "",
-            "emoji": lambda: self.emoji,
-            "name": lambda: f"({self.name})" if self.name else "",
-            "default": lambda: str(DEFAULT_PROMPT),
-        }
-
-    def reset(self) -> None:
-        self._prompt = self._template
-        self.emergency = False
-        self.loading = False
+        self.state = PromptState.NORMAL
+        self.previous_state: Optional[PromptState] = None
         self.emoji = ""
         self.name = ""
-        self.default = str(DEFAULT_PROMPT)
+
+    def set_state(self, state: PromptState) -> None:
+        self.previous_state = self.state
+        self.state = state
+
+    def as_str(self) -> str:
+        return self.state_prefix_map[self.state]()
 
     def __str__(self) -> str:
-        prompt = self._prompt.format(**{k: v() for k, v in self.context.items()})
-        return prompt
+        return self.state_prefix_map[self.state]()
 
 
 class Shell(BaseShell):  # type: ignore
@@ -51,18 +51,32 @@ class Shell(BaseShell):  # type: ignore
     Xonsh shell extension.
     """
 
+    @dataclass
+    class Callbacs:
+        pre_cmd: Callback = Callback(None)
+        on_stdout: Callback = Callback(None)
+        on_stderr: Callback = Callback(None)
+        post_cmd: Callback = Callback(None)
+        on_enter: Callback = Callback(None)
+        on_exit: Callback = Callback(None)
+
+        def reset(self) -> None:
+            self.pre_cmd = Callback(None)
+            self.on_stdout = Callback(None)
+            self.on_stderr = Callback(None)
+            self.post_cmd = Callback(None)
+            self.on_enter = Callback(None)
+            self.on_exit = Callback(None)
+
     def __init__(self, execer: Execer) -> None:
         super().__init__(execer=execer, ctx={})
+
+        self.callbacks = self.Callbacs()
 
         self.environ = builtins.__xonsh__.env  # type: ignore
         self.history = builtins.__xonsh__.history  # type: ignore
         self.environ_before = copy(self.environ)
         self.context: Dict[str, Any] = {}
-
-        self.pre_cmd: Optional[Callable] = None
-        self.on_stdout: Optional[Callable] = None
-        self.on_stderr: Optional[Callable] = None
-        self.post_cmd: Optional[Callable] = None
 
         self.cmd_lock = Lock()
 
@@ -81,7 +95,7 @@ class Shell(BaseShell):  # type: ignore
 
         built_in_name = f"__envo_{name}__"
         setattr(builtins, built_in_name, value)
-        self.default(f"{name} = {built_in_name}")
+        exec(f"{name} = {built_in_name}", builtins.__dict__)
 
     def update_context(self, context: Dict[str, Any]) -> None:
         for k, v in context.items():
@@ -95,13 +109,9 @@ class Shell(BaseShell):  # type: ignore
     def reset(self) -> None:
         self.environ = copy(self.environ_before)
         for n, v in self.context.items():
-            self.default(f"del {n}")
+            exec(f"del {n}", builtins.__dict__)
 
         self.context = {}
-        self.pre_cmd = None
-        self.on_stdout = None
-        self.on_stderr = None
-        self.post_cmd = None
 
     @property
     def prompt(self) -> str:
@@ -127,11 +137,12 @@ class Shell(BaseShell):  # type: ignore
         load_builtins(ctx=ctx, execer=execer)
         env = builtins.__xonsh__.env  # type: ignore
         env.update({"XONSH_INTERACTIVE": True, "SHELL_TYPE": "prompt_toolkit"})
-        builtins.__xonsh__.history = xhm.construct_history(  # type: ignore
-            env=env.detype(), ts=[time.time(), None], locked=True
-        )
 
-        builtins.__xonsh__.history.gc.wait_for_shell = False  # type: ignore
+        if "ENVO_SHELL_NOHISTORY" not in os.environ:
+            builtins.__xonsh__.history = xhm.construct_history(  # type: ignore
+                env=env.detype(), ts=[time.time(), None], locked=True
+            )
+            builtins.__xonsh__.history.gc.wait_for_shell = False  # type: ignore
 
         install_import_hooks()
         builtins.aliases.update({"ll": "ls -alF"})  # type: ignore
@@ -177,31 +188,31 @@ class Shell(BaseShell):  # type: ignore
         class StdErr(Stream):
             device = sys.__stderr__
 
-        if self.pre_cmd:
-            line = self.pre_cmd(line)
+        if self.callbacks.pre_cmd:
+            line = self.callbacks.pre_cmd(line)
 
         out = None
-        if self.on_stdout:
-            out = StdOut(command=line, on_write=self.on_stdout)
+        if self.callbacks.on_stdout:
+            out = StdOut(command=line, on_write=self.callbacks.on_stdout)
             sys.stdout = out  # type: ignore
 
         err = None
-        if self.on_stderr:
-            err = StdErr(command=line, on_write=self.on_stderr)
+        if self.callbacks.on_stderr:
+            err = StdErr(command=line, on_write=self.callbacks.on_stderr)
             sys.stderr = err  # type: ignore
 
         try:
             # W want to catch all exceptions just in case the command fails so we can handle std_err and post_cmd
             ret = super().default(line)
         finally:
-            if self.on_stdout:
+            if self.callbacks.on_stdout:
                 sys.stdout = sys.__stdout__
 
-            if self.on_stderr:
+            if self.callbacks.on_stderr:
                 sys.stderr = sys.__stderr__
 
-            if self.post_cmd and out and err:
-                self.post_cmd(command=line, stdout=out.output, stderr=err.output)
+            if self.callbacks.post_cmd and out and err:
+                self.callbacks.post_cmd(command=line, stdout=out.output, stderr=err.output)
 
             self.cmd_lock.release()
 
@@ -214,11 +225,23 @@ class FancyShell(Shell, PromptToolkitShell):  # type: ignore
         from xonsh.main import _pprint_displayhook
 
         shell = super().create()
+
         setattr(sys, "displayhook", _pprint_displayhook)
         return shell
 
     def start(self) -> None:
+        if "ENVO_E2E_TEST" in os.environ:
+            self.prompter.output.get_size = lambda: Size(50, 200)
+
+        self.callbacks.on_enter()
         self.cmdloop()
+
+        self.callbacks.on_exit()
+
+    def set_prompt(self, prompt: str) -> None:
+        super(FancyShell, self).set_prompt(prompt)
+        self.prompter.message = self.prompt_tokens()
+        self.prompter.app.invalidate()
 
 
 class SimpleShell(Shell, ReadlineShell):  # type: ignore

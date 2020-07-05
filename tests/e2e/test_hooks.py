@@ -1,8 +1,3 @@
-from pathlib import Path
-
-import pytest
-from pexpect import EOF, TIMEOUT
-
 from tests.e2e import utils
 
 
@@ -19,12 +14,20 @@ class TestHooks(utils.TestBase):
         )
 
         s = utils.shell()
-        s.sendline('print("pancake");')
-        s.expect(r"pre\r\n")
-        s.expect(r"pancake\r\n")
-        s.expect(r"pancake\r\n")
+        e = s.expecter
 
-    def test_fun_args_validation(self, envo_prompt):
+        e.prompt().eval()
+
+        s.sendline('print("pancake");')
+        e.output(r"pre\n")
+        e.output(r"pancake\n")
+        e.output(r"pancake\n")
+        e.prompt().eval()
+
+        s.exit()
+        e.exit().eval()
+
+    def test_fun_args_validation(self):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"print\(.*\)")
@@ -34,17 +37,23 @@ class TestHooks(utils.TestBase):
                 return command * 2
             """
         )
-        utils.shell(
-            envo_prompt.replace(
-                r"🛠\(sandbox\)".encode("utf-8"),
+        s = utils.shell()
+        e = s.expecter
+
+        e.output(
+            (
                 r"Unexpected magic function args \['cmd'\], should be \['command'\].*"
                 r"pre_print\(cmd: str\) -> str.*"
                 r'In file ".*".*'
-                r"Line number: \d\d.*.*❌".encode("utf-8"),
+                r"Line number: \d\d\n"
             )
         )
+        e.prompt(utils.PromptState.EMERGENCY).eval()
 
-    def test_fun_args_validation_missing_arg(self, envo_prompt):
+        s.exit()
+        e.exit().eval()
+
+    def test_fun_args_validation_missing_arg(self):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"print\(.*\)")
@@ -53,15 +62,22 @@ class TestHooks(utils.TestBase):
                 return "cmd"
             """
         )
-        utils.shell(
-            envo_prompt.replace(
-                r"🛠\(sandbox\)".encode("utf-8"),
+        s = utils.shell()
+        e = s.expecter
+
+        e.output(
+            (
                 r"Missing magic function args \['command'\].*"
                 r"pre_print\(\) -> str.*"
                 r'In file ".*".*'
-                r"Line number: \d\d.*.*❌".encode("utf-8"),
+                r"Line number: \d\d\n"
             )
         )
+
+        e.prompt(utils.PromptState.EMERGENCY).eval()
+
+        s.exit()
+        e.exit().eval()
 
     def test_precmd_not_matching_not_run(self):
         utils.add_hook(
@@ -74,12 +90,15 @@ class TestHooks(utils.TestBase):
         )
 
         s = utils.shell()
+        e = s.expecter
+
+        e.prompt().eval()
 
         s.sendline('print("pancake");')
-        with pytest.raises(TIMEOUT):
-            s.expect(r"pre\r\n", timeout=0.5)
+        e.output(r"pancake\n").prompt().eval()
 
-        s.expect(r"pancake\r\n")
+        s.exit()
+        e.exit().eval()
 
     def test_precmd_access_env_vars(self):
         utils.add_hook(
@@ -92,9 +111,15 @@ class TestHooks(utils.TestBase):
         )
 
         s = utils.shell()
+        e = s.expecter
+
+        e.prompt().eval()
+
         s.sendline('print("pancake");')
-        s.expect(r"test\r\n")
-        s.expect(r"pancake\r\n")
+        e.output(r"test\npancake\n").prompt().eval()
+
+        s.exit()
+        e.exit().eval()
 
     def test_onstdout(self):
         utils.add_hook(
@@ -107,9 +132,15 @@ class TestHooks(utils.TestBase):
         )
 
         s = utils.shell()
+        e = s.expecter
+
+        e.prompt().eval()
+
         s.sendline('print("pancake");print("banana")')
-        s.expect(r" sweet pancake sweet \r\n")
-        s.expect(r" sweet banana sweet \r\n")
+        e.output(r" sweet pancake sweet\n sweet banana sweet\n").prompt().eval()
+
+        s.exit()
+        e.exit().eval()
 
     def test_onstderr(self):
         utils.add_hook(
@@ -127,10 +158,15 @@ class TestHooks(utils.TestBase):
         )
 
         s = utils.shell()
+        e = s.expecter
+
+        e.prompt().eval()
+
         s.sendline("print(1/0)")
-        s.expect(r"not good :/")
-        s.expect(r"ZeroDivisionError: division by zero")
-        s.expect(r"post command test")
+        e.output(r"not good :/\nxonsh:.*ZeroDivisionError: division by zero\npost command test\n").prompt().eval()
+
+        s.exit()
+        e.exit().eval()
 
     def test_post_hook_print(self):
         utils.add_hook(
@@ -145,12 +181,17 @@ class TestHooks(utils.TestBase):
         )
 
         s = utils.shell()
-        s.sendline('print("pancake");print("banana")')
-        s.expect(r"pancake\r\n")
-        s.expect(r"banana\r\n")
-        s.expect(r"post\r\n")
+        e = s.expecter
 
-    def test_onload_onunload_hook(self, envo_prompt):
+        e.prompt().eval()
+
+        s.sendline('print("pancake");print("banana")')
+        e.output(r"pancake\nbanana\npost\n").prompt().eval()
+
+        s.exit()
+        e.exit().eval()
+
+    def test_onload_onunload_hook(self):
         utils.add_hook(
             r"""
             @oncreate
@@ -168,13 +209,20 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell(rb"on create.*on load.*" + envo_prompt)
-        s.sendline("exit")
-        s.expect(r"on unload")
-        s.expect(r"on destroy")
-        s.expect(EOF)
+        s = utils.shell()
+        e = s.expecter
 
-    def test_onload_onunload_reload(self, envo_prompt):
+        e.output(r"on load\n")
+        e.output(r"on create\n")
+        e.prompt().eval()
+
+        s.exit()
+        e.exit()
+        e.output(r"on destroy\n")
+        e.output(r"on unload")
+        e.eval()
+
+    def test_onload_onunload_reload(self):
         utils.add_hook(
             r"""
             @onload
@@ -186,10 +234,12 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell(rb"on load.*" + envo_prompt)
-        Path("env_comm.py").write_text(Path("env_comm.py").read_text())
-        s.expect(r"on unload")
-        s.expect(r"on load")
-        s.sendline("exit")
-        s.expect(r"on unload")
-        s.expect(EOF)
+        s = utils.shell()
+        e = s.expecter
+
+        e.output(r"on load\n")
+        e.prompt().eval()
+
+        s.exit()
+        e.exit()
+        e.output(r"on unload").eval()

@@ -1,7 +1,5 @@
-from loguru import logger  # noqa: F401
-
 from env_comm import EnvoEnvComm
-from envo import Raw, command, run  # noqa: F401
+from envo import Raw, command, run, logger  # noqa: F401
 
 
 class EnvoEnv(EnvoEnvComm):  # type: ignore
@@ -11,8 +9,8 @@ class EnvoEnv(EnvoEnvComm):  # type: ignore
 
     # Declare your variables here
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
 
         # Define your variables here
 
@@ -20,7 +18,7 @@ class EnvoEnv(EnvoEnvComm):  # type: ignore
     def test(self) -> None:
         logger.info("Running tests")
         run("mkdir -p workspace")
-        run("pytest -v tests --cov-report xml:workspace/cov.xml --cov=envo ./workspace")
+        run("pytest --reruns 10 -v tests --cov-report xml:workspace/cov.xml --cov=envo ./workspace")
 
     @command
     def flake(self) -> None:

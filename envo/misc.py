@@ -1,21 +1,23 @@
 import importlib.machinery
 import importlib.util
 import inspect
-import sys
+import time
+
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Callable
 import inotify.adapters
 import inotify.constants
 from globmatch_temp import glob_match
-
+from threading import Thread
 
 __all__ = [
     "dir_name_to_class_name",
-    "setup_logger",
     "render_py_file",
     "render_file",
     "import_from_file",
     "EnvoError",
+    "Callback",
 ]
 
 
@@ -23,37 +25,118 @@ class EnvoError(Exception):
     pass
 
 
-class Inotify:
-    def __init__(self, root: Path):
-        self.device = inotify.adapters.Inotify()
-        self.root = root
-        self.include: List[str] = []
-        self.exclude: List[str] = []
-        self._pause = False
-        self._pause_exemption: Optional[Path] = None
-        self.stop = False
+class Callback:
+    def __init__(self, func: Optional[Callable[..., Any]]) -> None:
+        self.func = func
 
-    def event_gen(self) -> Any:
-        for event in self.device.event_gen(yield_nones=False):
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        if not self.func:
+            return
+        return self.func(*args, **kwargs)
+
+    def __bool__(self) -> bool:
+        return self.func is not None
+
+
+class InotifyPath:
+    def __init__(self, raw_path: Path, root: Path) -> None:
+        self.absolute = raw_path.absolute()
+        self.relative = self.absolute.relative_to(root)
+        self.relative_str = str(self.relative)
+
+        if self.relative.is_dir():
+            self.relative_str += "/"
+
+    def match(self, include: Tuple[str, ...], exclude: Tuple[str, ...]) -> bool:
+        return not glob_match(self.relative_str, exclude) and glob_match(self.relative_str, include)
+
+    def is_dir(self) -> bool:
+        return self.absolute.is_dir()
+
+
+class Inotify:
+    @dataclass
+    class Event:
+        path: InotifyPath
+        type_names: Tuple[str]
+        during_pause: bool
+        during_commands: bool
+
+    @dataclass
+    class Sets:
+        include: Tuple[str, ...]
+        exclude: Tuple[str, ...]
+        root: Path
+        lock_file: Optional[Path] = None
+
+    @dataclass
+    class Callbacks:
+        on_event: Callback
+
+    device = inotify.adapters.Inotify()
+    stop: bool
+    events: List[Event]
+
+    _pause: bool
+    _collector_thread: Thread
+    _producer_thread: Thread
+    _on_event: Callback
+
+    def __init__(self, se: Sets, calls: Callbacks):
+        self.se = se
+        self.calls = calls
+        self.remove_watches()
+
+        self._pause = False
+        self.stop = False
+        self._collector_thread = Thread(target=self._collector_thread_fun)
+        self._producer_thread = Thread(target=self._producer_thread_fun)
+        self.events = []
+
+    def _collector_thread_fun(self) -> None:
+        for raw_event in self.device.event_gen(yield_nones=False):
             if self.stop:
                 return
+            (_, type_names, path, filename) = raw_event
+            raw_path = Path(path) / Path(filename)
 
-            (_, type_names, path, filename) = event
-            full_path = Path(path) / Path(filename)
+            event = Inotify.Event(
+                path=InotifyPath(raw_path=raw_path, root=self.se.root),
+                type_names=type_names,
+                during_pause=self._pause,
+                during_commands=self._pause,
+            )
 
-            relative_path = full_path.relative_to(self.root)
-            relative_path_str = str(relative_path)
-            if relative_path.is_dir():
-                relative_path_str += "/"
+            if self.se.lock_file and event.path.absolute.name == self.se.lock_file.name:
+                if "IN_CREATE" in event.type_names:
+                    self.pause()
 
-            if self._pause and full_path != self._pause_exemption:
+                if "IN_DELETE" in event.type_names:
+                    self.resume()
                 continue
 
-            if glob_match(relative_path_str, self.exclude):
-                continue
+            if event.path.match(self.se.include, self.se.exclude):
+                if not self._pause and "IN_CREATE" in event.type_names:
+                    self.add_watch_recursive(event.path.absolute)
 
-            if glob_match(relative_path_str, self.include):
-                yield event
+                self.events.append(event)
+
+    def _producer_thread_fun(self) -> None:
+        while not self.stop:
+            while self.events:
+                if self._pause:
+                    break
+                e = self.events.pop(0)
+                self.calls.on_event(e)
+
+            time.sleep(0.1)
+
+    def flush(self) -> None:
+        self.events = []
+
+    def start(self) -> None:
+        self._collector_thread.start()
+        self._producer_thread.start()
 
     def remove_watches(self) -> None:
         self.device._Inotify__watches = {}
@@ -65,51 +148,96 @@ class Inotify:
 
         self.device.remove_watch(str(path))
 
-    def pause(self, exempt: Optional[Path] = None) -> None:
+    def pause(self) -> None:
         self._pause = True
-        self._pause_exemption = exempt
 
     def resume(self) -> None:
         self._pause = False
 
-    def add_watch(self, path: Path) -> None:
+    def add_watch(self, raw_path: Path) -> None:
+        path = InotifyPath(raw_path=raw_path, root=self.se.root)
+        if str(path.absolute) not in self.device._Inotify__watches:
+            self.device.add_watch(str(path.absolute))
+
+    def add_watch_recursive(self, raw_path: Path) -> None:
         if self.stop:
             return
 
-        if path.is_absolute():
-            relative = path.relative_to(self.root)
+        path = InotifyPath(raw_path=raw_path, root=self.se.root)
+        if path.relative == Path("."):
+            self.device.add_watch(str(path.absolute))
         else:
-            relative = path
+            if not path.match(self.se.include, self.se.exclude):
+                return
 
-        relative_str = str(relative)
+        if path.relative.is_dir():
+            self.add_watch(path.absolute)
+            for p in path.relative.iterdir():
+                self.add_watch_recursive(p.absolute())
+        else:
+            self.add_watch(path.absolute)
 
-        absolute_path = path.absolute()
 
-        if relative.is_dir():
-            relative_str += "/"
+class FilesWatcher:
+    @dataclass
+    class Sets:
+        watch_root: Path
+        watch_files: Tuple[str, ...]
+        ignore_files: Tuple[str, ...]
+        global_lock_file: Optional[Path] = None
 
-        if path.is_dir():
-            if relative == Path("."):
-                self.device.add_watch(str(absolute_path))
-            else:
-                if glob_match(relative_str, self.exclude):
-                    return
-                if not glob_match(relative_str, self.include):
-                    return
-                self.device.add_watch(str(absolute_path))
+    @dataclass
+    class Callbacks:
+        on_trigger: Callback
 
-            for p in relative.iterdir():
-                self.add_watch(p.absolute())
+    inotify: Inotify
 
-        if glob_match(relative_str, self.exclude):
+    def __init__(self, se: Sets, callbacks: Callbacks):
+        self.se = se
+        self.callbacks = callbacks
+
+        self.inotify = Inotify(
+            se=Inotify.Sets(
+                root=self.se.watch_root,
+                lock_file=self.se.global_lock_file,
+                include=("**/env_*.py", *self.se.watch_files),
+                exclude=self.se.ignore_files,
+            ),
+            calls=Inotify.Callbacks(on_event=Callback(self._on_event)),
+        )
+
+        self.inotify.remove_watches()
+        self.inotify.add_watch_recursive(self.se.watch_root)
+
+    def _on_event(self, event: Inotify.Event) -> None:
+        if event.during_pause:
             return
-        if not glob_match(relative_str, self.include):
+
+        if event.path.absolute.is_dir():
             return
 
-        if str(absolute_path) not in self.device._Inotify__watches:
-            self.device.add_watch(str(absolute_path))
+        if "IN_CLOSE_WRITE" in event.type_names or "IN_CREATE" in event.type_names:
+            self.inotify.flush()
+            self.callbacks.on_trigger(event)
 
-        return
+    def start(self) -> None:
+        self.inotify.start()
+
+    def pause(self) -> None:
+        self.inotify.pause()
+
+    def resume(self) -> None:
+        self.inotify.resume()
+
+    def stop(self) -> None:
+        if not self.inotify:
+            return
+
+        self.inotify.stop = True
+        self.inotify.flush()
+        env_comm = self.se.watch_root / "env_comm.py"
+        # Save the same content to trigger inotify event
+        env_comm.read_text()
 
 
 def dir_name_to_class_name(dir_name: str) -> str:
@@ -136,37 +264,6 @@ def is_valid_module_name(module: str) -> bool:
     from keyword import iskeyword
 
     return module.isidentifier() and not iskeyword(module)
-
-
-def setup_logger() -> None:
-    from loguru import logger
-
-    logger.remove()
-
-    logger.add(
-        sys.stdout,
-        format="<blue>{message}</blue>",
-        level="DEBUG",
-        filter=lambda x: x["level"].name == "DEBUG",
-    )
-    logger.add(
-        sys.stdout,
-        format="<bold>{message}</bold>",
-        level="INFO",
-        filter=lambda x: x["level"].name == "INFO",
-    )
-    logger.add(
-        sys.stderr,
-        format="<bold><yellow>{message}</yellow></bold>",
-        level="WARNING",
-        filter=lambda x: x["level"].name == "WARNING",
-    )
-    logger.add(
-        sys.stderr,
-        format="<bold><red>{message}</red></bold>",
-        level="ERROR",
-        filter=lambda x: x["level"].name == "ERROR",
-    )
 
 
 def render_file(template_path: Path, output: Path, context: Dict[str, Any]) -> None:

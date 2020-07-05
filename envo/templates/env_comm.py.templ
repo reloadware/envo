@@ -17,30 +17,25 @@ from envo import (  # noqa: F401
     oncreate,
     onunload,
     ondestroy,
+    VirtualEnv
 )
 
 
-class {{ class_name }}Comm(envo.Env):
+class {{ class_name }}Comm(
+# Add plugins here
+envo.Env
+):
     class Meta(envo.Env.Meta):
         root = Path(__file__).parent.absolute()
         name: str = "{{ name }}"
         version: str = "0.1.0"
-        watch_files: Tuple[str] = ()  # type: ignore
-        ignore_files: Tuple[str] = ()  # type: ignore
+        watch_files: Tuple[str, ...] = ()
+        ignore_files: Tuple[str, ...] = ()
         parent: Optional[str] = None
-
-    {%- if "venv" in selected_addons%}
-    venv: envo.VenvEnv
-    {%- endif %}
-
     # Declare your variables here
 
-    def __init__(self) -> None:
-        super().__init__()
-
-        {%- if "venv" in selected_addons %}
-        self.venv = envo.VenvEnv(owner=self)
-        {%- endif %}
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
 
         # Define your variables here
 

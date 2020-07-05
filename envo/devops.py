@@ -5,7 +5,7 @@ from getpass import getpass
 from typing import List
 
 import pexpect
-from loguru import logger
+from loguru import logger as loguru_logger
 from tqdm import tqdm
 
 
@@ -33,12 +33,7 @@ class CustomPrint:
         self.old_stdout.flush()
 
 
-def run(
-    command: str,
-    ignore_errors: bool = False,
-    print_output: bool = True,
-    progress_bar: bool = False,
-) -> List[str]:
+def run(command: str, ignore_errors: bool = False, print_output: bool = True, progress_bar: bool = False,) -> List[str]:
     # preprocess
     # join multilines
     command = re.sub(r"\\(?:\t| )*\n(?:\t| )*", "", command)
@@ -83,7 +78,7 @@ def run(
 
     for c in commands:
         if "PG_DEBUG" in os.environ:
-            logger.debug(c)
+            loguru_logger.debug(c)
 
         if print_output:
             p.logfile = CustomPrint(command=c, prompt=prompt)
