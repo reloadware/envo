@@ -9,11 +9,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Thread
 from time import sleep
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 from ilock import ILock
+from rhei import Stopwatch
 
-from envo import Env, misc, shell, logger, const
+import envo.e2e
+from envo import Env, misc, shell, logger, const, logging
 from envo.misc import import_from_file, EnvoError, Inotify, FilesWatcher, Callback
 from envo.shell import PromptBase, PromptState, Shell
 
@@ -24,6 +26,64 @@ except ImportError:
 
 package_root = Path(os.path.realpath(__file__)).parent
 templates_dir = package_root / "templates"
+
+
+__all__ = ["_main"]
+
+
+class Status:
+    @dataclass
+    class Callbacks:
+        on_ready: Callback
+
+    _context_ready: bool
+    _reloader_ready: bool
+    _shell_ready: bool
+
+    def __init__(self, calls: Callbacks) -> None:
+        self.calls = calls
+        self._context_ready = False
+        self._reloader_ready = False
+        self._shell_ready = False
+
+    @property
+    def context_ready(self) -> bool:
+        return self._context_ready
+
+    @context_ready.setter
+    def context_ready(self, value: bool) -> None:
+        self._context_ready = value
+        logger.debug(f"Context", {"ready": value})
+        self._on_status_change()
+
+    @property
+    def reloader_ready(self) -> bool:
+        return self._context_ready
+
+    @reloader_ready.setter
+    def reloader_ready(self, value: bool) -> None:
+        self._reloader_ready = value
+        logger.debug(f"Reloader", {"ready": value})
+        self._on_status_change()
+
+    @property
+    def shell_ready(self) -> bool:
+        return self._shell_ready
+
+    @shell_ready.setter
+    def shell_ready(self, value: bool) -> None:
+        self._shell_ready = value
+        logger.debug(f"Shell ready", {"ready": value})
+        self._on_status_change()
+
+    @property
+    def ready(self) -> bool:
+        return self.context_ready and self.reloader_ready and self.shell_ready
+
+    def _on_status_change(self) -> None:
+        if self.ready:
+            logger.debug(f"Everything ready")
+            self.calls.on_ready()
 
 
 class Mode:
@@ -42,11 +102,12 @@ class Mode:
         restart: Callback
 
     files_watcher: FilesWatcher = NotImplemented
+    prompt: PromptBase = NotImplemented
 
-    def __init__(self, se: Sets, li: Links, callbacks: Callbacks) -> None:
+    def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
         self.se = se
         self.li = li
-        self.callbacks = callbacks
+        self.calls = calls
 
         self.env_dirs = self._get_env_dirs()
         self.executing_cmd = False
@@ -54,25 +115,42 @@ class Mode:
         if not self.env_dirs:
             raise EnvoError("Couldn't find any env!\n" 'Forgot to run envo --init" first?')
 
-        self.li.shell.callbacks.reset()
-        self.li.shell.callbacks.on_exit = Callback(self.on_shell_exit)
+        self.status = Status(calls=Status.Callbacks(on_ready=Callback(self._on_ready)))
 
-        # TODO: remove on exit?
+        self.li.shell.calls.reset()
+        self.li.shell.calls.on_exit = Callback(self.on_shell_exit)
+
+        self.status.shell_ready = True
+
+        try:
+            sys.path.remove(str(self.env_dirs[0]))
+        except ValueError:
+            pass
         sys.path.insert(0, str(self.env_dirs[0]))
+
+    def __del__(self) -> None:
+        env_dir = str(self.env_dirs[0])
+        sys.path.remove(env_dir) if env_dir in sys.path else None
 
     def _on_env_edit(self, event: Inotify.Event) -> None:
         while self.executing_cmd:
             sleep(0.2)
 
-        if ("IN_CLOSE_WRITE" in event.type_names or "IN_CREATE" in event.type_names) and event.path.absolute.is_file():
-            logger.info(f'\nDetected changes in "{event.path.relative_str}"')
-            logger.info("Reloading...")
+        subscribe_events = ["IN_CLOSE_WRITE", "IN_CREATE", "IN_DELETE", "IN_DELETE_SELF"]
+
+        if any([s in event.type_names for s in subscribe_events]):
+            logger.info('Reloading', metadata={"type": "reload", "event": event.type_names, "path": event.path.relative_str})
 
             self.stop()
-            self.callbacks.restart()
+            self.calls.restart()
+            self.files_watcher.flush()
 
-    def _update_context(self) -> None:
-        self.li.shell.update_context({"logger": logger})
+    def _on_ready(self) -> None:
+        self.prompt.state = PromptState.NORMAL
+        self.li.shell.set_prompt(self.prompt.as_str())
+
+    def get_context(self) -> Dict[str, Any]:
+        return {"logger": logger}
 
     def load(self) -> None:
         raise NotImplementedError()
@@ -133,10 +211,8 @@ class Mode:
 
 
 class NormalPrompt(PromptBase):
-    name: str
-
     def __init__(self) -> None:
-        super(PromptBase, self).__init__()
+        super().__init__()
 
         self.state_prefix_map = {
             PromptState.LOADING: lambda: f"{const.emojis['loading']}({self.name}){self.default}",
@@ -159,36 +235,34 @@ class HeadlessMode(Mode):
 
     env: Env
 
-    def __init__(self, se: Sets, li: Links, callbacks: Callbacks) -> None:
-        super(HeadlessMode, self).__init__(se=se, li=li, callbacks=callbacks)
+    def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
+        super(HeadlessMode, self).__init__(se=se, li=li, calls=calls)
         self.se = se
         self.li = li
-        self.callbacks = callbacks
-        logger.set_level("INFO")
+        self.calls = calls
+        logger.set_level(logging.Level.INFO)
+
+        logger.debug("Creating Headless Mode")
 
         self.global_lock = ILock("envo_lock")
         self.global_lock._filepath = str(self.env_dirs[0] / "__envo_lock__")
-
-        self.loading = False
 
     def unload(self) -> None:
         if self.env:
             self.on_unload()
 
-        self.li.shell.callbacks.reset()
+        self.li.shell.calls.reset()
 
     def load(self) -> None:
         self._create_env()
 
         assert self.env
 
-        self.env.validate()
-
-        self.li.shell.callbacks.on_enter = Callback(self.on_shell_enter)
-        self.li.shell.callbacks.pre_cmd = Callback(self.on_precmd)
-        self.li.shell.callbacks.on_stdout = Callback(self.on_stdout)
-        self.li.shell.callbacks.on_stderr = Callback(self.on_stderr)
-        self.li.shell.callbacks.post_cmd = Callback(self.on_postcmd)
+        self.li.shell.calls.on_enter = Callback(self.on_shell_enter)
+        self.li.shell.calls.pre_cmd = Callback(self.on_precmd)
+        self.li.shell.calls.on_stdout = Callback(self.on_stdout)
+        self.li.shell.calls.on_stderr = Callback(self.on_stderr)
+        self.li.shell.calls.post_cmd = Callback(self.on_postcmd)
 
         self.li.shell.set_variable("env", self.env)
         self.li.shell.set_variable("environ", os.environ)
@@ -219,18 +293,18 @@ class HeadlessMode(Mode):
         for h in functions:
             h()
 
-    def _update_context(self) -> None:
-        self.loading = True
-        super(HeadlessMode, self)._update_context()
+    def get_context(self) -> Dict[str, Any]:
+        self.status.context_ready = False
+        context = super(HeadlessMode, self).get_context()
         functions = self.env.get_magic_functions()["context"]
-        for c in functions:
-            context = c()
-            self.li.shell.update_context(context)
 
-        self.loading = False
+        for c in functions:
+            context.update(c())
+
+        return context
 
     def _load_context(self) -> None:
-        self._update_context()
+        self.li.shell.set_context(self.get_context())
 
     def on_load(self) -> None:
         self.env.activate()
@@ -243,7 +317,7 @@ class HeadlessMode(Mode):
         functions = self.env.get_magic_functions()["onunload"]
         for h in functions:
             h()
-        self.li.shell.callbacks.reset()
+        self.li.shell.calls.reset()
 
     def on_precmd(self, command: str) -> str:
         command = super(HeadlessMode, self).on_precmd(command)
@@ -287,6 +361,8 @@ class HeadlessMode(Mode):
         env_name = f"env_{self.se.stage}"
         env_file = env_dir / f"{env_name}.py"
 
+        logger.debug(f'Creating Env from file "{env_file}"')
+
         module_name = f"{package}.{env_name}"
 
         # We have to lock this part in case there's other shells concurrently executing this code
@@ -305,6 +381,8 @@ class HeadlessMode(Mode):
             finally:
                 self._delete_init_files()
 
+        self.env.validate()
+
     def _create_init_files(self) -> None:
         """
         Create __init__.py files if not exist.
@@ -312,16 +390,17 @@ class HeadlessMode(Mode):
         If exist save them to __init__.py.tmp to recover later.
         This step is needed because there might be some content in existing that might crash envo.
         """
-
         for d in self.env_dirs:
             init_file = d / "__init__.py"
 
             if init_file.exists():
+                logger.debug(f'Attempting to create {str(init_file.absolute())} but exists, renaming to __init__.py.tmp')
                 init_file_tmp = d / Path("__init__.py.tmp")
                 init_file_tmp.touch()
                 init_file_tmp.write_text(init_file.read_text())
 
             if not init_file.exists():
+                logger.debug(f'Creating {str(init_file.absolute())} file')
                 init_file.touch()
 
             init_file.write_text("# __envo_delete__")
@@ -336,12 +415,14 @@ class HeadlessMode(Mode):
             init_file_tmp = d / Path("__init__.py.tmp")
 
             if init_file.read_text() == "# __envo_delete__":
+                logger.debug(f'Deleting {str(init_file.absolute())} file')
                 init_file.unlink()
 
             if init_file_tmp.exists():
                 init_file.touch()
                 init_file.write_text(init_file_tmp.read_text())
                 init_file_tmp.unlink()
+                logger.debug(f'Recovering {str(init_file)} from {str(init_file_tmp)}')
 
 
 class NormalMode(HeadlessMode):
@@ -359,101 +440,60 @@ class NormalMode(HeadlessMode):
 
     env: Env
 
-    def __init__(self, se: Sets, li: Links, callbacks: Callbacks) -> None:
-        super(NormalMode, self).__init__(se=se, li=li, callbacks=callbacks)
+    def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
+        super(NormalMode, self).__init__(se=se, li=li, calls=calls)
         self.se = se
         self.li = li
-        self.callbacks = callbacks
+        self.calls = calls
 
-        logger.set_level("ERROR")
+        self.prompt = NormalPrompt()
+
+        logger.set_level(logging.Level.ERROR)
+        logger.debug("Creating NormalMode")
 
     def _load_context(self) -> None:
         def thread(self: NormalMode) -> None:
-            # Don't change to loading emoji on the first run
-            Thread(target=self._update_context).start()
+            logger.debug("Starting load context thread")
 
-            sleep(0.01)
+            sw = Stopwatch()
+            sw.start()
+            self.li.shell.set_context(self.get_context())
 
-            if self.se.restart_nr == 0:
-                if self.loading:
-                    self.prompt.state = PromptState.LOADING
-                    self.li.shell.set_prompt(self.prompt.as_str())
-            else:
-                self.prompt.state = PromptState.LOADING
-                self.li.shell.set_prompt(self.prompt.as_str())
-
-            if self.se.restart_nr != 0:
-                sleep(0.5)
-
-            while self.loading:
+            while sw.value <= 0.5:
                 sleep(0.1)
 
-            self.prompt.state = PromptState.NORMAL
-            self.li.shell.set_prompt(self.prompt.as_str())
+            logger.debug("Finished load context thread")
+            self.status.context_ready = True
 
         Thread(target=thread, args=(self,)).start()
 
     def load(self) -> None:
-        super(NormalMode, self).load()
+        def thread(self: NormalMode) -> None:
+            self.files_watcher = FilesWatcher(
+                FilesWatcher.Sets(
+                    watch_root=self.env.get_root_env().root,
+                    watch_files=self.env.meta.watch_files,
+                    ignore_files=self.env.meta.ignore_files,
+                    global_lock_file=Path(self.global_lock._filepath),
+                ),
+                calls=FilesWatcher.Callbacks(on_trigger=Callback(self._on_env_edit)),
+            )
+            self.files_watcher.start()
+            while not self.files_watcher.ready:
+                sleep(0.05)
 
-        self.prompt = NormalPrompt()
-        self.prompt.state = PromptState.NORMAL
+            self.status.reloader_ready = True
+
+        super(NormalMode, self).load()
         self.prompt.emoji = self.env.meta.emoji
         self.prompt.name = self.env.get_full_name()
 
         self.li.shell.set_prompt(str(self.prompt))
 
-        self.files_watcher = FilesWatcher(
-            FilesWatcher.Sets(
-                watch_root=self.env.get_root_env().root,
-                watch_files=self.env.meta.watch_files,
-                ignore_files=self.env.meta.ignore_files,
-                global_lock_file=Path(self.global_lock._filepath),
-            ),
-            callbacks=FilesWatcher.Callbacks(on_trigger=Callback(self._on_env_edit)),
-        )
-        self.files_watcher.start()
+        Thread(target=thread, args=(self,)).start()
 
     def stop(self) -> None:
         self.files_watcher.stop()
-
-    def _create_init_files(self) -> None:
-        """
-        Create __init__.py files if not exist.
-
-        If exist save them to __init__.py.tmp to recover later.
-        This step is needed because there might be some content in existing that might crash envo.
-        """
-
-        for d in self.env_dirs:
-            init_file = d / "__init__.py"
-
-            if init_file.exists():
-                init_file_tmp = d / Path("__init__.py.tmp")
-                init_file_tmp.touch()
-                init_file_tmp.write_text(init_file.read_text())
-
-            if not init_file.exists():
-                init_file.touch()
-
-            init_file.write_text("# __envo_delete__")
-
-    def _delete_init_files(self) -> None:
-        """
-        Delete __init__.py files if crated otherwise recover.
-        :return:
-        """
-        for d in self.env_dirs:
-            init_file = d / Path("__init__.py")
-            init_file_tmp = d / Path("__init__.py.tmp")
-
-            if init_file.read_text() == "# __envo_delete__":
-                init_file.unlink()
-
-            if init_file_tmp.exists():
-                init_file.touch()
-                init_file.write_text(init_file_tmp.read_text())
-                init_file_tmp.unlink()
 
 
 class EmergencyPrompt(PromptBase):
@@ -483,12 +523,12 @@ class EmergencyMode(Mode):
     class Callbacks(Mode.Callbacks):
         pass
 
-    def __init__(self, se: Sets, li: Links, callbacks: Callbacks) -> None:
-        super(EmergencyMode, self).__init__(se=se, li=li, callbacks=callbacks)
+    def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
+        super().__init__(se=se, li=li, calls=calls)
 
         self.se = se
         self.li = li
-        self.callbacks = callbacks
+        self.calls = calls
 
         self.prompt = EmergencyPrompt()
         self.prompt.state = PromptState.NORMAL
@@ -496,31 +536,31 @@ class EmergencyMode(Mode):
 
         self.li.shell.set_prompt(str(self.prompt))
 
-        logger.set_level("ERROR")
+        logger.set_level(logging.Level.ERROR)
+
+        logger.debug("Creating EmergencyMode")
 
         self.files_watcher = FilesWatcher(
             FilesWatcher.Sets(watch_root=self.env_dirs[0], watch_files=tuple(), ignore_files=tuple()),
-            callbacks=FilesWatcher.Callbacks(on_trigger=Callback(self._on_env_edit)),
+            calls=FilesWatcher.Callbacks(on_trigger=Callback(self._on_env_edit)),
         )
         self.files_watcher.start()
-
-        self._update_context()
+        self.status.reloader_ready = True
 
     def stop(self) -> None:
         self.files_watcher.stop()
 
     def load(self) -> None:
         def _load_context(self: EmergencyMode) -> None:
-            self.prompt.state = PromptState.LOADING
-            self.li.shell.set_prompt(self.prompt.as_str())
-
             sleep(0.5)
+            self.status.context_ready = True
 
-            self.prompt.state = PromptState.NORMAL
-            self.li.shell.set_prompt(self.prompt.as_str())
+            self.li.shell.set_context(self.get_context())
 
         if self.se.restart_nr != 0:
             Thread(target=_load_context, args=(self,)).start()
+        else:
+            self.status.context_ready = True
 
     def unload(self) -> None:
         pass
@@ -532,11 +572,12 @@ class EnvoBase:
         stage: str
 
     shell: shell.Shell
-    mode: Mode
+    mode: Optional[Mode]
 
     def __init__(self, se: Sets):
         self.se = se
-        logger.set_level("INFO")
+        logger.set_level(logging.Level.INFO)
+        self.mode = None
 
         self.restart_count = -1
 
@@ -574,7 +615,7 @@ class EnvoHeadless(EnvoBase):
     def __init__(self, se: Sets):
         super().__init__(se)
         self.se = se
-        logger.set_level("INFO")
+        logger.set_level(logging.Level.INFO)
 
         self.restart_count = -1
 
@@ -584,7 +625,7 @@ class EnvoHeadless(EnvoBase):
 
         self.mode = HeadlessMode(
             se=HeadlessMode.Sets(stage=self.se.stage, restart_nr=self.restart_count),
-            callbacks=HeadlessMode.Callbacks(restart=Callback(self.restart)),
+            calls=HeadlessMode.Callbacks(restart=Callback(self.restart)),
             li=HeadlessMode.Links(shell=self.shell, envo=self),
         )
         self.mode.load()
@@ -611,7 +652,8 @@ class EnvoHeadless(EnvoBase):
     def save(self) -> None:
         self.shell = shell.shells["headless"].create()
         self.restart()
-        self.mode.env.dump_dot_env()
+        path = self.mode.env.dump_dot_env()
+        logger.info(f"Saved envs to {str(path)} 💾", print_msg=True)
 
 
 class Envo(EnvoBase):
@@ -631,24 +673,26 @@ class Envo(EnvoBase):
 
         self.quit: bool = False
         self.environ_before = os.environ.copy()  # type: ignore
-        logger.set_level("ERROR")
+        logger.set_level(logging.Level.ERROR)
 
     def restart(self, *args: Any, **kwargs: Any) -> None:
         self.restart_count += 1
         try:
             self.shell.reset()
 
-            if hasattr(self, "mode"):
+            if self.mode:
                 self.mode.unload()
 
             self.mode = NormalMode(
                 se=NormalMode.Sets(stage=self.se.stage, restart_nr=self.restart_count),
                 li=NormalMode.Links(shell=self.shell, envo=self),
-                callbacks=NormalMode.Callbacks(restart=Callback(self.restart)),
+                calls=NormalMode.Callbacks(restart=Callback(self.restart)),
             )
             self.mode.load()
 
         except (EnvoError, Exception) as exc:
+            logger.error(f"Cought {type(exc).__name__}", {"error_msg": str(exc)})
+
             if isinstance(exc, EnvoError):
                 msg = str(exc)
             else:
@@ -656,17 +700,22 @@ class Envo(EnvoBase):
                 msg_raw.extend(traceback.format_stack(limit=25)[:-2])
                 msg_raw.extend(traceback.format_exception(*sys.exc_info())[1:])
                 msg_relevant = ["Traceback (Envo relevant):\n"]
+                relevant = False
                 for m in msg_raw:
-                    msg_relevant.append(m)
+                    if re.search(r"env_.*\.py", m):
+                        relevant = True
+                    if relevant:
+                        msg_relevant.append(m)
 
-                if len(msg_relevant) > 1:
+                if relevant:
                     msg = "".join(msg_relevant).rstrip()
                 else:
-                    msg = "".join(msg_raw).rstrip()
+                    msg = "".join(msg_raw).rstrip() + "\n"
+
             self.mode = EmergencyMode(
                 se=EmergencyMode.Sets(stage=self.se.stage, restart_nr=self.restart_count, msg=msg),
                 li=EmergencyMode.Links(shell=self.shell, envo=self),
-                callbacks=EmergencyMode.Callbacks(restart=Callback(self.restart)),
+                calls=EmergencyMode.Callbacks(restart=Callback(self.restart)),
             )
             self.mode.load()
 
@@ -690,6 +739,7 @@ class EnvoCreator:
         stage: str
 
     def __init__(self, se: Sets) -> None:
+        logger.debug(f"Starting EnvoCreator")
         self.se = se
 
     def _create_from_templ(self, templ_file: Path, output_file: Path, is_comm: bool = False) -> None:
@@ -742,10 +792,12 @@ class EnvoCreator:
 
         env_file = Path(f"env_{self.se.stage}.py")
         self._create_from_templ(Path("env.py.templ"), env_file)
-        logger.info(f"Created {self.se.stage} environment 🍰!")
+        print(f"Created {self.se.stage} environment 🍰!")
 
 
 def _main() -> None:
+    logger.debug(f"Starting")
+
     sys.argv[0] = "/home/kwazar/Code/opensource/envo/.venv/bin/xonsh"
     parser = argparse.ArgumentParser()
     parser.add_argument("stage", type=str, default="local", help="Stage to activate.", nargs="?")
@@ -770,19 +822,20 @@ def _main() -> None:
             envo_creator = EnvoCreator(EnvoCreator.Sets(stage=args.stage))
             envo_creator.create()
         elif args.command:
-            env_headless = EnvoHeadless(EnvoHeadless.Sets(stage=args.stage))
+            envo.e2e.envo = env_headless = EnvoHeadless(EnvoHeadless.Sets(stage=args.stage))
             env_headless.single_command(args.command)
         elif args.dry_run:
-            env_headless = EnvoHeadless(EnvoHeadless.Sets(stage=args.stage))
+            envo.e2e.envo = env_headless = EnvoHeadless(EnvoHeadless.Sets(stage=args.stage))
             env_headless.dry_run()
         elif args.save:
-            env_headless = EnvoHeadless(EnvoHeadless.Sets(stage=args.stage))
+            envo.e2e.envo = env_headless = EnvoHeadless(EnvoHeadless.Sets(stage=args.stage))
             env_headless.save()
         else:
-            envo = Envo(Envo.Sets(stage=args.stage))
-            envo.handle_command(args)
+            envo.e2e.envo = e = Envo(Envo.Sets(stage=args.stage))
+            e.handle_command(args)
     except EnvoError as e:
         logger.error(str(e))
+        sys.exit(1)
 
 
 if __name__ == "__main__":

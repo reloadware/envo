@@ -23,7 +23,6 @@ envo_root = test_root.parent
 __all__ = [
     "TestBase",
     "spawn",
-    "shell",
     "flake8",
     "mypy",
 ]
@@ -84,7 +83,7 @@ def env(env_dir: Path = Path(".")) -> Env:
     return env
 
 
-def shell() -> None:
+def shell_unit() -> None:
     command("test")
 
 

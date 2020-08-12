@@ -5,8 +5,11 @@ from getpass import getpass
 from typing import List
 
 import pexpect
-from loguru import logger as loguru_logger
+from envo import logger
 from tqdm import tqdm
+
+
+__all__ = ["CommandError", "run"]
 
 
 class CommandError(RuntimeError):
@@ -50,6 +53,8 @@ def run(command: str, ignore_errors: bool = False, print_output: bool = True, pr
     p.expect(r"(\$|#)")
     p.sendline(f"export PS1={prompt}")
     p.expect(prompt)
+    p.sendline(f"set -uo pipefail")
+    p.expect(prompt)
 
     # Get sudo password if needed
     if "sudo " in command:
@@ -78,7 +83,7 @@ def run(command: str, ignore_errors: bool = False, print_output: bool = True, pr
 
     for c in commands:
         if "PG_DEBUG" in os.environ:
-            loguru_logger.debug(c)
+            logger.debug(c)
 
         if print_output:
             p.logfile = CustomPrint(command=c, prompt=prompt)

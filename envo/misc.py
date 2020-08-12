@@ -20,6 +20,8 @@ __all__ = [
     "Callback",
 ]
 
+from envo import logger
+
 
 class EnvoError(Exception):
     pass
@@ -73,9 +75,10 @@ class Inotify:
     class Callbacks:
         on_event: Callback
 
-    device = inotify.adapters.Inotify()
+    device: inotify.adapters.Inotify
     stop: bool
     events: List[Event]
+    ready: bool
 
     _pause: bool
     _collector_thread: Thread
@@ -85,7 +88,11 @@ class Inotify:
     def __init__(self, se: Sets, calls: Callbacks):
         self.se = se
         self.calls = calls
+
+        self.device = inotify.adapters.Inotify()
         self.remove_watches()
+
+        self.ready = False
 
         self._pause = False
         self.stop = False
@@ -94,6 +101,7 @@ class Inotify:
         self.events = []
 
     def _collector_thread_fun(self) -> None:
+        logger.debug("Starting collector thread")
         for raw_event in self.device.event_gen(yield_nones=False):
             if self.stop:
                 return
@@ -115,13 +123,22 @@ class Inotify:
                     self.resume()
                 continue
 
-            if event.path.match(self.se.include, self.se.exclude):
-                if not self._pause and "IN_CREATE" in event.type_names:
+            if event.path.match(self.se.include, self.se.exclude) or "IN_ISDIR" in event.type_names:
+                if self._pause:
+                    continue
+
+                if "IN_CREATE" in event.type_names:
                     self.add_watch_recursive(event.path.absolute)
+
+                if any([s in event.type_names for s in ["IN_DELETE", "IN_DELETE_SELF"]]):
+                    self.remove_watch(event.path.absolute, recursive=True)
 
                 self.events.append(event)
 
     def _producer_thread_fun(self) -> None:
+        logger.debug("Starting producer thread")
+        self.ready = True
+
         while not self.stop:
             while self.events:
                 if self._pause:
@@ -135,6 +152,7 @@ class Inotify:
         self.events = []
 
     def start(self) -> None:
+        logger.debug("Starting Inotify")
         self._collector_thread.start()
         self._producer_thread.start()
 
@@ -142,11 +160,16 @@ class Inotify:
         self.device._Inotify__watches = {}
         self.device._Inotify__watches_r = {}
 
-    def remove_watch(self, path: Path) -> None:
+    def remove_watch(self, path: Path, recursive=False) -> None:
         if str(path) not in self.device._Inotify__watches:
             return
 
-        self.device.remove_watch(str(path))
+        self.device._Inotify__watches.pop(str(path))
+        if recursive:
+            watches = self.device._Inotify__watches.copy()
+            for f in watches:
+                if str(f).startswith(str(path)):
+                    self.device._Inotify__watches.remove(f)
 
     def pause(self) -> None:
         self._pause = True
@@ -192,9 +215,9 @@ class FilesWatcher:
 
     inotify: Inotify
 
-    def __init__(self, se: Sets, callbacks: Callbacks):
+    def __init__(self, se: Sets, calls: Callbacks):
         self.se = se
-        self.callbacks = callbacks
+        self.calls = calls
 
         self.inotify = Inotify(
             se=Inotify.Sets(
@@ -213,23 +236,29 @@ class FilesWatcher:
         if event.during_pause:
             return
 
-        if event.path.absolute.is_dir():
-            return
+        self.calls.on_trigger(event)
 
-        if "IN_CLOSE_WRITE" in event.type_names or "IN_CREATE" in event.type_names:
-            self.inotify.flush()
-            self.callbacks.on_trigger(event)
+    def flush(self) -> None:
+        self.inotify.flush()
 
+    @property
+    def ready(self) -> bool:
+        return self.inotify.ready
+    
     def start(self) -> None:
+        logger.debug("Starting FilesWatcher")
         self.inotify.start()
 
     def pause(self) -> None:
+        logger.debug("Pausing FilesWatcher")
         self.inotify.pause()
 
     def resume(self) -> None:
+        logger.debug("Resuming FilesWatcher")
         self.inotify.resume()
 
     def stop(self) -> None:
+        logger.debug("Stopping FilesWatcher")
         if not self.inotify:
             return
 
@@ -274,13 +303,7 @@ def render_file(template_path: Path, output: Path, context: Dict[str, Any]) -> N
 
 
 def render_py_file(template_path: Path, output: Path, context: Dict[str, Any]) -> None:
-    import black
-
     render_file(template_path, output, context)
-    try:
-        black.main([str(output), "-q"])
-    except SystemExit:
-        pass
 
 
 def import_from_file(path: Path) -> Any:

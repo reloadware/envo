@@ -2,7 +2,7 @@ from tests.e2e import utils
 
 
 class TestHooks(utils.TestBase):
-    def test_precmd_print_and_modify(self):
+    def test_precmd_print_and_modify(self, shell):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"print\(.*\)")
@@ -13,21 +13,21 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell()
-        e = s.expecter
+        shell.start()
+        e = shell.expecter
 
         e.prompt().eval()
 
-        s.sendline('print("pancake");')
+        shell.sendline('print("pancake");')
         e.output(r"pre\n")
         e.output(r"pancake\n")
         e.output(r"pancake\n")
         e.prompt().eval()
 
-        s.exit()
+        shell.exit()
         e.exit().eval()
 
-    def test_fun_args_validation(self):
+    def test_fun_args_validation(self, shell):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"print\(.*\)")
@@ -37,8 +37,8 @@ class TestHooks(utils.TestBase):
                 return command * 2
             """
         )
-        s = utils.shell()
-        e = s.expecter
+        shell.start()
+        e = shell.expecter
 
         e.output(
             (
@@ -50,10 +50,10 @@ class TestHooks(utils.TestBase):
         )
         e.prompt(utils.PromptState.EMERGENCY).eval()
 
-        s.exit()
+        shell.exit()
         e.exit().eval()
 
-    def test_fun_args_validation_missing_arg(self):
+    def test_fun_args_validation_missing_arg(self, shell):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"print\(.*\)")
@@ -62,8 +62,8 @@ class TestHooks(utils.TestBase):
                 return "cmd"
             """
         )
-        s = utils.shell()
-        e = s.expecter
+        shell.start()
+        e = shell.expecter
 
         e.output(
             (
@@ -76,10 +76,10 @@ class TestHooks(utils.TestBase):
 
         e.prompt(utils.PromptState.EMERGENCY).eval()
 
-        s.exit()
+        shell.exit()
         e.exit().eval()
 
-    def test_precmd_not_matching_not_run(self):
+    def test_precmd_not_matching_not_run(self, shell):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"some_cmd\(.*\)")
@@ -89,18 +89,18 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell()
-        e = s.expecter
+        shell.start()
+        e = shell.expecter
 
         e.prompt().eval()
 
-        s.sendline('print("pancake");')
+        shell.sendline('print("pancake");')
         e.output(r"pancake\n").prompt().eval()
 
-        s.exit()
+        shell.exit()
         e.exit().eval()
 
-    def test_precmd_access_env_vars(self):
+    def test_precmd_access_env_vars(self, shell):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"print\(.*\)")
@@ -110,18 +110,18 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell()
-        e = s.expecter
+        shell.start()
+        e = shell.expecter
 
         e.prompt().eval()
 
-        s.sendline('print("pancake");')
+        shell.sendline('print("pancake");')
         e.output(r"test\npancake\n").prompt().eval()
 
-        s.exit()
+        shell.exit()
         e.exit().eval()
 
-    def test_onstdout(self):
+    def test_onstdout(self, shell):
         utils.add_hook(
             r"""
             @onstdout(cmd_regex=r"print\(.*\)")
@@ -131,18 +131,18 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell()
-        e = s.expecter
+        shell.start()
+        e = shell.expecter
 
         e.prompt().eval()
 
-        s.sendline('print("pancake");print("banana")')
+        shell.sendline('print("pancake");print("banana")')
         e.output(r" sweet pancake sweet\n sweet banana sweet\n").prompt().eval()
 
-        s.exit()
+        shell.exit()
         e.exit().eval()
 
-    def test_onstderr(self):
+    def test_onstderr(self, shell):
         utils.add_hook(
             r"""
             @onstderr(cmd_regex=r"print\(.*\)")
@@ -157,18 +157,18 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell()
-        e = s.expecter
+        shell.start()
+        e = shell.expecter
 
         e.prompt().eval()
 
-        s.sendline("print(1/0)")
+        shell.sendline("print(1/0)")
         e.output(r"not good :/\nxonsh:.*ZeroDivisionError: division by zero\npost command test\n").prompt().eval()
 
-        s.exit()
+        shell.exit()
         e.exit().eval()
 
-    def test_post_hook_print(self):
+    def test_post_hook_print(self, shell):
         utils.add_hook(
             r"""
             @postcmd(cmd_regex=r"print\(.*\)")
@@ -180,18 +180,18 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell()
-        e = s.expecter
+        shell.start()
+        e = shell.expecter
 
         e.prompt().eval()
 
-        s.sendline('print("pancake");print("banana")')
+        shell.sendline('print("pancake");print("banana")')
         e.output(r"pancake\nbanana\npost\n").prompt().eval()
 
-        s.exit()
+        shell.exit()
         e.exit().eval()
 
-    def test_onload_onunload_hook(self):
+    def test_onload_onunload_hook(self, shell):
         utils.add_hook(
             r"""
             @oncreate
@@ -209,20 +209,20 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell()
-        e = s.expecter
+        shell.start()
+        e = shell.expecter
 
         e.output(r"on load\n")
         e.output(r"on create\n")
         e.prompt().eval()
 
-        s.exit()
+        shell.exit()
         e.exit()
         e.output(r"on destroy\n")
         e.output(r"on unload")
         e.eval()
 
-    def test_onload_onunload_reload(self):
+    def test_onload_onunload_reload(self, shell):
         utils.add_hook(
             r"""
             @onload
@@ -234,12 +234,12 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell()
-        e = s.expecter
+        shell.start()
+        e = shell.expecter
 
         e.output(r"on load\n")
         e.prompt().eval()
 
-        s.exit()
+        shell.exit()
         e.exit()
         e.output(r"on unload").eval()

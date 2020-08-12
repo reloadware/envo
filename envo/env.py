@@ -2,6 +2,9 @@ import inspect
 import os
 import re
 import sys
+from copy import copy
+
+import xonsh
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import (
@@ -74,6 +77,7 @@ class MagicFunction:
         self._validate_fun_args()
 
     def __call__(self, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
+        logger.debug(f'Running magic function (name="{self.name}", type={self.type})')
         if args:
             args = (self.env, *args)  # type: ignore
         else:
@@ -230,12 +234,6 @@ class context(magic_function):  # noqa: N801
         super().__init__()
 
 
-class EnvMetaclass(type):
-    def __new__(cls, name: str, bases: Tuple, attr: Dict[str, Any]) -> Any:
-        cls = super().__new__(cls, name, bases, attr)
-        cls = dataclass(cls, repr=False)  # type: ignore
-        return cls
-
 
 @dataclass
 class Field:
@@ -244,7 +242,8 @@ class Field:
     value: Any
 
 
-class BaseEnv(metaclass=EnvMetaclass):
+@dataclass
+class BaseEnv:
     def __init__(self, _name: Optional[str] = None) -> None:
         """
         :param _name: with underscore so it doesn't conflict with possible field with name "name"
@@ -265,6 +264,7 @@ class BaseEnv(metaclass=EnvMetaclass):
         """
         Validate env
         """
+        logger.debug("Validating env.")
         errors = self.get_errors(self.get_name())
         if errors:
             raise EnvoError("\n".join(errors))
@@ -384,11 +384,13 @@ class BaseEnv(metaclass=EnvMetaclass):
         return "\n".join(ret) + "\n"
 
 
+@dataclass
 class Env(BaseEnv):
     """
     Defines environment.
     """
 
+    @dataclass
     class Meta(BaseEnv):
         """
         Environment metadata.
@@ -415,7 +417,7 @@ class Env(BaseEnv):
             )
 
     root: Path
-    path: str
+    path: Raw[str]
     stage: str
     envo_stage: Raw[str]
     pythonpath: Raw[str]
@@ -425,11 +427,10 @@ class Env(BaseEnv):
         self.meta.validate()
         super().__init__(self.meta.name)
 
+        self._environ_before = None
+        self._shell_environ_before = None
+
         self._shell = shell
-        if self._shell:
-            self._environ = self._shell.environ
-        else:
-            self._environ = os.environ
 
         self.root = self.meta.root
         self.stage = self.meta.stage
@@ -462,6 +463,9 @@ class Env(BaseEnv):
         if self.meta.parent:
             self._init_parent()
 
+    def __post_init__(self):
+        self.validate()
+
     def activate(self) -> None:
         """
         Validate env and send vars to os.environ
@@ -471,7 +475,15 @@ class Env(BaseEnv):
         if self.meta.stage == "comm":
             raise RuntimeError('Cannot activate env with "comm" stage!')
 
-        self._environ.update(**self.get_env_vars())
+        if not self._environ_before:
+            self._environ_before = os.environ.copy()
+
+        if self._shell:
+            if not self._shell_environ_before:
+                self._shell_environ_before = dict(self._shell.environ.items())
+            self._shell.environ.update(**self.get_env_vars())
+
+        os.environ.update(**self.get_env_vars())
 
     def deactivate(self) -> None:
         """
@@ -482,14 +494,18 @@ class Env(BaseEnv):
         if self.meta.stage == "comm":
             raise RuntimeError('Cannot deactivate env with "comm" stage!')
 
-        for k, v in self.get_env_vars().items():
-            if k in self._environ:
-                self._environ.pop(k)
+        os.environ = self._environ_before.copy()
+
+        if self._shell:
+            tmp_environ = copy(self._shell.environ)
+            for i, v in tmp_environ.items():
+                self._shell.environ.pop(i)
+            self._shell.environ.update(**self._shell_environ_before)
 
     def get_magic_functions(self) -> Dict[str, List[MagicFunction]]:
         return self._magic_functions
 
-    def dump_dot_env(self) -> None:
+    def dump_dot_env(self) -> Path:
         """
         Dump .env file for the current environment.
 
@@ -498,7 +514,7 @@ class Env(BaseEnv):
         path = Path(f".env_{self.meta.stage}")
         content = "\n".join([f'{key}="{value}"' for key, value in self.get_env_vars().items()])
         path.write_text(content)
-        logger.info(f"Saved envs to {str(path)} 💾")
+        return path
 
     def get_full_name(self) -> str:
         """
@@ -561,7 +577,6 @@ class Env(BaseEnv):
         """
         Initialize parent if exists.
         """
-        assert self.meta.parent
         # unload modules just in case env with the same name has been already loaded
         for m in list(sys.modules.keys())[:]:
             if m.startswith("env_"):
@@ -571,8 +586,6 @@ class Env(BaseEnv):
         sys.path.insert(0, str(env_dir))
         self._parent = import_from_file(env_dir / f"env_{self.stage}.py").Env(self._shell)
         sys.path.pop(0)
-        assert self._parent
-        self._parent.activate()
 
     def __repr__(self) -> str:
         ret = []

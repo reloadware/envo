@@ -108,11 +108,9 @@ Example usage:
 TODO:
 Major:
 * Refactor start_in
-* restore wordking dir
 * Add file hooks
 * Add bootstrap (versioning etc)
-* Fix git log bug
-* Silent reloading
+* add error line number
 
 Minor:
 * Shell should highlight envo commands on green

@@ -3,16 +3,17 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from dataclasses import dataclass
 
-from envo import BaseEnv, onload
-
+from envo import Env, onload, onunload, logger
 
 __all__ = [
     "VirtualEnv",
 ]
 
 
-class VirtualEnv(BaseEnv):
+@dataclass
+class VirtualEnv(Env):
     """
     Env that activates virtual environment.
     """
@@ -20,18 +21,48 @@ class VirtualEnv(BaseEnv):
     # TODO: change it to a mixin?
     root: Path
     venv_path: Path
+    venv_lib_path: Path
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        logger.info("VirtualEnv plugin init")
+
         self.venv_path = Path()
+        self.venv_lib_path = self.root / ".venv/lib"
+
+        # possible python site-packages
+        versions = [f"python3.{v}" for v in range(0, 20)]
+        versions += [f"python2.{v}" for v in range(0, 10)]
+        self._possible_site_packages = [self.venv_lib_path / v / "site-packages" for v in versions]
 
     @onload
-    def _onload(self) -> None:
+    def __onload(self) -> None:
+        logger.info("VirtualEnv plugin onload")
         self.venv_path = self.root / ".venv/bin"
 
-        if self.venv_path.exists():
-            self.path = f"""{str(self.venv_path)}:{os.environ['PATH']}"""
+        self.path = f"""{str(self.venv_path)}:{os.environ['PATH']}"""
 
-            site_packages = next((self.root / ".venv/lib").glob("*")) / "site-packages"
+        if not (Path(self.root) / ".venv").exists():
+            for d in self._possible_site_packages:
+                if d not in sys.path:
+                    sys.path.insert(0, str(d))
+        else:
+            # cleanup after above
+            for d in self._possible_site_packages:
+                if d in sys.path:
+                    sys.path.remove(str(d))
 
-            sys.path.insert(0, str(site_packages))
+            path = str(next(self.venv_lib_path.glob("*")) / "site-packages")
+
+            if path not in sys.path:
+                sys.path.insert(0, path)
+
+        self.activate()
+
+    @onunload
+    def __onunload(self) -> None:
+        logger.info("VirtualEnv plugin onunload")
+
+        for d in self._possible_site_packages:
+            if d in sys.path:
+                sys.path.remove(str(d))

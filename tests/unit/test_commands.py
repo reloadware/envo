@@ -2,8 +2,6 @@ import os
 import re
 from tests.unit import utils
 
-environ_before = os.environ.copy()
-
 
 class TestCommands(utils.TestBase):
     def test_repr(self):
@@ -72,7 +70,7 @@ class TestCommands(utils.TestBase):
 
         e = utils.env()
         assert repr(e.flake) == "Flake return value"
-        assert capsys.readouterr().out == "Flake all good\n"
+        assert "Flake all good" in capsys.readouterr().out
 
     def test_call_cmd(self, capsys):
         utils.init()
@@ -80,7 +78,7 @@ class TestCommands(utils.TestBase):
 
         e = utils.env()
         assert e.flake() == "Flake return value"
-        assert capsys.readouterr().out == "Flake all good\n"
+        assert "Flake all good" in capsys.readouterr().out
 
     def test_property_cmd_no_ret(self, capsys):
         utils.init()
@@ -88,4 +86,4 @@ class TestCommands(utils.TestBase):
 
         e = utils.env()
         assert repr(e.mypy) == ""
-        assert capsys.readouterr().out == "Mypy all good\n"
+        assert "Mypy all good" in capsys.readouterr().out

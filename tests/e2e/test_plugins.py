@@ -2,31 +2,31 @@ from tests.e2e import utils
 
 
 class TestPlugins(utils.TestBase):
-    def test_venv_addon(self):
+    def test_venv_addon(self, shell):
         utils.run("poetry run python -m venv .venv")
-        utils.run("./.venv/bin/pip install rhei==0.5.2")
-        utils.run("envo test --init=venv")
+        utils.run("./.venv/bin/pip install url-regex")
+        utils.run("envo test")
         utils.add_plugin("VirtualEnv")
 
-        s = utils.shell()
-        e = s.expecter
+        shell.start()
+        e = shell.expecter
         e.prompt().eval()
 
-        s.sendline("import rhei")
+        shell.sendline("import url_regex")
         e.prompt()
-        s.sendline("print(rhei.stopwatch)")
-        e.output(r"<module 'rhei\.stopwatch' from .*\n")
+        shell.sendline("print(url_regex.UrlRegex)")
+        e.output(r"<class 'url_regex\.url_regex\.UrlRegex'>\n")
         e.prompt()
 
-        s.exit()
+        shell.exit()
         e.exit().eval()
 
-    def test_venv_addon_no_venv(self):
+    def test_venv_addon_no_venv(self, shell):
         utils.add_plugin("VirtualEnv")
 
-        s = utils.shell()
-        e = s.expecter
+        shell.start()
+        e = shell.expecter
         e.prompt().eval()
 
-        s.exit()
+        shell.exit()
         e.exit().eval()

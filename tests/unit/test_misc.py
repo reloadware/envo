@@ -7,8 +7,6 @@ import envo.scripts
 from envo.const import stage_emojis
 from tests.unit import utils
 
-environ_before = os.environ.copy()
-
 
 class TestMisc(utils.TestBase):
     def test_init(self):
@@ -31,7 +29,7 @@ class TestMisc(utils.TestBase):
 
         utils.flake8()
 
-    def test_importing(self, shell, env):
+    def test_importing(self, shell_unit, env):
         assert str(env) == "sandbox"
         assert env.meta.stage == "test"
         assert env.meta.emoji == stage_emojis[env.meta.stage]
@@ -104,6 +102,7 @@ class TestMisc(utils.TestBase):
     def test_nested(self):
         utils.add_declaration(
             """
+            @dataclass
             class Python(envo.BaseEnv):
                 version: str
 
@@ -158,6 +157,7 @@ class TestMisc(utils.TestBase):
     def test_raw(self):
         utils.add_declaration(
             """
+            @dataclass
             class Python(envo.BaseEnv):
                 version: Raw[str]
 

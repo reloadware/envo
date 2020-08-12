@@ -3,8 +3,8 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple  # noqa: F401
 
 import envo
-from loguru import logger  # noqa: F401
 from envo import (  # noqa: F401
+    logger,
     command,
     context,
     Raw,
@@ -17,13 +17,15 @@ from envo import (  # noqa: F401
     oncreate,
     onunload,
     ondestroy,
-    VirtualEnv
+    VirtualEnv,
+    dataclass
 )
 
 
+@dataclass
 class {{ class_name }}Comm(
-# Add plugins here
-envo.Env
+    # Add plugins here
+    envo.Env
 ):
     class Meta(envo.Env.Meta):
         root = Path(__file__).parent.absolute()
@@ -34,7 +36,7 @@ envo.Env
         parent: Optional[str] = None
     # Declare your variables here
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
         # Define your variables here

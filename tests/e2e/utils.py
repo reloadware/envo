@@ -1,14 +1,17 @@
+import atexit
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 from collections import Callable
 from enum import Enum
 from pathlib import Path
 from subprocess import Popen
+from threading import Thread
 from time import sleep
-from typing import List
+from typing import List, TYPE_CHECKING, Type, Optional
 
 import pexpect
 import pyte
@@ -18,8 +21,11 @@ import fcntl
 
 import pytest
 from rhei import Stopwatch
+from stickybeak import Injector
 
 from envo import const
+from envo.e2e import STICKYBEAK_PORT
+from envo.logging import Logger
 from envo.shell import PromptBase
 from tests.utils import add_command  # noqa F401
 from tests.utils import add_declaration  # noqa F401
@@ -32,8 +38,16 @@ from tests.utils import replace_in_code  # noqa F401
 from tests.utils import add_context  # noqa F401
 from tests.utils import add_plugin  # noqa F401
 
+
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
+
+
+injector = Injector(address=f"http://localhost:{STICKYBEAK_PORT}")
+
+
+if TYPE_CHECKING:
+    from envo.scripts import EnvoBase
 
 
 class PromptState(Enum):
@@ -117,14 +131,6 @@ class Expecter:
         self.expected.append(str(PromptRe(state=state, name=name)))
         return self
 
-    def reloaded(self, file="env_comm.py", times: int = 1) -> "Expecter":
-        sleep(0.2)
-        self._spawn.log()
-        for i in range(times):
-            self.output(rf'\[INFO\] Detected changes in "{re.escape(file)}"\n')
-            self.output(r"\[INFO\] Reloading\.\.\.\n")
-        return self
-
     def exit(self, return_code=0) -> "Expecter":
         self.expected.append(r"exit\n?")
         self._expect_exit = True
@@ -135,69 +141,141 @@ class Expecter:
     def expected_regex(self):
         return "".join(self.expected)
 
-    def eval(self, timeout: int = 3) -> None:
-        def condition():
-            return re.fullmatch(self.expected_regex, self._spawn.cleaned_display, re.DOTALL)
+    def pop(self) -> None:
+        self.expected.pop()
 
-        try:
-            AssertInTime(condition, timeout)
-        except AssertInTime.TIMEOUT:
-            self.print_info()
-            raise
+    def eval(self, timeout: int = 4) -> None:
+        def condition():
+            return re.fullmatch(self.expected_regex, self._spawn.get_cleaned_display(), re.DOTALL)
+
+        AssertInTime(condition, timeout)
 
         if self._expect_exit:
             self._spawn.stop_collecting = True
 
             # check if has exited
             def condition():
-                return self._spawn.process.poll() == 0
+                return self._spawn.process.poll() == self._return_code
 
-            AssertInTime(condition, timeout)
-            assert self._spawn.process.returncode == self._return_code
-            self.print_info()
-
-    def print_info(self):
-        print("\nDisplay:")
-        print(self._spawn.cleaned_display)
-        expected_multiline = self.expected_regex.replace(r"\n", "\n")
-        print(f"\nExpected (multiline):\n{expected_multiline}")
-        print(f"\nExpected (raw):\n{self.expected}")
+            try:
+                AssertInTime(condition, timeout)
+            except AssertInTime.TIMEOUT:
+                raise AssertInTime.TIMEOUT(f"Process has not exit on time with proper exit code (last exit code = {self._spawn.process.poll()})")
 
 
 class Spawn:
-    def __init__(self, command: str):
+    process: Optional[Popen] = None
+
+    @injector.klass
+    class RemoteEnvo:
+        @classmethod
+        def get_logger(cls) -> "Logger":
+            from envo.logging import logger
+            return logger
+
+        @classmethod
+        def wait_until_ready(cls, timeout=2) -> None:
+            import envo.e2e
+            from time import sleep
+
+            passed_time = 0.0
+            sleep_time = 0.01
+            while True:
+                sleep(sleep_time)
+                passed_time += sleep_time
+
+                if not envo.e2e.envo.mode:
+                    continue
+
+                mode = envo.e2e.envo.mode
+                if mode.status.ready:
+                    break
+
+                if passed_time >= timeout:
+                    raise AssertionError("Wait timeout")
+
+        @classmethod
+        def assert_reloaded(cls, number: int = 1, path="env_comm.py", timeout=3) -> None:
+            from envo import logger, logging
+            from time import sleep
+
+            passed_time = 0.0
+            sleep_time = 0.05
+            while True:
+                sleep(sleep_time)
+                passed_time += sleep_time
+
+                msgs = logger.get_msgs(filter=logging.MsgFilter(metadata_re={"type": r"reload"}))
+                if number == 0 and len(msgs) == 0:
+                    break
+
+                if len(msgs) == number and msgs[-1].metadata["path"] == path:
+                    break
+
+                if passed_time >= timeout:
+                    raise AssertionError("Reload timeout")
+
+            cls.wait_until_ready()
+
+    def __init__(self, command: str, debug=True):
         self.screen = pyte.Screen(200, 50)
         self.stream = pyte.ByteStream(self.screen)
+        self.command = command
 
+        self.expecter = None
+        self._buffer = []
+
+        self.stop_collecting = False
+        self._printed_info = False
+        self.debug = debug
+
+    def start(self, wait_until_ready=True) -> None:
         environ = os.environ.copy()
-        environ["ENVO_E2E_TEST"] = "True"
+        if self.debug:
+            environ["ENVO_E2E_TEST"] = "True"
         environ["PYTHONUNBUFFERED"] = "True"
         environ["ENVO_SHELL_NOHISTORY"] = "True"
+
+        if self.process:
+            self.on_exit()
+
         self.process = Popen(
-            command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE, env=environ,
+            self.command.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE, env=environ,
         )
         fcntl.fcntl(
             self.process.stdout, fcntl.F_SETFL, fcntl.fcntl(self.process.stdout, fcntl.F_GETFL) | os.O_NONBLOCK,
         )
-        self.stop_collecting = False
-        self._buffer = []
-        # self._collector_thread = Thread(target=self._collector_thread)
-        # self._collector_thread.start()
 
         self.expecter = Expecter(self)
 
-        # wait a bit for things to start
-        sleep(0.5)
+        if self.debug:
+            injector.connect()
+
+        if wait_until_ready and self.debug:
+            self.envo.wait_until_ready()
 
     def exit(self) -> None:
+        if self.process.poll() is not None:
+            return
+
+        self.print_info()
+
         self.send("exit", expect=False)
         sleep(0.5)
         self.send("\n", expect=False)
         sleep(0.5)
 
-    def log(self) -> None:
-        sleep(0.2)
-        self.sendline("logger.print_all(add_time=False);logger.clean()")
+    def on_exit(self) -> None:
+        self.print_info()
+        if self.process.poll() is not None:
+            return
+        self.process.send_signal(signal.SIGINT)
+        self.process.send_signal(signal.SIGINT)
+        self.process.send_signal(signal.SIGKILL)
+
+    @property
+    def envo(self) -> Type["Spawn.RemoteEnvo"]:
+        return Spawn.RemoteEnvo
 
     def send(self, text: str, expect=True) -> None:
         if expect:
@@ -224,14 +302,14 @@ class Spawn:
         except OSError:
             pass
 
-    @property
-    def display(self):
+    def get_display(self):
         # Remove "Warning: Output is not a terminal"
         def ignore(s: str) -> bool:
             if "Warning: Output is not a terminal" in s:
                 return True
             if "Warning: Input is not a terminal" in s:
                 return True
+
             return False
 
         self._collect_output()
@@ -239,9 +317,26 @@ class Spawn:
         display = [s for s in display_raw if not ignore(s)]
         return display
 
-    @property
-    def cleaned_display(self):
-        return "\n".join([s.rstrip() for s in self.display if s.rstrip()])
+    def get_cleaned_display(self):
+        return "\n".join([s.rstrip() for s in self.get_display() if s.rstrip()])
+
+    def print_info(self):
+        if not self.debug:
+            return
+
+        if self._printed_info:
+            return
+
+        self._printed_info = True
+
+        print("\nDisplay:")
+        print(self.get_cleaned_display())
+        expected_multiline = self.expecter.expected_regex.replace(r"\n", "\n")
+        print(f"\nExpected (multiline):\n{expected_multiline}")
+        print(f"\nExpected (raw):\n{self.expecter.expected_regex}")
+
+        print("\nLog:")
+        print("\n".join([str(log) for log in self.envo.get_logger().messages]))
 
 
 def shell() -> Spawn:
@@ -282,7 +377,6 @@ def init_child_env(child_dir: Path) -> None:
 
 def trigger_reload(file: Path = Path("env_comm.py")) -> None:
     file.write_text(file.read_text() + "\n")
-    sleep(0.5)
 
 
 def replace_last_occurence(string: str, what: str, to_what: str) -> str:

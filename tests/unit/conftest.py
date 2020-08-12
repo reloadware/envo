@@ -20,17 +20,10 @@ def init() -> None:
 
 
 @fixture
-def shell() -> None:
-    from tests.unit.utils import shell
+def shell_unit() -> None:
+    from tests.unit.utils import shell_unit
 
-    shell()
-
-
-@fixture
-def bash() -> None:
-    from tests.unit.utils import bash
-
-    bash()
+    shell_unit()
 
 
 @fixture

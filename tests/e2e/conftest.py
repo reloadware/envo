@@ -13,7 +13,7 @@ envo_root = test_root.parent / "envo"
 @fixture
 def init() -> None:
     result = run("envo test --init")
-    assert result == b"\x1b[1mCreated test environment \xf0\x9f\x8d\xb0!\x1b[0m\r\n"
+    assert b"Created test environment" in result
 
 
 @fixture
@@ -36,4 +36,5 @@ def shell() -> utils.Spawn:
     from tests.e2e.utils import shell
 
     s = shell()
-    return s
+    yield s
+    s.on_exit()

@@ -4,8 +4,6 @@ import pytest
 
 from envo import run
 
-environ_before = os.environ.copy()
-
 
 class TestRun:
     @pytest.fixture(autouse=True)
@@ -70,3 +68,9 @@ class TestRun:
         result = run("""non_existend_command""", ignore_errors=True)
         assert len(result) == 1
         assert "non_existend_command: command not found" in result[0]
+
+    def test_pipefail(self):
+        with pytest.raises(SystemExit) as e:
+            result = run("""non_existend_command | grep command""")
+
+        assert e.value.code == 1
