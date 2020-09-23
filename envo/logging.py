@@ -1,4 +1,3 @@
-import json
 import re
 import sys
 from enum import Enum
@@ -7,7 +6,10 @@ from typing import List, Dict, Any, Optional
 
 from dataclasses import dataclass, field
 import loguru
+from loguru._colorizer import Colorizer
+from pygments.styles import get_style_by_name
 from rhei import Stopwatch
+from xonsh.pyghooks import XonshConsoleLexer, CompoundColorMap, pygments_style_by_name
 
 
 class Level(Enum):
@@ -22,19 +24,44 @@ class Msg:
     level: Level
     body: str
     time: float  # s
+    descriptor: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.body = str(self.body).lstrip()
 
     def print(self) -> None:
-        body = self.body
-        time = ":" + f"{self.time:.2f}s"
-        metadata = json.dumps(self.metadata)
-        loguru.logger.log(self.level.name, f"[{self.level.name}{time}] {body}; {metadata}")
+        print(self.render_all(with_color=True))
+
+    def render_message(self, with_color: bool = True) -> str:
+        def color(clr:str) -> str:
+            if with_color:
+                return clr
+            else:
+                return ""
+
+        from pygments import highlight
+        from pygments.formatters.terminal import TerminalFormatter
+
+        metadata = ""
+        if self.metadata:
+            metadata = str(self.metadata)
+
+        descriptor = ""
+        if self.descriptor:
+            descriptor = f"{color('<green>')}({str(self.descriptor)}) {color('</green>')}"
+        msg = f"@{self.time:.4f}]{descriptor}{self.body}; {metadata}"
+
+        if with_color:
+            msg = highlight(msg, XonshConsoleLexer(), TerminalFormatter(style=get_style_by_name('emacs')))
+            msg = Colorizer.ansify(msg)
+        return msg
+
+    def render_all(self, with_color = True) -> str:
+        return f"[{self.level.name:<5}{self.render_message(with_color=with_color)}"
 
     def __repr__(self) -> str:
-        return f"[{self.level.name}@{self.time:.4f}s] {self.body}; {self.metadata}"
+        return self.render_all(with_color=False)
 
 
 @dataclass
@@ -76,12 +103,33 @@ class MsgFilter:
         return self.matches_level(msg) and self.matches_body(msg) and self.matches_time_later(msg) and self.matches_time_before(msg) and self.matches_metadata(msg)
 
 
-class Logger:
-    messages: List[Msg]
-    level: Level
+class Messages(list):
+    content = List[Msg]
 
-    def __init__(self) -> None:
-        self.messages = []
+    def print(self) -> None:
+        ret = []
+
+        for m in self:
+            m.print()
+
+        ret = "\n".join(ret)
+
+        print(ret)
+
+
+class Logger:
+    messages: Messages
+    level: Level
+    parent: Optional["Logger"]
+    descriptor: Optional[str]
+    name: str
+
+    def __init__(self, name: str, parent: Optional["Logger"]=None, descriptor: Optional[str]=None) -> None:
+        self.name = name
+        self.parent = parent
+        self.descriptor = descriptor
+
+        self.messages = Messages()
         self.level = Level.INFO
 
         self.set_level(Level.INFO)
@@ -109,18 +157,27 @@ class Logger:
             filter=lambda x: x["level"].name == "ERROR",
         )
 
+    def create_child(self, name: str, descriptor: str) -> "Logger":
+        return Logger(parent=self, name=name, descriptor=descriptor)
+
     def clean(self) -> None:
-        self.messages = []
+        self.messages = Messages()
 
     def set_level(self, level: Level) -> None:
         self.level = level
 
-    def log(self, message: str, level: Level, metadata: Optional[Dict[str, Any]] = None, print_msg=False):
-        msg = Msg(level, message, self.sw.value, metadata=metadata or {})
+    def _log(self, msg: Msg) -> None:
+        self.messages.append(msg)
+
+    def log(self, message: str, level: Level, metadata: Optional[Dict[str, Any]] = None, print_msg=False) -> None:
+        msg = Msg(level, message, self.sw.value, metadata=metadata or {}, descriptor=self.descriptor)
         if print_msg:
             loguru.logger.log(level.name, message)
 
-        self.messages.append(msg)
+        self._log(msg)
+
+        if self.parent:
+            self.parent._log(msg)
 
     def debug(self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False) -> None:
         self.log(message, Level.DEBUG, metadata, print_msg)
@@ -150,4 +207,4 @@ class Logger:
         pass
 
 
-logger = Logger()
+logger = Logger(name="root")

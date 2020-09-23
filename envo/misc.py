@@ -18,6 +18,7 @@ __all__ = [
     "import_from_file",
     "EnvoError",
     "Callback",
+    "Inotify"
 ]
 
 from envo import logger
@@ -49,7 +50,7 @@ class InotifyPath:
         if self.relative.is_dir():
             self.relative_str += "/"
 
-    def match(self, include: Tuple[str, ...], exclude: Tuple[str, ...]) -> bool:
+    def match(self, include: List[str], exclude: List[str]) -> bool:
         return not glob_match(self.relative_str, exclude) and glob_match(self.relative_str, include)
 
     def is_dir(self) -> bool:
@@ -66,10 +67,9 @@ class Inotify:
 
     @dataclass
     class Sets:
-        include: Tuple[str, ...]
-        exclude: Tuple[str, ...]
+        include: List[str]
+        exclude: List[str]
         root: Path
-        lock_file: Optional[Path] = None
 
     @dataclass
     class Callbacks:
@@ -95,15 +95,18 @@ class Inotify:
         self.ready = False
 
         self._pause = False
-        self.stop = False
+        self._stop = False
         self._collector_thread = Thread(target=self._collector_thread_fun)
         self._producer_thread = Thread(target=self._producer_thread_fun)
         self.events = []
 
+        self.remove_watches()
+        self.add_watch_recursive(self.se.root)
+
     def _collector_thread_fun(self) -> None:
         logger.debug("Starting collector thread")
         for raw_event in self.device.event_gen(yield_nones=False):
-            if self.stop:
+            if self._stop:
                 return
             (_, type_names, path, filename) = raw_event
             raw_path = Path(path) / Path(filename)
@@ -114,14 +117,6 @@ class Inotify:
                 during_pause=self._pause,
                 during_commands=self._pause,
             )
-
-            if self.se.lock_file and event.path.absolute.name == self.se.lock_file.name:
-                if "IN_CREATE" in event.type_names:
-                    self.pause()
-
-                if "IN_DELETE" in event.type_names:
-                    self.resume()
-                continue
 
             if event.path.match(self.se.include, self.se.exclude) or "IN_ISDIR" in event.type_names:
                 if self._pause:
@@ -139,7 +134,7 @@ class Inotify:
         logger.debug("Starting producer thread")
         self.ready = True
 
-        while not self.stop:
+        while not self._stop:
             while self.events:
                 if self._pause:
                     break
@@ -183,7 +178,7 @@ class Inotify:
             self.device.add_watch(str(path.absolute))
 
     def add_watch_recursive(self, raw_path: Path) -> None:
-        if self.stop:
+        if self._stop:
             return
 
         path = InotifyPath(raw_path=raw_path, root=self.se.root)
@@ -195,79 +190,17 @@ class Inotify:
 
         if path.relative.is_dir():
             self.add_watch(path.absolute)
-            for p in path.relative.iterdir():
-                self.add_watch_recursive(p.absolute())
+            for p in path.absolute.iterdir():
+                self.add_watch_recursive(p)
         else:
             self.add_watch(path.absolute)
 
-
-class FilesWatcher:
-    @dataclass
-    class Sets:
-        watch_root: Path
-        watch_files: Tuple[str, ...]
-        ignore_files: Tuple[str, ...]
-        global_lock_file: Optional[Path] = None
-
-    @dataclass
-    class Callbacks:
-        on_trigger: Callback
-
-    inotify: Inotify
-
-    def __init__(self, se: Sets, calls: Callbacks):
-        self.se = se
-        self.calls = calls
-
-        self.inotify = Inotify(
-            se=Inotify.Sets(
-                root=self.se.watch_root,
-                lock_file=self.se.global_lock_file,
-                include=("**/env_*.py", *self.se.watch_files),
-                exclude=self.se.ignore_files,
-            ),
-            calls=Inotify.Callbacks(on_event=Callback(self._on_event)),
-        )
-
-        self.inotify.remove_watches()
-        self.inotify.add_watch_recursive(self.se.watch_root)
-
-    def _on_event(self, event: Inotify.Event) -> None:
-        if event.during_pause:
-            return
-
-        self.calls.on_trigger(event)
-
-    def flush(self) -> None:
-        self.inotify.flush()
-
-    @property
-    def ready(self) -> bool:
-        return self.inotify.ready
-    
-    def start(self) -> None:
-        logger.debug("Starting FilesWatcher")
-        self.inotify.start()
-
-    def pause(self) -> None:
-        logger.debug("Pausing FilesWatcher")
-        self.inotify.pause()
-
-    def resume(self) -> None:
-        logger.debug("Resuming FilesWatcher")
-        self.inotify.resume()
-
     def stop(self) -> None:
-        logger.debug("Stopping FilesWatcher")
-        if not self.inotify:
-            return
-
-        self.inotify.stop = True
-        self.inotify.flush()
-        env_comm = self.se.watch_root / "env_comm.py"
+        self._stop = True
+        self.flush()
+        env_comm = self.se.root / "env_comm.py"
         # Save the same content to trigger inotify event
         env_comm.read_text()
-
 
 def dir_name_to_class_name(dir_name: str) -> str:
     class_name = dir_name.replace("_", " ")

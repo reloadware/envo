@@ -29,11 +29,10 @@ class {{ class_name }}Comm(
 ):
     class Meta(envo.Env.Meta):
         root = Path(__file__).parent.absolute()
-        name: str = "{{ name }}"
         version: str = "0.1.0"
-        watch_files: Tuple[str, ...] = ()
-        ignore_files: Tuple[str, ...] = ()
-        parent: Optional[str] = None
+        watch_files: List[str] = []
+        ignore_files: List[str] = []
+        parents: List[str] = []
     # Declare your variables here
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:

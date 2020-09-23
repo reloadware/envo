@@ -3,8 +3,9 @@ import os
 import re
 import sys
 from copy import copy
+from threading import Lock
+from time import sleep
 
-import xonsh
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import (
@@ -17,12 +18,17 @@ from typing import (
     Optional,
     Tuple,
     TypeVar,
-    Union,
+    Union, Type,
 )
 
-from envo import logger
 
-from envo.misc import import_from_file, EnvoError
+from envo import logger
+from envo.logging import Logger
+
+from envo.misc import import_from_file, EnvoError, Callback, Inotify
+
+from ilock import ILock
+
 
 __all__ = [
     "BaseEnv",
@@ -234,7 +240,6 @@ class context(magic_function):  # noqa: N801
         super().__init__()
 
 
-
 @dataclass
 class Field:
     name: str
@@ -257,6 +262,9 @@ class BaseEnv:
         """
         Repeating this code to populate _name when super().__init__() is not called in subclasses
         """
+
+        self.logger: Logger = logger
+
         if not hasattr(self, "_name"):
             self._name = str(self.__class__.__name__)
 
@@ -264,20 +272,21 @@ class BaseEnv:
         """
         Validate env
         """
-        logger.debug("Validating env.")
-        errors = self.get_errors(self.get_name())
+        self.logger.debug("Validating env")
+        errors = self.get_errors()
         if errors:
             raise EnvoError("\n".join(errors))
 
-    def get_errors(self, parent_name: str = "") -> List[str]:
+    def get_errors(self) -> List[str]:
         """
         Return list of detected errors (unset, undeclared)
 
-        :param parent_name:
         :return: error messages
         """
         # look for undeclared variables
-        field_names = set(self.fields.keys())
+        _internal_objs = ("meta", "logger")
+
+        field_names = set([f for f in self.fields.keys() if not f.startswith("_")])
 
         var_names = set()
         f: str
@@ -292,7 +301,7 @@ class BaseEnv:
                 inspect.ismethod(attr)
                 or f.startswith("_")
                 or inspect.isclass(attr)
-                or f == "meta"
+                or f in _internal_objs
                 or isinstance(attr, MagicFunction)
             ):
                 continue
@@ -305,17 +314,17 @@ class BaseEnv:
         error_msgs: List[str] = []
 
         if unset:
-            error_msgs += [f'Variable "{parent_name}.{v}" is unset!' for v in unset]
+            error_msgs += [f'Variable "{v}" is unset!' for v in unset]
 
         if undeclr:
-            error_msgs += [f'Variable "{parent_name}.{v}" is undeclared!' for v in undeclr]
+            error_msgs += [f'Variable "{v}" is undeclared!' for v in undeclr]
 
         fields_to_check = field_names - unset - undeclr
 
         for f in fields_to_check:
             attr2check: Any = getattr(self, f)
             if issubclass(type(attr2check), BaseEnv):
-                error_msgs += attr2check.get_errors(parent_name=f"{parent_name}.{f}")
+                error_msgs += attr2check.get_errors()
 
         return error_msgs
 
@@ -390,31 +399,23 @@ class Env(BaseEnv):
     Defines environment.
     """
 
-    @dataclass
-    class Meta(BaseEnv):
+    class Meta:
         """
         Environment metadata.
         """
+        root: Path
+        name: Optional[str] = None
+        version: str = "0.1.0"
+        parents: List[str] = []
+        watch_files: List[str] = []
+        ignore_files: List[str] = []
+        emoji: str = ""
+        stage: str = "comm"
 
-        root: Path = field(init=False)
-        name: str = field(init=False)
-        version: str = field(default="0.1.0", init=False)
-        parent: Optional[str] = field(default=None, init=False)
-        watch_files: Tuple[str, ...] = field(init=False)
-        ignore_files: Tuple[str, ...] = field(init=False)
-        emoji: str = field(default="", init=False)
-        stage: str = field(default="comm", init=False)
-
-        def __post_init__(self) -> None:
-            super().__post_init__()
-            self.watch_files = (r"**/", r"**/__envo_lock__", *self.watch_files)
-            self.ignore_files = (
-                r"**/.*",
-                r"**/*~",
-                r"**/__pycache__",
-                r"**/__envo_lock__",
-                *self.ignore_files,
-            )
+    @dataclass
+    class Callbacks:
+        restart: Callback
+        reloader_ready: Callback
 
     root: Path
     path: Raw[str]
@@ -422,19 +423,34 @@ class Env(BaseEnv):
     envo_stage: Raw[str]
     pythonpath: Raw[str]
 
-    def __init__(self, shell: Optional["Shell"] = None) -> None:
+    _parents: List[Type["Env"]]
+    _files_watchers: List[Inotify]
+    _default_watch_files = ["**/", "env_*.py"]
+    _default_ignore_files = [
+        r"**/.*",
+        r"**/*~",
+        r"**/__pycache__",
+        r"**/__envo_lock__"
+    ]
+
+    def __init__(self, shell: Optional["Shell"], calls: Callbacks,
+                 reloader_enabled: bool=True) -> None:
+        self._calls = calls
         self.meta = self.Meta()
-        self.meta.validate()
         super().__init__(self.meta.name)
+
+        self.logger: Logger = logger.create_child("envo", descriptor=self.meta.name)
 
         self._environ_before = None
         self._shell_environ_before = None
+        self._reloader_enabled = reloader_enabled
 
         self._shell = shell
 
         self.root = self.meta.root
         self.stage = self.meta.stage
         self.envo_stage = self.stage
+        self.logger.info("Starting env", metadata={"root": self.root, "stage": self.stage})
 
         self.path = os.environ["PATH"]
 
@@ -443,8 +459,6 @@ class Env(BaseEnv):
         else:
             self.pythonpath = os.environ["PYTHONPATH"]
         self.pythonpath = str(self.root) + ":" + self.pythonpath
-
-        self._parent: Optional["Env"] = None
 
         self._magic_functions: Dict[str, List[MagicFunction]] = {
             "context": [],
@@ -460,11 +474,66 @@ class Env(BaseEnv):
         }
         self._collect_commands_and_hooks()
 
-        if self.meta.parent:
-            self._init_parent()
+        self._files_watchers = []
+        self._reload_lock = Lock()
+
+        self._exiting = False
+        self._executing_cmd = False
+
+        if self._reloader_enabled:
+            self._start_watchers()
 
     def __post_init__(self):
         self.validate()
+
+    def _start_watchers(self) -> None:
+        constituents = self._parents + [self.__class__]
+        for p in constituents:
+            watcher = Inotify(
+                Inotify.Sets(
+                    root=p.Meta.root,
+                    include=p.Meta.watch_files + self._default_watch_files,
+                    exclude=p.Meta.ignore_files + self._default_ignore_files
+                ),
+                calls=Inotify.Callbacks(on_event=Callback(self._on_env_edit)),
+            )
+            watcher.start()
+
+            self._files_watchers.append(watcher)
+
+        self._calls.reloader_ready()
+
+    def _stop_watchers(self):
+        for w in self._files_watchers:
+            w.stop()
+
+    def _on_env_edit(self, event: Inotify.Event) -> None:
+        while self._executing_cmd:
+            sleep(0.2)
+        self._reload_lock.acquire()
+
+        if self._exiting:
+            self._reload_lock.release()
+            return
+
+        subscribe_events = ["IN_CLOSE_WRITE", "IN_CREATE", "IN_DELETE", "IN_DELETE_SELF"]
+
+        if any([s in event.type_names for s in subscribe_events]):
+            if self._reloader_enabled:
+                self._stop_watchers()
+
+            self.logger.info('Reloading',
+                        metadata={"type": "reload", "event": event.type_names, "path": event.path.absolute.resolve()})
+
+            self._calls.restart()
+            self._exiting = True
+
+        self._reload_lock.release()
+
+    def exit(self) -> None:
+        self.logger.info("Exiting env")
+        if self._reloader_enabled:
+            self._stop_watchers()
 
     def activate(self) -> None:
         """
@@ -516,16 +585,24 @@ class Env(BaseEnv):
         path.write_text(content)
         return path
 
-    def get_full_name(self) -> str:
+    @classmethod
+    def get_full_name(cls) -> str:
         """
         Get full name.
 
         :return: Return a full name in the following format {parent_name}.{env_name}
         """
-        if self._parent:
-            return self._parent.get_full_name() + "." + self.get_name()
+        if cls._parents:
+            parents_names = ".".join([p.get_full_name() for p in cls._parents if p.get_full_name()])
+            ret = parents_names + ("." if parents_names else "") + cls.get_name()
+            return ret
         else:
-            return self.get_name()
+            ret = cls.get_name()
+            return ret
+
+    @classmethod
+    def get_name(cls) -> str:
+        return cls.Meta.name if cls.Meta.name else ""
 
     @classmethod
     def get_current_env(cls) -> "Env":
@@ -541,12 +618,35 @@ class Env(BaseEnv):
         return env
 
     @classmethod
-    def get_env_by_stage(cls, stage: str) -> "Env":
+    def build_env(cls) -> Type["Env"]:
+        if cls.Meta.parents:
+            cls._parents = [cls.get_parent_env(p) for p in cls.Meta.parents]
+
+            class InheritedEnv(cls, *cls._parents):
+                pass
+
+            return InheritedEnv
+        else:
+            cls._parents = []
+        return cls
+
+    @classmethod
+    def build_env_from_file(cls, file: Path) -> Type["Env"]:
+        Env = import_from_file(file).Env  # type: ignore
+        return Env.build_env()
+
+    @classmethod
+    def get_parent_env(cls, parent_path: str) -> Type["Env"]:
+        return cls.build_env_from_file(Path(str(cls.Meta.root / parent_path) + ".py"))
+
+    @classmethod
+    def get_env_by_stage(cls, stage: str) -> Type["Env"]:
         """
         Return env by stage
         :param stage:
         """
-        env: "Env" = import_from_file(cls.Meta.root / f"env_{stage}.py").Env()  # type: ignore
+
+        env: Type["Env"] = cls.build_env_from_file(Path(f"env_{stage}.py"))  # type: ignore
         return env
 
     def _collect_commands_and_hooks(self) -> None:
@@ -563,30 +663,6 @@ class Env(BaseEnv):
                 attr.env = self
                 self._magic_functions[attr.type].append(attr)
 
-    def get_parent(self) -> Optional["Env"]:
-        return self._parent
-
-    def get_root_env(self) -> "Env":
-        parent = self.get_parent()
-        if parent:
-            return parent.get_root_env()
-        else:
-            return self
-
-    def _init_parent(self) -> None:
-        """
-        Initialize parent if exists.
-        """
-        # unload modules just in case env with the same name has been already loaded
-        for m in list(sys.modules.keys())[:]:
-            if m.startswith("env_"):
-                sys.modules.pop(m)
-
-        env_dir = self.root.parents[len(self.meta.parent) - 2].absolute()
-        sys.path.insert(0, str(env_dir))
-        self._parent = import_from_file(env_dir / f"env_{self.stage}.py").Env(self._shell)
-        sys.path.pop(0)
-
     def __repr__(self) -> str:
         ret = []
 
@@ -596,3 +672,12 @@ class Env(BaseEnv):
                 ret.append(str(f))
 
         return super()._repr() + "\n".join(ret)
+
+    @precmd
+    def _pre_cmd(self, command: str) -> str:
+        self._executing_cmd = True
+        return command
+
+    @postcmd
+    def _post_cmd(self, command: str, stderr: str, stdout: str) -> None:
+        self._executing_cmd = False

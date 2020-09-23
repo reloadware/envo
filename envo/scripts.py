@@ -16,7 +16,7 @@ from rhei import Stopwatch
 
 import envo.e2e
 from envo import Env, misc, shell, logger, const, logging
-from envo.misc import import_from_file, EnvoError, Inotify, FilesWatcher, Callback
+from envo.misc import import_from_file, EnvoError, Inotify, Callback
 from envo.shell import PromptBase, PromptState, Shell
 
 try:
@@ -58,7 +58,7 @@ class Status:
 
     @property
     def reloader_ready(self) -> bool:
-        return self._context_ready
+        return self._reloader_ready
 
     @reloader_ready.setter
     def reloader_ready(self, value: bool) -> None:
@@ -101,8 +101,8 @@ class Mode:
     class Callbacks:
         restart: Callback
 
-    files_watcher: FilesWatcher = NotImplemented
     prompt: PromptBase = NotImplemented
+    reloader_enabled: bool = NotImplemented
 
     def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
         self.se = se
@@ -110,7 +110,6 @@ class Mode:
         self.calls = calls
 
         self.env_dirs = self._get_env_dirs()
-        self.executing_cmd = False
 
         if not self.env_dirs:
             raise EnvoError("Couldn't find any env!\n" 'Forgot to run envo --init" first?')
@@ -133,17 +132,7 @@ class Mode:
         sys.path.remove(env_dir) if env_dir in sys.path else None
 
     def _on_env_edit(self, event: Inotify.Event) -> None:
-        while self.executing_cmd:
-            sleep(0.2)
-
-        subscribe_events = ["IN_CLOSE_WRITE", "IN_CREATE", "IN_DELETE", "IN_DELETE_SELF"]
-
-        if any([s in event.type_names for s in subscribe_events]):
-            logger.info('Reloading', metadata={"type": "reload", "event": event.type_names, "path": event.path.relative_str})
-
-            self.stop()
-            self.calls.restart()
-            self.files_watcher.flush()
+        pass
 
     def _on_ready(self) -> None:
         self.prompt.state = PromptState.NORMAL
@@ -157,12 +146,6 @@ class Mode:
 
     def unload(self) -> None:
         raise NotImplementedError()
-
-    def _on_global_lock_enter(self) -> None:
-        self.files_watcher.pause()
-
-    def _on_global_lock_exit(self) -> None:
-        self.files_watcher.resume()
 
     def on_shell_enter(self) -> None:
         raise NotImplementedError()
@@ -197,7 +180,6 @@ class Mode:
         return ret
 
     def on_precmd(self, command: str) -> str:
-        self.executing_cmd = True
         return command
 
     def on_stdout(self, command: str, out: str) -> str:
@@ -207,7 +189,18 @@ class Mode:
         return out
 
     def on_postcmd(self, command: str, stdout: List[str], stderr: List[str]) -> None:
-        self.executing_cmd = False
+        pass
+
+    def _create_env_object(self, file: Path) -> Env:
+        def on_reloader_ready():
+            self.status.reloader_ready=True
+
+        env_class = Env.build_env_from_file(file)
+        env = env_class(self.li.shell,
+                        calls=Env.Callbacks(restart=self.calls.restart,
+                                            reloader_ready=Callback(on_reloader_ready)),
+                        reloader_enabled=self.reloader_enabled)
+        return env
 
 
 class NormalPrompt(PromptBase):
@@ -234,18 +227,19 @@ class HeadlessMode(Mode):
         pass
 
     env: Env
+    reloader_enabled: bool = False
 
     def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
         super(HeadlessMode, self).__init__(se=se, li=li, calls=calls)
         self.se = se
         self.li = li
         self.calls = calls
+
+        self.env = None
+
         logger.set_level(logging.Level.INFO)
 
         logger.debug("Creating Headless Mode")
-
-        self.global_lock = ILock("envo_lock")
-        self.global_lock._filepath = str(self.env_dirs[0] / "__envo_lock__")
 
     def unload(self) -> None:
         if self.env:
@@ -274,12 +268,6 @@ class HeadlessMode(Mode):
             self.li.shell.set_variable(c.name, c)
 
         self._load_context()
-
-    def _on_global_lock_enter(self) -> None:
-        self.files_watcher.pause()
-
-    def _on_global_lock_exit(self) -> None:
-        self.files_watcher.resume()
 
     def on_shell_enter(self) -> None:
         functions = self.env.get_magic_functions()["oncreate"]
@@ -365,21 +353,14 @@ class HeadlessMode(Mode):
 
         module_name = f"{package}.{env_name}"
 
-        # We have to lock this part in case there's other shells concurrently executing this code
-        with self.global_lock:
-            self._create_init_files()
-
-            # unload modules
-            for m in list(sys.modules.keys())[:]:
-                if m.startswith("env_"):
-                    sys.modules.pop(m)
-            try:
-                module = import_from_file(env_file)
-                self.env = module.Env(self.li.shell)
-            except ImportError as exc:
-                raise EnvoError(f"""Couldn't import "{module_name}" ({exc}).""")
-            finally:
-                self._delete_init_files()
+        # unload modules
+        for m in list(sys.modules.keys())[:]:
+            if m.startswith("env_"):
+                sys.modules.pop(m)
+        try:
+            self.env = self._create_env_object(env_file)
+        except ImportError as exc:
+            raise EnvoError(f"""Couldn't import "{module_name}" ({exc}).""")
 
         self.env.validate()
 
@@ -439,6 +420,7 @@ class NormalMode(HeadlessMode):
         pass
 
     env: Env
+    reloader_enabled: bool = True
 
     def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
         super(NormalMode, self).__init__(se=se, li=li, calls=calls)
@@ -468,32 +450,14 @@ class NormalMode(HeadlessMode):
         Thread(target=thread, args=(self,)).start()
 
     def load(self) -> None:
-        def thread(self: NormalMode) -> None:
-            self.files_watcher = FilesWatcher(
-                FilesWatcher.Sets(
-                    watch_root=self.env.get_root_env().root,
-                    watch_files=self.env.meta.watch_files,
-                    ignore_files=self.env.meta.ignore_files,
-                    global_lock_file=Path(self.global_lock._filepath),
-                ),
-                calls=FilesWatcher.Callbacks(on_trigger=Callback(self._on_env_edit)),
-            )
-            self.files_watcher.start()
-            while not self.files_watcher.ready:
-                sleep(0.05)
-
-            self.status.reloader_ready = True
-
         super(NormalMode, self).load()
         self.prompt.emoji = self.env.meta.emoji
         self.prompt.name = self.env.get_full_name()
 
         self.li.shell.set_prompt(str(self.prompt))
 
-        Thread(target=thread, args=(self,)).start()
-
     def stop(self) -> None:
-        self.files_watcher.stop()
+        self.env.exit()
 
 
 class EmergencyPrompt(PromptBase):
@@ -540,9 +504,10 @@ class EmergencyMode(Mode):
 
         logger.debug("Creating EmergencyMode")
 
-        self.files_watcher = FilesWatcher(
-            FilesWatcher.Sets(watch_root=self.env_dirs[0], watch_files=tuple(), ignore_files=tuple()),
-            calls=FilesWatcher.Callbacks(on_trigger=Callback(self._on_env_edit)),
+        self.files_watcher = Inotify(
+            Inotify.Sets(root=self.env_dirs[0], include=["env_*.py"],
+                         exclude=[r"**/.*", r"**/*~", r"**/__pycache__"]),
+            calls=Inotify.Callbacks(on_event=Callback(self._on_env_edit)),
         )
         self.files_watcher.start()
         self.status.reloader_ready = True
@@ -563,7 +528,7 @@ class EmergencyMode(Mode):
             self.status.context_ready = True
 
     def unload(self) -> None:
-        pass
+        self.stop()
 
 
 class EnvoBase:

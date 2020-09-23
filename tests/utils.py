@@ -19,7 +19,7 @@ def change_file(file: Path, delay_s: float, new_content: str) -> None:
     thread.start()
 
 
-def replace_in_code(what: str, to_what: str, file=Path("env_comm.py"), indent: int = 0):
+def replace_in_code(what: str, to_what: str, file=Path("env_test.py"), indent: int = 0):
     content = file.read_text()
 
     if what not in content:
@@ -32,7 +32,7 @@ def replace_in_code(what: str, to_what: str, file=Path("env_comm.py"), indent: i
     file.write_text(content)
 
 
-def add_declaration(code: str, file=Path("env_comm.py")) -> None:
+def add_declaration(code: str, file=Path("env_test.py")) -> None:
     spaces = 4 * " "
     code = textwrap.dedent(code)
     replace_in_code(
@@ -46,7 +46,7 @@ def add_declaration(code: str, file=Path("env_comm.py")) -> None:
     )
 
 
-def add_definition(code: str, file=Path("env_comm.py")) -> None:
+def add_definition(code: str, file=Path("env_test.py")) -> None:
     spaces = 8 * " "
     code = textwrap.dedent(code)
     replace_in_code(
@@ -60,7 +60,7 @@ def add_definition(code: str, file=Path("env_comm.py")) -> None:
     )
 
 
-def add_command(code: str, file=Path("env_comm.py")) -> None:
+def add_command(code: str, file=Path("env_test.py")) -> None:
     spaces = 4 * " "
     code = textwrap.dedent(code)
     replace_in_code(
@@ -74,7 +74,7 @@ def add_command(code: str, file=Path("env_comm.py")) -> None:
     )
 
 
-def add_hook(code: str, file=Path("env_comm.py")) -> None:
+def add_hook(code: str, file=Path("env_test.py")) -> None:
     add_command(code, file)
 
 
@@ -99,7 +99,7 @@ def flake_cmd(prop: bool = False, glob: bool = False) -> None:
     )
 
 
-def add_context(context: Dict[str, Any], name: str = "some_context", file=Path("env_comm.py")) -> None:
+def add_context(context: Dict[str, Any], name: str = "some_context", file=Path("env_test.py")) -> None:
     context_str = json.dumps(context)
     add_command(
         f"""

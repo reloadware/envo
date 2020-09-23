@@ -28,7 +28,7 @@ class TestParentChild(utils.TestBase):
         e.expected.pop()
         e.prompt(name=r"sandbox\.ch").eval()
 
-        utils.replace_in_code("sandbox", "sb", file=Path("../env_comm.py"))
+        utils.replace_in_code("sandbox", "sb", file=Path("../env_test.py"))
         e.expected.pop()
         e.prompt(name=r"sb\.ch").eval()
 

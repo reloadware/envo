@@ -1,9 +1,12 @@
 import os
 from pathlib import Path
 
+import pytest
+
 from tests.unit import utils
 
 
+@pytest.mark.skip
 class TestParentChild(utils.TestBase):
     def test_parents_basic_functionality(self, init_child_env):
         sandbox_dir = Path(".").absolute()
@@ -13,12 +16,12 @@ class TestParentChild(utils.TestBase):
         utils.add_declaration("test_parent_var: str")
         utils.add_definition('self.test_parent_var = "test_parent_value"')
 
-        utils.replace_in_code('name: str = "child"', 'name: str = "ch"', file=child_dir / "env_comm.py")
+        utils.replace_in_code('name: str = "child"', 'name: str = "ch"', file=child_dir / "env_test.py")
         utils.add_declaration(
-            "test_var: str", file=child_dir / "env_comm.py",
+            "test_var: str", file=child_dir / "env_test.py",
         )
         utils.add_definition(
-            'self.test_var = "test_value"', file=child_dir / "env_comm.py",
+            'self.test_var = "test_value"', file=child_dir / "env_test.py",
         )
 
         child_env = utils.env(child_dir)
@@ -37,7 +40,7 @@ class TestParentChild(utils.TestBase):
         child_dir = sandbox_dir / "child"
 
         utils.replace_in_code('name: str = "sandbox"', 'name: str = "pa"')
-        utils.replace_in_code('name: str = "child"', 'name: str = "ch"', file=child_dir / "env_comm.py")
+        utils.replace_in_code('name: str = "child"', 'name: str = "ch"', file=child_dir / "env_test.py")
 
         child_env = utils.env(child_dir)
 
@@ -57,9 +60,9 @@ class TestParentChild(utils.TestBase):
             """
         )
 
-        utils.replace_in_code('name: str = "child"', 'name: str = "ch"', file=child_dir / "env_comm.py")
+        utils.replace_in_code('name: str = "child"', 'name: str = "ch"', file=child_dir / "env_test.py")
         utils.add_declaration(
-            "path: Raw[str]", file=child_dir / "env_comm.py",
+            "path: Raw[str]", file=child_dir / "env_test.py",
         )
         utils.add_definition(
             """
@@ -67,7 +70,7 @@ class TestParentChild(utils.TestBase):
             self.path = os.environ["PATH"]
             self.path = "/child_bin_dir:" + self.path
             """,
-            file=child_dir / "env_comm.py",
+            file=child_dir / "env_test.py",
         )
 
         child_env = utils.env(child_dir)

@@ -2,6 +2,7 @@ import shutil
 
 import pytest
 
+from envo.e2e import ReloadTimeout
 from tests.e2e import utils
 import os
 from time import sleep
@@ -17,8 +18,8 @@ class TestHotReload(utils.TestBase):
         e = shell.expecter
         e.prompt(PromptState.MAYBE_LOADING, name=r"(new|sandbox)").eval()
 
-        new_content = Path("env_comm.py").read_text().replace("sandbox", "new")
-        Path("env_comm.py").write_text(new_content)
+        new_content = Path("env_test.py").read_text().replace("sandbox", "new")
+        Path("env_test.py").write_text(new_content)
 
         shell.envo.assert_reloaded()
 
@@ -35,8 +36,7 @@ class TestHotReload(utils.TestBase):
         e.output(r"'test'\n")
 
         e.prompt(PromptState.MAYBE_LOADING).eval()
-        new_content = Path("env_comm.py").read_text().replace("sandbox", "new")
-        Path("env_comm.py").write_text(new_content)
+        utils.replace_in_code("sandbox", "new")
         shell.envo.assert_reloaded()
 
         e.pop()
@@ -59,10 +59,10 @@ class TestHotReload(utils.TestBase):
         e.prompt(PromptState.MAYBE_LOADING).eval()
 
         Path("./test_dir").mkdir()
-        shell.envo.assert_reloaded(1, "test_dir/")
+        shell.envo.assert_reloaded(1, "test_dir")
         shell.sendline("cd ./test_dir")
 
-        utils.trigger_reload(Path("env_comm.py"))
+        utils.trigger_reload(Path("env_test.py"))
         shell.envo.assert_reloaded(2)
 
         e.prompt().eval()
@@ -76,10 +76,10 @@ class TestHotReload(utils.TestBase):
         e.prompt(PromptState.MAYBE_LOADING).eval()
         Path("./test_dir").mkdir()
 
-        shell.envo.assert_reloaded(1, "test_dir/")
+        shell.envo.assert_reloaded(1, "test_dir")
 
         utils.replace_in_code(
-            "watch_files: Tuple[str, ...] = ()", 'watch_files: Tuple[str, ...] = ("test_dir/**/*.py", "test_dir/*.py")',
+            "watch_files: List[str] = []", 'watch_files: List[str] = ["test_dir/**/*.py", "test_dir/*.py"]',
         )
         shell.envo.assert_reloaded(2)
 
@@ -99,7 +99,7 @@ class TestHotReload(utils.TestBase):
         e.prompt(PromptState.MAYBE_LOADING).eval()
 
         utils.replace_in_code(
-            "watch_files: Tuple[str, ...] = ()", 'watch_files: Tuple[str, ...] = ("*.py")',
+            "watch_files: List[str] = []", 'watch_files: List[str] = ["*.py"]',
         )
         shell.envo.assert_reloaded(1)
 
@@ -121,13 +121,13 @@ class TestHotReload(utils.TestBase):
         directory = Path("./test_dir")
         directory.mkdir()
 
-        shell.envo.assert_reloaded(1, "test_dir/")
+        shell.envo.assert_reloaded(1, "test_dir")
 
         some_file = Path("./test_dir/some_file.py")
         some_file.touch()
 
         utils.replace_in_code(
-            "watch_files: Tuple[str, ...] = ()", 'watch_files: Tuple[str, ...] = ("test_dir/**/*.py", "test_dir/*.py")',
+            "watch_files: List[str] = []", 'watch_files: List[str] = ["test_dir/**/*.py", "test_dir/*.py"]',
         )
 
         shell.envo.assert_reloaded(2)
@@ -148,15 +148,15 @@ class TestHotReload(utils.TestBase):
 
         Path("./test_dir").mkdir()
 
-        shell.envo.assert_reloaded(1, "test_dir/")
+        shell.envo.assert_reloaded(1, "test_dir")
 
         utils.replace_in_code(
-            "watch_files: Tuple[str, ...] = ()", 'watch_files: Tuple[str, ...] = ("test_dir/**/*.py",)',
+            "watch_files: List[str] = []", 'watch_files: List[str] = ["test_dir/**/*.py"]',
         )
         shell.envo.assert_reloaded(2)
 
         utils.replace_in_code(
-            "ignore_files: Tuple[str, ...] = ()", 'ignore_files: Tuple[str, ...] = ("test_dir/ignored_file.py",)',
+            "ignore_files: List[str] = []", 'ignore_files: List[str] = ["test_dir/ignored_file.py"]',
         )
         shell.envo.assert_reloaded(3)
 
@@ -186,7 +186,7 @@ class TestHotReload(utils.TestBase):
 
         e.expected.pop()
 
-        e.output(r'Variable "sandbox\.test_var" is unset!\n')
+        e.output(r'Variable "test_var" is unset!\n')
         e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         e.expected.pop()
@@ -268,11 +268,19 @@ class TestHotReload(utils.TestBase):
         e = shell.expecter
         e.prompt().eval()
         sleep(0.5)
-        shell.sendline('sleep 2 && print("command_test")')
+        shell.sendline('sleep 3 && print("command_test")')
         sleep(0.5)
         utils.trigger_reload()
+        with pytest.raises(ReloadTimeout):
+            shell.envo.assert_reloaded(1, timeout=0.2)
+
         utils.trigger_reload()
+        with pytest.raises(ReloadTimeout):
+            shell.envo.assert_reloaded(1, timeout=0.2)
+
         utils.trigger_reload()
+        with pytest.raises(ReloadTimeout):
+            shell.envo.assert_reloaded(1, timeout=0.2)
 
         e.output("command_test\n")
         e.prompt(PromptState.MAYBE_LOADING)

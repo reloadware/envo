@@ -17,6 +17,15 @@ enabled = "ENVO_E2E_TEST" in os.environ
 
 server = None
 
+
+class ReloadTimeout(Exception):
+    pass
+
+
+class ReadyTimeout(Exception):
+    pass
+
+
 if enabled:
     import os
     import stickybeak

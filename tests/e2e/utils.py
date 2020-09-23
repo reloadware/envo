@@ -176,6 +176,7 @@ class Spawn:
         @classmethod
         def wait_until_ready(cls, timeout=2) -> None:
             import envo.e2e
+            from envo.e2e import ReadyTimeout
             from time import sleep
 
             passed_time = 0.0
@@ -192,11 +193,12 @@ class Spawn:
                     break
 
                 if passed_time >= timeout:
-                    raise AssertionError("Wait timeout")
+                    raise ReadyTimeout
 
         @classmethod
-        def assert_reloaded(cls, number: int = 1, path="env_comm.py", timeout=3) -> None:
+        def assert_reloaded(cls, number: int = 1, path="env_test.py", timeout=1) -> None:
             from envo import logger, logging
+            from envo.e2e import ReloadTimeout
             from time import sleep
 
             passed_time = 0.0
@@ -209,11 +211,11 @@ class Spawn:
                 if number == 0 and len(msgs) == 0:
                     break
 
-                if len(msgs) == number and msgs[-1].metadata["path"] == path:
+                if len(msgs) == number and str(msgs[-1].metadata["path"]).endswith(path):
                     break
 
                 if passed_time >= timeout:
-                    raise AssertionError("Reload timeout")
+                    raise ReloadTimeout
 
             cls.wait_until_ready()
 
@@ -336,7 +338,7 @@ class Spawn:
         print(f"\nExpected (raw):\n{self.expecter.expected_regex}")
 
         print("\nLog:")
-        print("\n".join([str(log) for log in self.envo.get_logger().messages]))
+        self.envo.get_logger().print_all()
 
 
 def shell() -> Spawn:
@@ -369,13 +371,13 @@ def init_child_env(child_dir: Path) -> None:
 
     comm_file = Path("env_comm.py")
     content = comm_file.read_text()
-    content = content.replace("parent: Optional[str] = None", 'parent = ".."')
+    content = content.replace("parent: Optional[str] = None", 'parent = "../env_comm"')
     comm_file.write_text(content)
 
     os.chdir(str(cwd))
 
 
-def trigger_reload(file: Path = Path("env_comm.py")) -> None:
+def trigger_reload(file: Path = Path("env_test.py")) -> None:
     file.write_text(file.read_text() + "\n")
 
 
