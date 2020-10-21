@@ -18,7 +18,8 @@ from envo import (  # noqa: F401
     onunload,
     ondestroy,
     VirtualEnv,
-    dataclass
+    dataclass,
+    Plugin
 )
 
 
@@ -33,6 +34,7 @@ class {{ class_name }}Comm(
         watch_files: List[str] = []
         ignore_files: List[str] = []
         parents: List[str] = []
+        plugins: List[Plugin] = []
     # Declare your variables here
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:

@@ -111,7 +111,7 @@ def add_context(context: Dict[str, Any], name: str = "some_context", file=Path("
     )
 
 
-def add_plugin(name: str) -> None:
+def add_plugins(name: str) -> None:
     replace_in_code(
-        "# Add plugins here", f"{name},",
+        "plugins: List[Plugin] = []", f"plugins: List[Plugin] = [{name}]",
     )

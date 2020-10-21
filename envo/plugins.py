@@ -8,18 +8,24 @@ from dataclasses import dataclass
 from envo import Env, onload, onunload, logger
 
 __all__ = [
+    "Plugin",
     "VirtualEnv",
 ]
 
 
 @dataclass
-class VirtualEnv(Env):
+class Plugin(Env):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+
+
+@dataclass
+class VirtualEnv(Plugin):
     """
     Env that activates virtual environment.
     """
 
     # TODO: change it to a mixin?
-    root: Path
     venv_path: Path
     venv_lib_path: Path
 

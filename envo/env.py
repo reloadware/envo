@@ -27,8 +27,6 @@ from envo.logging import Logger
 
 from envo.misc import import_from_file, EnvoError, Callback, Inotify
 
-from ilock import ILock
-
 
 __all__ = [
     "BaseEnv",
@@ -52,6 +50,7 @@ T = TypeVar("T")
 if TYPE_CHECKING:
     Raw = Union[T]
     from envo.shell import Shell
+    from envo import Plugin
 else:
 
     class Raw(Generic[T]):
@@ -407,6 +406,7 @@ class Env(BaseEnv):
         name: Optional[str] = None
         version: str = "0.1.0"
         parents: List[str] = []
+        plugins: List["Plugin"] = []
         watch_files: List[str] = []
         ignore_files: List[str] = []
         emoji: str = ""
@@ -619,16 +619,14 @@ class Env(BaseEnv):
 
     @classmethod
     def build_env(cls) -> Type["Env"]:
-        if cls.Meta.parents:
-            cls._parents = [cls.get_parent_env(p) for p in cls.Meta.parents]
+        cls._parents = list(reversed([cls.get_parent_env(p) for p in cls.Meta.parents]))
 
-            class InheritedEnv(cls, *cls._parents):
-                pass
+        class InheritedEnv(*cls.Meta.plugins, cls, *cls._parents):
+            pass
 
-            return InheritedEnv
-        else:
-            cls._parents = []
-        return cls
+        env = InheritedEnv
+
+        return env
 
     @classmethod
     def build_env_from_file(cls, file: Path) -> Type["Env"]:

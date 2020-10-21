@@ -6,7 +6,7 @@ class TestPlugins(utils.TestBase):
         utils.run("poetry run python -m venv .venv")
         utils.run("./.venv/bin/pip install url-regex")
         utils.run("envo test")
-        utils.add_plugin("VirtualEnv")
+        utils.add_plugins("VirtualEnv")
 
         shell.start()
         e = shell.expecter
@@ -22,7 +22,7 @@ class TestPlugins(utils.TestBase):
         e.exit().eval()
 
     def test_venv_addon_no_venv(self, shell):
-        utils.add_plugin("VirtualEnv")
+        utils.add_plugins("VirtualEnv")
 
         shell.start()
         e = shell.expecter

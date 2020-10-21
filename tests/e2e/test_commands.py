@@ -258,7 +258,6 @@ class TestCommands(utils.TestBase):
         assert res == "Flake all good\r\nFlake return value\r\n"
 
     def test_env_variables_available_in_run(self, shell):
-        utils.add_plugin("VirtualEnv")
         utils.add_declaration("test_var: Raw[str]")
         utils.add_definition('self.test_var = "test_value"')
         utils.add_command(

@@ -1,3 +1,5 @@
+import pytest
+
 from tests.e2e import utils
 import os
 from pathlib import Path
@@ -35,6 +37,7 @@ class TestParentChild(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    @pytest.mark.skip
     def test_child_importable(self, shell, init_child_env):
         Path("__init__.py").touch()
         os.chdir("child")

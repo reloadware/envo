@@ -36,7 +36,7 @@ from tests.utils import flake_cmd  # noqa F401
 from tests.utils import mypy_cmd  # noqa F401
 from tests.utils import replace_in_code  # noqa F401
 from tests.utils import add_context  # noqa F401
-from tests.utils import add_plugin  # noqa F401
+from tests.utils import add_plugins  # noqa F401
 
 
 test_root = Path(os.path.realpath(__file__)).parent
@@ -196,7 +196,7 @@ class Spawn:
                     raise ReadyTimeout
 
         @classmethod
-        def assert_reloaded(cls, number: int = 1, path="env_test.py", timeout=1) -> None:
+        def assert_reloaded(cls, number: int = 1, path="env_test.py", timeout=2) -> None:
             from envo import logger, logging
             from envo.e2e import ReloadTimeout
             from time import sleep
@@ -371,8 +371,13 @@ def init_child_env(child_dir: Path) -> None:
 
     comm_file = Path("env_comm.py")
     content = comm_file.read_text()
-    content = content.replace("parent: Optional[str] = None", 'parent = "../env_comm"')
+    content = content.replace("parents: List[str] = []", 'parents = ["../env_comm"]')
     comm_file.write_text(content)
+
+    test_file = Path("env_test.py")
+    content = test_file.read_text()
+    content = content.replace('parents: List[str] = ["env_comm"]', 'parents = ["env_comm", "../env_test"]')
+    test_file.write_text(content)
 
     os.chdir(str(cwd))
 
