@@ -97,3 +97,4 @@ sandbox
 pip-wheel-metadata
 
 .env_*
+*.pyi

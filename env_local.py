@@ -7,15 +7,17 @@ class EnvoEnv(EnvoEnvComm):  # type: ignore
     class Meta(EnvoEnvComm.Meta):  # type: ignore
         stage = "local"
         emoji = "🐣"
-        parent = ".."
+        parents = ["env_comm"]
 
     # Declare your variables here
+    var: int
+    raw_var: Raw[float]
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-        stickybeak_root = self.get_parent().root / "stickybeak"
-        self.pythonpath = f"{str(stickybeak_root)}:{self.pythonpath}"
+        self.var = 12
+        self.raw_var = 12.03
 
         # Define your variables here
 

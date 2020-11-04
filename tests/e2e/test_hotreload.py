@@ -62,7 +62,7 @@ class TestHotReload(utils.TestBase):
         shell.envo.assert_reloaded(1, "test_dir")
         shell.sendline("cd ./test_dir")
 
-        utils.trigger_reload(Path("env_test.py"))
+        shell.trigger_reload(Path("env_test.py"))
         shell.envo.assert_reloaded(2)
 
         e.prompt().eval()
@@ -207,7 +207,7 @@ class TestHotReload(utils.TestBase):
 
         for i in range(5):
             sleep(0.2)
-            utils.trigger_reload()
+            shell.trigger_reload()
 
         shell.envo.assert_reloaded(5)
 
@@ -229,14 +229,11 @@ class TestHotReload(utils.TestBase):
         shell.start()
 
         e = shell.expecter
-        e.prompt().eval()
+        e.prompt(PromptState.MAYBE_LOADING).eval()
 
-        utils.trigger_reload()
-        sleep(0.2)
-        utils.trigger_reload()
-        sleep(0.2)
-        utils.trigger_reload()
-        sleep(0.2)
+        shell.trigger_reload()
+        shell.trigger_reload()
+        shell.trigger_reload()
 
         shell.sendline("print($PATH)")
         sleep(0.5)
@@ -270,15 +267,15 @@ class TestHotReload(utils.TestBase):
         sleep(0.5)
         shell.sendline('sleep 3 && print("command_test")')
         sleep(0.5)
-        utils.trigger_reload()
+        shell.trigger_reload()
         with pytest.raises(ReloadTimeout):
             shell.envo.assert_reloaded(1, timeout=0.2)
 
-        utils.trigger_reload()
+        shell.trigger_reload()
         with pytest.raises(ReloadTimeout):
             shell.envo.assert_reloaded(1, timeout=0.2)
 
-        utils.trigger_reload()
+        shell.trigger_reload()
         with pytest.raises(ReloadTimeout):
             shell.envo.assert_reloaded(1, timeout=0.2)
 

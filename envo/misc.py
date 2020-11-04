@@ -235,6 +235,13 @@ def render_file(template_path: Path, output: Path, context: Dict[str, Any]) -> N
     output.write_text(template.render(**context))
 
 
+def render(template: str, output: Path, context: Dict[str, Any]) -> None:
+    from jinja2 import StrictUndefined, Template
+
+    template = Template(template, undefined=StrictUndefined)
+    output.write_text(template.render(**context))
+
+
 def render_py_file(template_path: Path, output: Path, context: Dict[str, Any]) -> None:
     render_file(template_path, output, context)
 

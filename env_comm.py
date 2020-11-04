@@ -29,11 +29,12 @@ class EnvoEnvComm(VirtualEnv, envo.Env):
         root = Path(__file__).parent
         name = "envo"
         version = "0.1.0"
-        watch_files: Tuple[str, ...] = ()
-        ignore_files: Tuple[str, ...] = ("**/tests/**",)
+        watch_files: List[str] = []
+        ignore_files: List[str] = ["**/tests/**"]
         parent = None
 
     poetry_ver: str
+    poetry_ver4: str
     some_var: str
 
     def __init__(self, *args, **kwargs) -> None:
@@ -41,6 +42,7 @@ class EnvoEnvComm(VirtualEnv, envo.Env):
 
         self.poetry_ver = "1.0.5"
         self.some_var = "test"
+        self.poetry_ver4 = "fds"
 
     @command(glob=True)
     def bootstrap(self):
@@ -55,4 +57,5 @@ class EnvoEnvComm(VirtualEnv, envo.Env):
 
 
 Env = EnvoEnvComm
+
 

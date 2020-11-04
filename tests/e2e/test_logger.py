@@ -31,7 +31,7 @@ class TestLogger(utils.TestBase):
         assert len(logger().get_msgs(filter=logging.MsgFilter(metadata_re={"type": "reload"}))) == 0
 
         # Test filtering on metadata
-        utils.trigger_reload()
+        shell.trigger_reload()
         sleep(0.5)
         assert len(logger().get_msgs(filter=logging.MsgFilter(metadata_re={"type": r"reload"}))) == 1
 

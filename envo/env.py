@@ -1,7 +1,6 @@
 import inspect
 import os
 import re
-import sys
 from copy import copy
 from threading import Lock
 from time import sleep
@@ -43,6 +42,8 @@ __all__ = [
     "onunload",
     "ondestroy",
 ]
+
+from envo.stub_gen import StubGen
 
 T = TypeVar("T")
 
@@ -340,6 +341,9 @@ class BaseEnv:
         """
         ret = {}
         for f in fields(self):
+            if f.name.startswith("_"):
+                continue
+
             if hasattr(self, f.name):
                 attr = getattr(self, f.name)
                 if hasattr(f.type, "__origin__"):
@@ -619,13 +623,14 @@ class Env(BaseEnv):
 
     @classmethod
     def build_env(cls) -> Type["Env"]:
-        cls._parents = list(reversed([cls.get_parent_env(p) for p in cls.Meta.parents]))
+        parents = list(reversed([cls.get_parent_env(p) for p in cls.Meta.parents]))
 
-        class InheritedEnv(*cls.Meta.plugins, cls, *cls._parents):
+        class InheritedEnv(*cls.Meta.plugins, cls, *parents):
             pass
 
         env = InheritedEnv
-
+        env.__name__ = cls.__name__
+        env._parents = parents
         return env
 
     @classmethod
@@ -679,3 +684,11 @@ class Env(BaseEnv):
     @postcmd
     def _post_cmd(self, command: str, stderr: str, stdout: str) -> None:
         self._executing_cmd = False
+
+    @command
+    def genstub(self) -> None:
+        StubGen(self).generate()
+
+    @onload
+    def _on_load(self) -> None:
+        self.genstub()

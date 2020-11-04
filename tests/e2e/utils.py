@@ -174,7 +174,7 @@ class Spawn:
             return logger
 
         @classmethod
-        def wait_until_ready(cls, timeout=2) -> None:
+        def wait_until_ready(cls, timeout=1) -> None:
             import envo.e2e
             from envo.e2e import ReadyTimeout
             from time import sleep
@@ -195,8 +195,10 @@ class Spawn:
                 if passed_time >= timeout:
                     raise ReadyTimeout
 
+            sleep(0.2)
+
         @classmethod
-        def assert_reloaded(cls, number: int = 1, path="env_test.py", timeout=2) -> None:
+        def assert_reloaded(cls, number: int = 1, path="env_test.py", timeout=1) -> None:
             from envo import logger, logging
             from envo.e2e import ReloadTimeout
             from time import sleep
@@ -291,6 +293,10 @@ class Spawn:
         self.process.stdin.writelines([f"{line}\n".encode("utf-8")])
         self.process.stdin.flush()
 
+    def trigger_reload(self, file: Path = Path("env_test.py")) -> None:
+        file.write_text(file.read_text() + "\n")
+        self.envo.wait_until_ready()
+
     def _collect_output(self):
         try:
             while not self.stop_collecting:
@@ -382,10 +388,6 @@ def init_child_env(child_dir: Path) -> None:
     os.chdir(str(cwd))
 
 
-def trigger_reload(file: Path = Path("env_test.py")) -> None:
-    file.write_text(file.read_text() + "\n")
-
-
 def replace_last_occurence(string: str, what: str, to_what: str) -> str:
     if what not in string:
         raise RuntimeError('"what" string not found in input string')
@@ -393,3 +395,7 @@ def replace_last_occurence(string: str, what: str, to_what: str) -> str:
     # ugh, ugly...
     ret = string[::-1].replace(what[::-1], to_what[::-1], 1)[::-1]
     return ret
+
+
+def trigger_reload(file: Path = Path("env_test.py")) -> None:
+    file.write_text(file.read_text() + "\n")

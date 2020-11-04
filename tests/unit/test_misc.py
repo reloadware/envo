@@ -58,51 +58,10 @@ class TestMisc(utils.TestBase):
         Path("sandbox/__init__.py").touch()
         utils.command("test")
 
-    def test_dry_run(self, capsys, caplog):
-        utils.command("test --dry-run")
-        captured = capsys.readouterr()
-        assert captured.out != ""
-        assert len(caplog.messages) == 0
-
-    def test_save(self, caplog, capsys):
-        utils.command("test --save")
-
-        assert len(caplog.messages) == 1
-        assert caplog.messages[0] == "Saved envs to .env_test 💾"
-        assert Path(".env_test").exists()
-
-        captured = capsys.readouterr()
-        assert captured.out == ""
-        assert captured.err == ""
-
     @pytest.mark.skip
     def test_activating(self, env):
         env.activate()
         assert os.environ["SANDBOX_STAGE"] == "test"
-
-    def test_init_py_created(self, mocker):
-        mocker.patch("envo.scripts.Path.unlink")
-        utils.command("test")
-        assert Path("__init__.py").exists()
-
-    def test_existing_init_py_recovered(self):
-        init_file = Path("__init__.py")
-        init_file.touch()
-        init_file.write_text("import flask")
-        utils.command("test")
-
-        assert init_file.read_text() == "import flask"
-        assert not Path("__init__.py.tmp").exists()
-
-    def test_init_py_delete_if_not_exists(self):
-        assert not Path("__init__.py").exists()
-
-    def test_init_untouched_if_exists(self):
-        file = Path("__init__.py")
-        file.touch()
-        file.write_text("a = 1")
-
-        assert file.read_text() == "a = 1"
 
     @pytest.mark.skip
     def test_nested(self):
@@ -201,9 +160,3 @@ class TestMisc(utils.TestBase):
         e.activate()
         assert os.environ["VALUE"] == "test_value"
 
-    @pytest.mark.skip
-    def test_get_current_stage(self, env_comm):
-        utils.command("local --init")
-
-        os.environ["ENVO_STAGE"] = "local"
-        assert env_comm.get_current_env().meta.stage == "local"
