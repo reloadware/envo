@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import traceback
+from collections import OrderedDict
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -86,6 +87,11 @@ class Status:
             self.calls.on_ready()
 
 
+class CantFindEnvFile(EnvoError):
+    def __init__(self):
+        super().__init__("Couldn't find any env!\n" 'Forgot to run envo --init" first?')
+
+
 class Mode:
     @dataclass
     class Links:
@@ -112,7 +118,7 @@ class Mode:
         self.env_dirs = self._get_env_dirs()
 
         if not self.env_dirs:
-            raise EnvoError("Couldn't find any env!\n" 'Forgot to run envo --init" first?')
+            raise CantFindEnvFile
 
         self.status = Status(calls=Status.Callbacks(on_ready=Callback(self._on_ready)))
 
@@ -169,12 +175,13 @@ class Mode:
         ret = []
         path = Path(".").absolute()
         while True:
-            env_file = path / f"env_{self.se.stage}.py"
-            if env_file.exists():
-                ret.append(path)
-            else:
-                if path == Path("/"):
-                    break
+            if path == Path("/"):
+                break
+
+            for p in path.glob("env_*.py"):
+                if p.parent not in ret:
+                    ret.append(p.parent)
+
             path = path.parent
 
         return ret
@@ -343,15 +350,37 @@ class HeadlessMode(Mode):
 
         super(HeadlessMode, self).on_postcmd(command, stdout, stderr)
 
+    def _find_env(self) -> Path:
+        # TODO: Test this
+        if self.se.stage:
+            matches: Dict[Path, const.Stage] = OrderedDict()
+            for d in self.env_dirs:
+                for p in d.glob("env_*.py"):
+                    stage = const.STAGES.filename_to_stage(p.name)
+                    if stage:
+                        matches[p] = stage
+
+            results = [p for p, s in matches.items() if self.se.stage == s.name]
+            if results:
+                return results[0]
+        else:
+            for d in self.env_dirs:
+                matches: Dict[Path, const.Stage] = OrderedDict()
+                for p in d.glob("env_*.py"):
+                    stage = const.STAGES.filename_to_stage(p.name)
+                    if stage:
+                        matches[p] = stage
+
+                results = sorted(matches.items(), key=lambda x: x[1].priority, reverse=True)
+                if results:
+                    return results[0][0]
+
+        raise CantFindEnvFile()
+
     def _create_env(self) -> None:
-        env_dir = self.env_dirs[0]
-        package = env_dir.name
-        env_name = f"env_{self.se.stage}"
-        env_file = env_dir / f"{env_name}.py"
+        env_file = self._find_env()
 
         logger.debug(f'Creating Env from file "{env_file}"')
-
-        module_name = f"{package}.{env_name}"
 
         # unload modules
         for m in list(sys.modules.keys())[:]:
@@ -360,50 +389,9 @@ class HeadlessMode(Mode):
         try:
             self.env = self._create_env_object(env_file)
         except ImportError as exc:
-            raise EnvoError(f"""Couldn't import "{module_name}" ({exc}).""")
+            raise EnvoError(f"""Couldn't import "{env_file}" ({exc}).""")
 
         self.env.validate()
-
-    def _create_init_files(self) -> None:
-        """
-        Create __init__.py files if not exist.
-
-        If exist save them to __init__.py.tmp to recover later.
-        This step is needed because there might be some content in existing that might crash envo.
-        """
-        for d in self.env_dirs:
-            init_file = d / "__init__.py"
-
-            if init_file.exists():
-                logger.debug(f'Attempting to create {str(init_file.absolute())} but exists, renaming to __init__.py.tmp')
-                init_file_tmp = d / Path("__init__.py.tmp")
-                init_file_tmp.touch()
-                init_file_tmp.write_text(init_file.read_text())
-
-            if not init_file.exists():
-                logger.debug(f'Creating {str(init_file.absolute())} file')
-                init_file.touch()
-
-            init_file.write_text("# __envo_delete__")
-
-    def _delete_init_files(self) -> None:
-        """
-        Delete __init__.py files if crated otherwise recover.
-        :return:
-        """
-        for d in self.env_dirs:
-            init_file = d / Path("__init__.py")
-            init_file_tmp = d / Path("__init__.py.tmp")
-
-            if init_file.read_text() == "# __envo_delete__":
-                logger.debug(f'Deleting {str(init_file.absolute())} file')
-                init_file.unlink()
-
-            if init_file_tmp.exists():
-                init_file.touch()
-                init_file.write_text(init_file_tmp.read_text())
-                init_file_tmp.unlink()
-                logger.debug(f'Recovering {str(init_file)} from {str(init_file_tmp)}')
 
 
 class NormalMode(HeadlessMode):
@@ -452,7 +440,7 @@ class NormalMode(HeadlessMode):
     def load(self) -> None:
         super(NormalMode, self).load()
         self.prompt.emoji = self.env.meta.emoji
-        self.prompt.name = self.env.get_full_name()
+        self.prompt.name = self.env.get_name()
 
         self.li.shell.set_prompt(str(self.prompt))
 
@@ -707,7 +695,7 @@ class EnvoCreator:
         logger.debug(f"Starting EnvoCreator")
         self.se = se
 
-    def _create_from_templ(self, templ_file: Path, output_file: Path, is_comm: bool = False) -> None:
+    def _create_from_templ(self, stage: str, parent: str = "") -> None:
         """
         Create env file from template.
 
@@ -720,6 +708,8 @@ class EnvoCreator:
 
         Environment(keep_trailing_newline=True)
 
+        output_file = Path(f"env_{stage}.py")
+
         if output_file.exists():
             raise EnvoError(f"{str(output_file)} file already exists.")
 
@@ -727,36 +717,22 @@ class EnvoCreator:
         package_name = misc.dir_name_to_pkg_name(env_dir.name)
         class_name = misc.dir_name_to_class_name(package_name) + "Env"
 
-        if misc.is_valid_module_name(env_dir.name):
-            env_comm_import = f"from env_comm import {class_name}Comm"
-        else:
-            env_comm_import = (
-                "from pathlib import Path\n"
-                f"from envo.misc import import_from_file\n\n\n"
-                f'{class_name}Comm = import_from_file(Path("env_comm.py")).{class_name}Comm'
-            )
+        context = {"class_name": class_name, "name": env_dir.name, "stage": stage,
+                   "emoji": const.STAGES.get_stage_name_to_emoji().get(stage, "🙂"),
+                   "parents": f'"{parent}"'if parent else ""}
 
-        context = {
-            "class_name": class_name,
-            "name": env_dir.name,
-            "package_name": package_name,
-            "stage": self.se.stage,
-            "emoji": const.stage_emojis.get(self.se.stage, "🙂"),
-            "env_comm_import": env_comm_import,
-        }
-
-        if not is_comm:
-            context["stage"] = self.se.stage
-
+        templ_file = Path("env.py.templ")
         misc.render_py_file(templates_dir / templ_file, output=output_file, context=context)
 
     def create(self) -> None:
-        env_comm_file = Path("env_comm.py")
-        if not env_comm_file.exists():
-            self._create_from_templ(Path("env_comm.py.templ"), env_comm_file, is_comm=True)
+        if not self.se.stage:
+            self.se.stage = "comm"
 
-        env_file = Path(f"env_{self.se.stage}.py")
-        self._create_from_templ(Path("env.py.templ"), env_file)
+        self._create_from_templ(self.se.stage, parent="env_comm.py" if self.se.stage != "comm" else "")
+
+        if self.se.stage != "comm" and not Path("env_comm.py").exists():
+            self._create_from_templ("comm")
+
         print(f"Created {self.se.stage} environment 🍰!")
 
 
@@ -765,7 +741,7 @@ def _main() -> None:
 
     sys.argv[0] = "/home/kwazar/Code/opensource/envo/.venv/bin/xonsh"
     parser = argparse.ArgumentParser()
-    parser.add_argument("stage", type=str, default="local", help="Stage to activate.", nargs="?")
+    parser.add_argument("stage", type=str, default=None, help="Stage to activate.", nargs="?")
     parser.add_argument("--dry-run", default=False, action="store_true")
     parser.add_argument("--version", default=False, action="store_true")
     parser.add_argument("--save", default=False, action="store_true")

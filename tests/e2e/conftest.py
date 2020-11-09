@@ -15,6 +15,11 @@ def init() -> None:
     result = run("envo test --init")
     assert b"Created test environment" in result
 
+@fixture
+def init_bare() -> None:
+    result = run("envo --init")
+    assert b"Created test environment" in result
+
 
 @fixture
 def init_child_env() -> None:
@@ -38,3 +43,13 @@ def shell() -> utils.Spawn:
     s = shell()
     yield s
     s.on_exit()
+
+
+@fixture
+def default_shell() -> utils.Spawn:
+    from tests.e2e.utils import default_shell
+
+    s = default_shell()
+    yield s
+    s.on_exit()
+

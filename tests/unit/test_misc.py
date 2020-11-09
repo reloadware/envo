@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 import envo.scripts
-from envo.const import stage_emojis
+from envo.const import STAGES
 from tests.unit import utils
 
 
@@ -34,7 +34,7 @@ class TestMisc(utils.TestBase):
         # TODO: Add lightweight envo
         assert str(env) == "sandbox"
         assert env.meta.stage == "test"
-        assert env.meta.emoji == stage_emojis[env.meta.stage]
+        assert env.meta.emoji == STAGES.get_stage_name_to_emoji()[env.meta.stage]
 
     def test_version(self, capsys):
         utils.command("--version")

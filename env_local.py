@@ -5,6 +5,7 @@ from envo import Raw, command, run, logger, onload, dataclass  # noqa: F401
 @dataclass
 class EnvoEnv(EnvoEnvComm):  # type: ignore
     class Meta(EnvoEnvComm.Meta):  # type: ignore
+        name = "envo"
         stage = "local"
         emoji = "🐣"
         parents = ["env_comm"]

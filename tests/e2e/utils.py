@@ -61,12 +61,12 @@ class PromptState(Enum):
 class PromptRe(PromptBase):
     default = r"[\(.*\)]*.*?\$ ?"
 
-    def __init__(self, state: PromptState, name: str) -> None:
+    def __init__(self, state: PromptState, name: str, emoji=const.STAGES.get_stage_name_to_emoji()["test"]) -> None:
         super().__init__()
 
         self.state = state
         self.name = name
-        self.emoji = const.stage_emojis["test"]
+        self.emoji = emoji
 
         self.state_prefix_map = {
             PromptState.LOADING: lambda: rf"{const.emojis['loading']}\({self.name}\){self.default}",
@@ -127,8 +127,8 @@ class Expecter:
         self.expected.append(re.escape(raw))
         return self
 
-    def prompt(self, state=PromptState.NORMAL, name="sandbox") -> "Expecter":
-        self.expected.append(str(PromptRe(state=state, name=name)))
+    def prompt(self, state=PromptState.NORMAL, name="sandbox", emoji=const.STAGES.get_stage_name_to_emoji()["test"]) -> "Expecter":
+        self.expected.append(str(PromptRe(state=state, name=name, emoji=emoji)))
         return self
 
     def exit(self, return_code=0) -> "Expecter":
@@ -352,6 +352,11 @@ def shell() -> Spawn:
     return s
 
 
+def default_shell() -> Spawn:
+    s = Spawn("envo")
+    return s
+
+
 def bash() -> Spawn:
     s = Spawn("bash")
     return s
@@ -377,12 +382,12 @@ def init_child_env(child_dir: Path) -> None:
 
     comm_file = Path("env_comm.py")
     content = comm_file.read_text()
-    content = content.replace("parents: List[str] = []", 'parents = ["../env_comm"]')
+    content = content.replace("parents: List[str] = []", 'parents = ["../env_comm.py"]')
     comm_file.write_text(content)
 
     test_file = Path("env_test.py")
     content = test_file.read_text()
-    content = content.replace('parents: List[str] = ["env_comm"]', 'parents = ["env_comm", "../env_test"]')
+    content = content.replace('parents: List[str] = ["env_comm.py"]', 'parents = ["env_comm.py", "../env_test.py"]')
     test_file.write_text(content)
 
     os.chdir(str(cwd))

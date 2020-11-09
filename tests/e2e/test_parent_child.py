@@ -10,7 +10,7 @@ class TestParentChild(utils.TestBase):
         os.chdir("child")
         shell.start()
         e = shell.expecter
-        e.prompt(name=r"sandbox\.child").eval()
+        e.prompt(name=r"child").eval()
 
         shell.exit()
         e.exit().eval()
@@ -20,19 +20,15 @@ class TestParentChild(utils.TestBase):
 
         shell.start()
         e = shell.expecter
-        e.prompt(name=r"sandbox\.child").eval()
+        e.prompt(name=r"child").eval()
 
         utils.replace_in_code("child", "ch")
 
         e.expected.pop()
-        e.prompt(name=r"sandbox\.child").eval()
+        e.prompt(name=r"child").eval()
 
         e.expected.pop()
-        e.prompt(name=r"sandbox\.ch").eval()
-
-        utils.replace_in_code("sandbox", "sb", file=Path("../env_test.py"))
-        e.expected.pop()
-        e.prompt(name=r"sb\.ch").eval()
+        e.prompt(name=r"ch").eval()
 
         shell.exit()
         e.exit().eval()
@@ -45,7 +41,7 @@ class TestParentChild(utils.TestBase):
 
         shell.start()
         e = shell.expecter
-        e.prompt(name=r"sandbox\.child").eval()
+        e.prompt(name=r"child").eval()
 
         test_script = Path("test_script.py")
         content = "import os\n"
@@ -57,7 +53,7 @@ class TestParentChild(utils.TestBase):
 
         shell.sendline("python3 test_script.py")
         e.output("ok\n")
-        e.prompt(name=r"sandbox\.child").eval()
+        e.prompt(name=r"child").eval()
 
         shell.exit()
         e.exit().eval()
@@ -69,7 +65,7 @@ class TestParentChild(utils.TestBase):
         shell.start()
 
         e = shell.expecter
-        e.prompt(name="sandbox.sandbox.sandbox")
+        e.prompt(name="sandbox")
 
         shell.exit()
         e.exit().eval()

@@ -545,9 +545,6 @@ class Env(BaseEnv):
 
         :param owner_namespace:
         """
-        if self.meta.stage == "comm":
-            raise RuntimeError('Cannot activate env with "comm" stage!')
-
         if not self._environ_before:
             self._environ_before = os.environ.copy()
 
@@ -564,9 +561,6 @@ class Env(BaseEnv):
 
         :param owner_namespace:
         """
-        if self.meta.stage == "comm":
-            raise RuntimeError('Cannot deactivate env with "comm" stage!')
-
         os.environ = self._environ_before.copy()
 
         if self._shell:
@@ -588,21 +582,6 @@ class Env(BaseEnv):
         content = "\n".join([f'{key}="{value}"' for key, value in self.get_env_vars().items()])
         path.write_text(content)
         return path
-
-    @classmethod
-    def get_full_name(cls) -> str:
-        """
-        Get full name.
-
-        :return: Return a full name in the following format {parent_name}.{env_name}
-        """
-        if cls._parents:
-            parents_names = ".".join([p.get_full_name() for p in cls._parents if p.get_full_name()])
-            ret = parents_names + ("." if parents_names else "") + cls.get_name()
-            return ret
-        else:
-            ret = cls.get_name()
-            return ret
 
     @classmethod
     def get_name(cls) -> str:
@@ -640,7 +619,7 @@ class Env(BaseEnv):
 
     @classmethod
     def get_parent_env(cls, parent_path: str) -> Type["Env"]:
-        return cls.build_env_from_file(Path(str(cls.Meta.root / parent_path) + ".py"))
+        return cls.build_env_from_file(Path(str(cls.Meta.root / parent_path)))
 
     @classmethod
     def get_env_by_stage(cls, stage: str) -> Type["Env"]:

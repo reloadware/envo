@@ -27,7 +27,6 @@ from envo import (  # noqa: F401
 class EnvoEnvComm(VirtualEnv, envo.Env):
     class Meta(envo.Env.Meta):
         root = Path(__file__).parent
-        name = "envo"
         version = "0.1.0"
         watch_files: List[str] = []
         ignore_files: List[str] = ["**/tests/**"]
@@ -57,5 +56,4 @@ class EnvoEnvComm(VirtualEnv, envo.Env):
 
 
 Env = EnvoEnvComm
-
 
