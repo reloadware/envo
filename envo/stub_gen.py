@@ -1,10 +1,12 @@
 import inspect
+import re
 
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Any, Optional, Type, List, GenericMeta
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, field
 
+from envo.env import MagicFunction
 from envo.misc import render
 
 if TYPE_CHECKING:
@@ -16,6 +18,25 @@ from pathlib import PosixPath, Path
 import typing
 import envo.env
 
+from envo import (  # noqa: F401
+    logger,
+    command,
+    context,
+    Raw,
+    run,
+    precmd,
+    onstdout,
+    onstderr,
+    postcmd,
+    onload,
+    oncreate,
+    onunload,
+    ondestroy,
+    dataclass,
+    Plugin,
+    VirtualEnv
+)
+
 
 class {{ ctx.env_name }}:
     class Meta:
@@ -26,6 +47,9 @@ class {{ ctx.env_name }}:
     {% for f in ctx.fields -%}
         {{ f.name }}: {{ f.type }}
     {% endfor %}
+    {% for method in ctx.methods -%} 
+    {{ method.header }} ... 
+    {% endfor -%}
 
 """
 
@@ -35,12 +59,29 @@ class Field:
     name: str
     type: str
 
+    def __hash__(self) -> int:
+        return hash(self.name)
+
+
+@dataclass
+class Method:
+    name: str
+    header: str = field(init=False)
+    source: str
+
+    def __post_init__(self) -> None:
+        self.header = re.findall(r"(?:@.+?)?def .*?\).*?:", self.source, re.DOTALL)[0]
+
+    def __hash__(self) -> int:
+        return hash(self.name)
+
 
 @dataclass
 class Ctx:
     env_name: str
     fields: List[Field]
     meta: List[Field]
+    methods: List[Method]
 
 
 class StubGen:
@@ -56,6 +97,9 @@ class StubGen:
 
     def _annotations_for_obj(self, obj: Any) -> List[Field]:
         fields = []
+        if not hasattr(obj, "__annotations__"):
+            return []
+
         for n, a in obj.__annotations__.items():
             if n.startswith("_"):
                 continue
@@ -71,14 +115,45 @@ class StubGen:
         fields = self._annotations_for_obj(env)
         meta = self._annotations_for_obj(env.Meta)
 
-        for p in env._parents:
+        for p in self.env.__class__.mro():
             p_fields = self._annotations_for_obj(p)
 
             fields.extend(p_fields)
 
+        fields = list(set(fields))
+        fields.sort(key=lambda x: x.name)
+
+        meta = list(set(meta))
+        meta.sort(key=lambda x: x.name)
+
+        # collect methods
+        methods: List[Method] = []
+        for n, o in inspect.getmembers(self.env):
+            if not inspect.ismethod(o):
+                continue
+
+            if n.startswith("__"):
+                continue
+
+            methods.append(Method(name=n, source=inspect.getsource(o)))
+
+        # collect magic functions
+        for n, o in inspect.getmembers(self.env):
+            if not isinstance(o, MagicFunction):
+                continue
+
+            if n.startswith("__"):
+                continue
+
+            methods.append(Method(name=n, source=inspect.getsource(o.func)))
+
+        methods = list(set(methods))
+        methods.sort(key=lambda x: x.name)
+
         ctx = Ctx(env_name=env.__class__.__name__,
                   fields=fields,
-                  meta=meta)
+                  meta=meta,
+                  methods=methods)
 
         return ctx
 

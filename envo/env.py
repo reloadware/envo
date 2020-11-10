@@ -5,7 +5,7 @@ from copy import copy
 from threading import Lock
 from time import sleep
 
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -42,8 +42,6 @@ __all__ = [
     "onunload",
     "ondestroy",
 ]
-
-from envo.stub_gen import StubGen
 
 T = TypeVar("T")
 
@@ -286,7 +284,11 @@ class BaseEnv:
         # look for undeclared variables
         _internal_objs = ("meta", "logger")
 
-        field_names = set([f for f in self.fields.keys() if not f.startswith("_")])
+        field_names = set()
+        for c in self.__class__.mro():
+            if not is_dataclass(c):
+                continue
+            field_names |= set([f.name for f in fields(c) if not f.name.startswith("_")])
 
         var_names = set()
         f: str
@@ -666,6 +668,7 @@ class Env(BaseEnv):
 
     @command
     def genstub(self) -> None:
+        from envo.stub_gen import StubGen
         StubGen(self).generate()
 
     @onload

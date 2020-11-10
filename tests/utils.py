@@ -78,24 +78,26 @@ def add_hook(code: str, file=Path("env_test.py")) -> None:
     add_command(code, file)
 
 
-def mypy_cmd(prop: bool = False, glob: bool = False) -> None:
+def add_mypy_cmd(prop: bool = False, glob: bool = False, file=Path("env_test.py")) -> None:
     add_command(
         f"""
         @command(prop={prop}, glob={glob})
         def mypy(self, test_arg: str = "") -> None:
             print("Mypy all good" + test_arg)
-        """
+        """,
+        file=file
     )
 
 
-def flake_cmd(prop: bool = False, glob: bool = False) -> None:
+def add_flake_cmd(prop: bool = False, glob: bool = False, file=Path("env_test.py")) -> None:
     add_command(
         f"""
         @command(prop={prop}, glob={glob})
         def flake(self, test_arg: str = "") -> str:
             print("Flake all good" + test_arg)
             return "Flake return value"
-        """
+        """,
+        file=file
     )
 
 

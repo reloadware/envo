@@ -10,8 +10,8 @@ from tests.unit import utils
 class TestCommands(utils.TestBase):
     def test_repr(self):
         utils.init()
-        utils.flake_cmd(prop=False, glob=False)
-        utils.mypy_cmd(prop=False, glob=False)
+        utils.add_flake_cmd(prop=False, glob=False)
+        utils.add_mypy_cmd(prop=False, glob=False)
         e = utils.env()
         assert re.match(
             (
@@ -38,8 +38,8 @@ class TestCommands(utils.TestBase):
         )
 
         utils.init()
-        utils.flake_cmd(prop=True, glob=False)
-        utils.mypy_cmd(prop=True, glob=False)
+        utils.add_flake_cmd(prop=True, glob=False)
+        utils.add_mypy_cmd(prop=True, glob=False)
         e = utils.env()
         assert re.match(
             (
@@ -66,11 +66,11 @@ class TestCommands(utils.TestBase):
         )
 
         utils.init()
-        utils.mypy_cmd(prop=True, glob=False)
+        utils.add_mypy_cmd(prop=True, glob=False)
 
     def test_property_cmd(self, capsys):
         utils.init()
-        utils.flake_cmd(prop=True, glob=False)
+        utils.add_flake_cmd(prop=True, glob=False)
 
         e = utils.env()
         assert repr(e.flake) == "Flake return value"
@@ -78,7 +78,7 @@ class TestCommands(utils.TestBase):
 
     def test_call_cmd(self, capsys):
         utils.init()
-        utils.flake_cmd(prop=False, glob=False)
+        utils.add_flake_cmd(prop=False, glob=False)
 
         e = utils.env()
         assert e.flake() == "Flake return value"
@@ -86,7 +86,7 @@ class TestCommands(utils.TestBase):
 
     def test_property_cmd_no_ret(self, capsys):
         utils.init()
-        utils.mypy_cmd(prop=True, glob=False)
+        utils.add_mypy_cmd(prop=True, glob=False)
 
         e = utils.env()
         assert repr(e.mypy) == ""

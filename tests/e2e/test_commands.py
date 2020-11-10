@@ -7,8 +7,8 @@ import pexpect
 
 class TestCommands(utils.TestBase):
     def test_command_no_prop_no_glob(self, shell):
-        utils.flake_cmd(prop=False, glob=False)
-        utils.mypy_cmd(prop=False, glob=False)
+        utils.add_flake_cmd(prop=False, glob=False)
+        utils.add_mypy_cmd(prop=False, glob=False)
 
         shell.start()
         e = shell.expecter
@@ -52,8 +52,8 @@ class TestCommands(utils.TestBase):
         e.exit().eval()
 
     def test_command_prop_no_glob(self, shell):
-        utils.flake_cmd(prop=True, glob=False)
-        utils.mypy_cmd(prop=True, glob=False)
+        utils.add_flake_cmd(prop=True, glob=False)
+        utils.add_mypy_cmd(prop=True, glob=False)
 
         shell.start()
         e = shell.expecter
@@ -81,8 +81,8 @@ class TestCommands(utils.TestBase):
         e.exit().eval()
 
     def test_command_no_prop_glob(self, shell):
-        utils.flake_cmd(prop=False, glob=True)
-        utils.mypy_cmd(prop=False, glob=True)
+        utils.add_flake_cmd(prop=False, glob=True)
+        utils.add_mypy_cmd(prop=False, glob=True)
 
         shell.start()
         e = shell.expecter
@@ -109,8 +109,8 @@ class TestCommands(utils.TestBase):
         e.exit().eval()
 
     def test_command_prop_glob(self, shell):
-        utils.flake_cmd(prop=True, glob=True)
-        utils.mypy_cmd(prop=True, glob=True)
+        utils.add_flake_cmd(prop=True, glob=True)
+        utils.add_mypy_cmd(prop=True, glob=True)
 
         shell.start()
         e = shell.expecter
@@ -199,7 +199,7 @@ class TestCommands(utils.TestBase):
         e.exit().eval()
 
     def test_cmd_execution_with_args(self, shell):
-        utils.flake_cmd(prop=True, glob=True)
+        utils.add_flake_cmd(prop=True, glob=True)
         shell.start()
 
         e = shell.expecter
@@ -252,7 +252,7 @@ class TestCommands(utils.TestBase):
         assert s.exitstatus == 1
 
     def test_cant_find_env(self):
-        utils.flake_cmd(prop=True, glob=True)
+        utils.add_flake_cmd(prop=True, glob=True)
         res = utils.single_command("flake")
 
         assert res == "Flake all good\r\nFlake return value\r\n"
