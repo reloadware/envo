@@ -37,6 +37,7 @@ from tests.utils import add_mypy_cmd  # noqa F401
 from tests.utils import replace_in_code  # noqa F401
 from tests.utils import add_context  # noqa F401
 from tests.utils import add_plugins  # noqa F401
+from tests.utils import add_boot  # noqa F401
 
 
 test_root = Path(os.path.realpath(__file__)).parent

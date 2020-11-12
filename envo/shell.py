@@ -112,6 +112,10 @@ class Shell(BaseShell):  # type: ignore
 
         self.context.update(**context)
 
+    def run_code(self, code: str) -> None:
+        logger.debug(f'Running code "{code}"')
+        exec(code, builtins.__dict__)
+
     def start(self) -> None:
         pass
 

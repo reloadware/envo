@@ -1,9 +1,13 @@
 import inspect
 import os
 import re
+import sys
+import types
 from copy import copy
-from threading import Lock
+from threading import Lock, Thread
 from time import sleep
+
+import fire
 
 from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
@@ -20,6 +24,7 @@ from typing import (
     Union, Type,
 )
 
+from rhei import Stopwatch
 
 from envo import logger
 from envo.logging import Logger
@@ -41,7 +46,9 @@ __all__ = [
     "onload",
     "onunload",
     "ondestroy",
+    "boot_code"
 ]
+
 
 T = TypeVar("T")
 
@@ -117,10 +124,7 @@ class MagicFunction:
 
 @dataclass
 class Command(MagicFunction):
-    def __repr__(self) -> str:
-        if not self.kwargs["prop"]:
-            return super().__repr__()
-
+    def call(self) -> str:
         assert self.env is not None
         cwd = Path(".").absolute()
         os.chdir(str(self.env.root))
@@ -187,6 +191,12 @@ class command(magic_function):  # noqa: N801
 
     def __init__(self, glob: bool = True, prop: bool = True) -> None:
         super().__init__(glob=glob, prop=prop)  # type: ignore
+
+
+# decorators
+class boot_code(magic_function):  # noqa: N801
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
 
 
 class event(magic_function):  # noqa: N801
@@ -422,6 +432,7 @@ class Env(BaseEnv):
     class Callbacks:
         restart: Callback
         reloader_ready: Callback
+        context_ready: Callback
 
     root: Path
     path: Raw[str]
@@ -466,19 +477,20 @@ class Env(BaseEnv):
             self.pythonpath = os.environ["PYTHONPATH"]
         self.pythonpath = str(self.root) + ":" + self.pythonpath
 
-        self._magic_functions: Dict[str, List[MagicFunction]] = {
-            "context": [],
-            "command": [],
-            "precmd": [],
-            "onstdout": [],
-            "onstderr": [],
-            "postcmd": [],
-            "onload": [],
-            "oncreate": [],
-            "ondestroy": [],
-            "onunload": [],
+        self._magic_functions: Dict[str, Dict[str, MagicFunction]] = {
+            "context": {},
+            "command": {},
+            "precmd": {},
+            "onstdout": {},
+            "onstderr": {},
+            "postcmd": {},
+            "onload": {},
+            "oncreate": {},
+            "ondestroy": {},
+            "onunload": {},
+            "boot_code": {},
         }
-        self._collect_commands_and_hooks()
+        self._collect_magic_functions()
 
         self._files_watchers = []
         self._reload_lock = Lock()
@@ -491,6 +503,47 @@ class Env(BaseEnv):
 
     def __post_init__(self):
         self.validate()
+
+    def on_load(self) -> None:
+        """
+        Called after creation and reload.
+        :return:
+        """
+        self.validate()
+        self.activate()
+
+        def thread(self: Env) -> None:
+            logger.debug("Starting onload thread")
+
+            sw = Stopwatch()
+            sw.start()
+            functions = self._magic_functions["onload"].values()
+            for h in functions:
+                h()
+
+            # declare global functions
+            glob_cmds = [c for c in self._magic_functions["command"].values() if c.kwargs["glob"]]
+            for c in glob_cmds:
+                self._shell.set_variable(c.name, c)
+
+            self._shell.set_context(self._get_context())
+
+            while sw.value <= 0.5:
+                sleep(0.1)
+
+            logger.debug("Finished load context thread")
+            self._calls.context_ready()
+
+        Thread(target=thread, args=(self,)).start()
+
+    def on_create(self) -> None:
+        """
+        Called only after creation.
+        :return:
+        """
+        functions = self._magic_functions["oncreate"].values()
+        for h in functions:
+            h()
 
     def _start_watchers(self) -> None:
         constituents = self._parents + [self.__class__]
@@ -571,7 +624,7 @@ class Env(BaseEnv):
                 self._shell.environ.pop(i)
             self._shell.environ.update(**self._shell_environ_before)
 
-    def get_magic_functions(self) -> Dict[str, List[MagicFunction]]:
+    def get_magic_functions(self) -> Dict[str, Dict[str, MagicFunction]]:
         return self._magic_functions
 
     def dump_dot_env(self) -> Path:
@@ -633,7 +686,16 @@ class Env(BaseEnv):
         env: Type["Env"] = cls.build_env_from_file(Path(f"env_{stage}.py"))  # type: ignore
         return env
 
-    def _collect_commands_and_hooks(self) -> None:
+    def _get_context(self) -> Dict[str, Any]:
+        context = {}
+        functions = self._magic_functions["context"]
+
+        for c in functions.values():
+            context.update(c())
+
+        return context
+
+    def _collect_magic_functions(self) -> None:
         """
         Go through fields and transform decorated functions to commands.
         """
@@ -645,7 +707,7 @@ class Env(BaseEnv):
 
             if isinstance(attr, MagicFunction):
                 attr.env = self
-                self._magic_functions[attr.type].append(attr)
+                self._magic_functions[attr.type][f] = attr
 
     def __repr__(self) -> str:
         ret = []
@@ -660,6 +722,20 @@ class Env(BaseEnv):
     @precmd
     def _pre_cmd(self, command: str) -> str:
         self._executing_cmd = True
+
+        command_name = command.split()[0]
+        cmd_fun = self._magic_functions["command"].get(command_name, None)
+
+        if cmd_fun and cmd_fun.kwargs["prop"]:
+            command_args = command.split()[1:]
+
+            argv_before = sys.argv.copy()
+            sys.argv = [command_name, *command_args]
+
+            fire.Fire(cmd_fun)
+
+            sys.argv = argv_before
+
         return command
 
     @postcmd
@@ -673,4 +749,18 @@ class Env(BaseEnv):
 
     @onload
     def _on_load(self) -> None:
+        boot_codes_f = self.get_magic_functions()["boot_code"]
+
+        codes = []
+
+        for f in boot_codes_f.values():
+            codes.extend(f())
+
+        for c in codes:
+            try:
+                self._shell.run_code(c)
+            except Exception as e:
+                # TODO: make nice traceback?
+                raise e from None
+
         self.genstub()

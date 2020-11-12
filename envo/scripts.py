@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Thread
+from threading import Thread, Lock
 from time import sleep
 from typing import Dict, List, Any, Optional
 
@@ -137,15 +137,12 @@ class Mode:
         env_dir = str(self.env_dirs[0])
         sys.path.remove(env_dir) if env_dir in sys.path else None
 
-    def _on_env_edit(self, event: Inotify.Event) -> None:
-        pass
-
     def _on_ready(self) -> None:
         self.prompt.state = PromptState.NORMAL
         self.li.shell.set_prompt(self.prompt.as_str())
 
     def get_context(self) -> Dict[str, Any]:
-        return {"logger": logger}
+        return {}
 
     def load(self) -> None:
         raise NotImplementedError()
@@ -153,14 +150,8 @@ class Mode:
     def unload(self) -> None:
         raise NotImplementedError()
 
-    def on_shell_enter(self) -> None:
-        raise NotImplementedError()
-
     def on_shell_exit(self) -> None:
         self.stop()
-
-    def _on_load(self) -> None:
-        raise NotImplementedError()
 
     def _on_unload(self) -> None:
         raise NotImplementedError()
@@ -202,10 +193,14 @@ class Mode:
         def on_reloader_ready():
             self.status.reloader_ready=True
 
+        def on_context_ready():
+            self.status.context_ready=True
+
         env_class = Env.build_env_from_file(file)
         env = env_class(self.li.shell,
                         calls=Env.Callbacks(restart=self.calls.restart,
-                                            reloader_ready=Callback(on_reloader_ready)),
+                                            reloader_ready=Callback(on_reloader_ready),
+                                            context_ready=Callback(on_context_ready)),
                         reloader_enabled=self.reloader_enabled)
         return env
 
@@ -255,11 +250,13 @@ class HeadlessMode(Mode):
         self.li.shell.calls.reset()
 
     def load(self) -> None:
+        self.li.shell.set_context({"logger": logger})
+
         self._create_env()
 
         assert self.env
 
-        self.li.shell.calls.on_enter = Callback(self.on_shell_enter)
+        self.li.shell.calls.on_enter = Callback(self.env.on_create)
         self.li.shell.calls.pre_cmd = Callback(self.on_precmd)
         self.li.shell.calls.on_stdout = Callback(self.on_stdout)
         self.li.shell.calls.on_stderr = Callback(self.on_stderr)
@@ -268,56 +265,26 @@ class HeadlessMode(Mode):
         self.li.shell.set_variable("env", self.env)
         self.li.shell.set_variable("environ", os.environ)
 
-        self.on_load()
-
-        glob_cmds = [c for c in self.env.get_magic_functions()["command"] if c.kwargs["glob"]]
-        for c in glob_cmds:
-            self.li.shell.set_variable(c.name, c)
-
-        self._load_context()
-
-    def on_shell_enter(self) -> None:
-        functions = self.env.get_magic_functions()["oncreate"]
-        for h in functions:
-            h()
+        self.env.on_load()
 
     def on_shell_exit(self) -> None:
         super(HeadlessMode, self).on_shell_exit()
 
         functions = self.env.get_magic_functions()["ondestroy"]
-        for h in functions:
-            h()
-
-    def get_context(self) -> Dict[str, Any]:
-        self.status.context_ready = False
-        context = super(HeadlessMode, self).get_context()
-        functions = self.env.get_magic_functions()["context"]
-
-        for c in functions:
-            context.update(c())
-
-        return context
-
-    def _load_context(self) -> None:
-        self.li.shell.set_context(self.get_context())
-
-    def on_load(self) -> None:
-        self.env.activate()
-        functions = self.env.get_magic_functions()["onload"]
-        for h in functions:
+        for h in functions.values():
             h()
 
     def on_unload(self) -> None:
         self.env.deactivate()
         functions = self.env.get_magic_functions()["onunload"]
-        for h in functions:
+        for h in functions.values():
             h()
         self.li.shell.calls.reset()
 
     def on_precmd(self, command: str) -> str:
         command = super(HeadlessMode, self).on_precmd(command)
         functions = self.env.get_magic_functions()["precmd"]
-        for h in functions:
+        for h in functions.values():
             if re.match(h.kwargs["cmd_regex"], command):
                 ret = h(command=command)  # type: ignore
                 if ret:
@@ -326,7 +293,7 @@ class HeadlessMode(Mode):
 
     def on_stdout(self, command: str, out: str) -> str:
         functions = self.env.get_magic_functions()["onstdout"]
-        for h in functions:
+        for h in functions.values():
             if re.match(h.kwargs["cmd_regex"], command):
                 ret = h(command=command, out=out)  # type: ignore
                 if ret:
@@ -335,7 +302,7 @@ class HeadlessMode(Mode):
 
     def on_stderr(self, command: str, out: str) -> str:
         functions = self.env.get_magic_functions()["onstderr"]
-        for h in functions:
+        for h in functions.values():
             if re.match(h.kwargs["cmd_regex"], command):
                 ret = h(command=command, out=out)  # type: ignore
                 if ret:
@@ -344,7 +311,7 @@ class HeadlessMode(Mode):
 
     def on_postcmd(self, command: str, stdout: List[str], stderr: List[str]) -> None:
         functions = self.env.get_magic_functions()["postcmd"]
-        for h in functions:
+        for h in functions.values():
             if re.match(h.kwargs["cmd_regex"], command):
                 h(command=command, stdout=stdout, stderr=stderr)  # type: ignore
 
@@ -391,8 +358,6 @@ class HeadlessMode(Mode):
         except ImportError as exc:
             raise EnvoError(f"""Couldn't import "{env_file}" ({exc}).""")
 
-        self.env.validate()
-
 
 class NormalMode(HeadlessMode):
     @dataclass
@@ -420,22 +385,6 @@ class NormalMode(HeadlessMode):
 
         logger.set_level(logging.Level.ERROR)
         logger.debug("Creating NormalMode")
-
-    def _load_context(self) -> None:
-        def thread(self: NormalMode) -> None:
-            logger.debug("Starting load context thread")
-
-            sw = Stopwatch()
-            sw.start()
-            self.li.shell.set_context(self.get_context())
-
-            while sw.value <= 0.5:
-                sleep(0.1)
-
-            logger.debug("Finished load context thread")
-            self.status.context_ready = True
-
-        Thread(target=thread, args=(self,)).start()
 
     def load(self) -> None:
         super(NormalMode, self).load()
@@ -475,6 +424,18 @@ class EmergencyMode(Mode):
     class Callbacks(Mode.Callbacks):
         pass
 
+    def _on_env_edit(self, event: Inotify.Event) -> None:
+        if "IN_CLOSE_WRITE" in event.type_names:
+            self._reload_lock.acquire()
+            self.files_watcher.stop()
+
+            logger.info('Reloading',
+                        metadata={"type": "reload", "event": event.type_names, "path": event.path.absolute.resolve()})
+
+            self.calls.restart()
+
+            self._reload_lock.release()
+
     def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
         super().__init__(se=se, li=li, calls=calls)
 
@@ -485,6 +446,8 @@ class EmergencyMode(Mode):
         self.prompt = EmergencyPrompt()
         self.prompt.state = PromptState.NORMAL
         self.prompt.msg = self.se.msg
+
+        self._reload_lock = Lock()
 
         self.li.shell.set_prompt(str(self.prompt))
 

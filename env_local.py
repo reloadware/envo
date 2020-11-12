@@ -8,7 +8,7 @@ class EnvoEnv(EnvoEnvComm):  # type: ignore
         name = "envo"
         stage = "local"
         emoji = "🐣"
-        parents = ["env_comm"]
+        parents = ["env_comm.py"]
 
     # Declare your variables here
     var: int

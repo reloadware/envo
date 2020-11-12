@@ -4,10 +4,22 @@ import textwrap
 import time
 from pathlib import Path
 from threading import Thread
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
+
+__all__ = ["add_command",
+"add_declaration",
+"add_definition",
+"add_hook",
+"change_file",
+"add_flake_cmd",
+"add_mypy_cmd",
+"replace_in_code",
+"add_context",
+"add_plugins",
+"add_boot"]
 
 
 def change_file(file: Path, delay_s: float, new_content: str) -> None:
@@ -108,6 +120,19 @@ def add_context(context: Dict[str, Any], name: str = "some_context", file=Path("
         @context
         def {name}(self) -> Dict[str, Any]:
             return {context_str}
+        """,
+        file=file,
+    )
+
+
+def add_boot(boot_codes: List[str], name: str = "some_boot", file=Path("env_test.py")) -> None:
+    lines = ",".join([f'"{c}"' for c in boot_codes])
+
+    add_command(
+        f"""
+        @boot_code
+        def {name}(self) -> Dict[str, Any]:
+            return [{lines}]
         """,
         file=file,
     )

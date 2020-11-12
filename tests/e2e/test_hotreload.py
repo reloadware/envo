@@ -176,6 +176,25 @@ class TestHotReload(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    def test_syntax_error(self, shell):
+        utils.replace_in_code("# Declare your variables here", "1/0")
+
+        shell.start()
+        e = shell.expecter
+        e.output(r'.*ZeroDivisionError: division by zero\n')
+        e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
+
+        e.expected.pop()
+        e.expected.pop()
+
+        utils.replace_in_code("1/0", "")
+        e.prompt(PromptState.MAYBE_LOADING).eval()
+
+        shell.envo.assert_reloaded(1)
+
+        shell.exit()
+        e.exit().eval()
+
     def test_error(self, shell):
         shell.start()
         e = shell.expecter

@@ -20,6 +20,7 @@ from envo import (  # noqa: F401
     onload,
     onunload,
     logger,
+    boot_code
 )
 
 
@@ -48,11 +49,17 @@ class EnvoEnvComm(VirtualEnv, envo.Env):
         run(f"pip install poetry=={self.poetry_ver}")
         run("poetry install")
 
-    @context()
+    @context
     def fdsf(self):
         return {
             "test": 12
         }
+
+    @boot_code
+    def boot(self) -> List[str]:
+        return [
+            "import math"
+        ]
 
 
 Env = EnvoEnvComm
