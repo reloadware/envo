@@ -4,7 +4,7 @@ import textwrap
 import time
 from pathlib import Path
 from threading import Thread
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
@@ -90,24 +90,29 @@ def add_hook(code: str, file=Path("env_test.py")) -> None:
     add_command(code, file)
 
 
-def add_mypy_cmd(prop: bool = False, glob: bool = False, file=Path("env_test.py")) -> None:
+def add_namespace(name: str, file=Path("env_test.py")) -> None:
+    replace_in_code("# Declare your command namespaces here", f'{name} = command(namespace="{name}")',
+                                                                file=file)
+
+
+def add_flake_cmd(file=Path("env_test.py"), namespace="command", message="Flake all good") -> None:
     add_command(
         f"""
-        @command(prop={prop}, glob={glob})
-        def mypy(self, test_arg: str = "") -> None:
-            print("Mypy all good" + test_arg)
+        @{namespace}
+        def __flake(self, test_arg: str = "") -> str:
+            print("{message}" + test_arg)
+            return "Flake return value"
         """,
         file=file
     )
 
 
-def add_flake_cmd(prop: bool = False, glob: bool = False, file=Path("env_test.py")) -> None:
+def add_mypy_cmd(file=Path("env_test.py"), namespace="command", message="Mypy all good") -> None:
     add_command(
         f"""
-        @command(prop={prop}, glob={glob})
-        def flake(self, test_arg: str = "") -> str:
-            print("Flake all good" + test_arg)
-            return "Flake return value"
+        @{namespace}
+        def __mypy(self, test_arg: str = "") -> None:
+            print("{message}" + test_arg)
         """,
         file=file
     )

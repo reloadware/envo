@@ -1,11 +1,10 @@
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dataclasses import dataclass
-
-from envo import Env, onload, onunload, logger
+from envo import Env, logger, onload, onunload
 
 __all__ = [
     "Plugin",

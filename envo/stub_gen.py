@@ -1,10 +1,8 @@
 import inspect
 import re
-
+from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Any, Optional, Type, List, GenericMeta
-
-from dataclasses import dataclass, fields, field
+from typing import TYPE_CHECKING, Any, Dict, GenericMeta, List, Optional, Type
 
 from envo.env import MagicFunction
 from envo.misc import render
@@ -16,6 +14,7 @@ if TYPE_CHECKING:
 template = """
 from pathlib import PosixPath, Path
 import typing
+from typing import Dict, Any, List, Type, Optional
 import envo.env
 
 from envo import (  # noqa: F401
@@ -34,8 +33,14 @@ from envo import (  # noqa: F401
     ondestroy,
     dataclass,
     Plugin,
-    VirtualEnv
+    VirtualEnv,
 )
+
+from envo.env import (
+MagicFunction
+)
+
+from envo.misc import Inotify
 
 
 class {{ ctx.env_name }}:

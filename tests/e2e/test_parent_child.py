@@ -1,8 +1,9 @@
+import os
+from pathlib import Path
+
 import pytest
 
 from tests.e2e import utils
-import os
-from pathlib import Path
 
 
 class TestParentChild(utils.TestBase):

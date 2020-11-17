@@ -2,14 +2,14 @@ import importlib.machinery
 import importlib.util
 import inspect
 import time
-
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Callable
+from threading import Thread
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 import inotify.adapters
 import inotify.constants
 from globmatch_temp import glob_match
-from threading import Thread
 
 __all__ = [
     "dir_name_to_class_name",

@@ -1,15 +1,15 @@
 import re
 import sys
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
-from dataclasses import dataclass, field
 import loguru
 from loguru._colorizer import Colorizer
 from pygments.styles import get_style_by_name
 from rhei import Stopwatch
-from xonsh.pyghooks import XonshConsoleLexer, CompoundColorMap, pygments_style_by_name
+from xonsh.pyghooks import CompoundColorMap, XonshConsoleLexer, pygments_style_by_name
 
 
 class Level(Enum):

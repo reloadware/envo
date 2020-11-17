@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from env_comm import EnvoEnvComm
-from envo import Raw, command, run, logger  # noqa: F401
+from envo import Raw, command, logger, run  # noqa: F401
 
 
 class EnvoEnv(EnvoEnvComm):  # type: ignore

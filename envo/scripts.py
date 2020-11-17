@@ -5,19 +5,18 @@ import re
 import sys
 import traceback
 from collections import OrderedDict
-
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Thread, Lock
+from threading import Lock, Thread
 from time import sleep
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from ilock import ILock
 from rhei import Stopwatch
 
 import envo.e2e
-from envo import Env, misc, shell, logger, const, logging
-from envo.misc import import_from_file, EnvoError, Inotify, Callback
+from envo import Env, const, logger, logging, misc, shell
+from envo.misc import Callback, EnvoError, Inotify, import_from_file
 from envo.shell import PromptBase, PromptState, Shell
 
 try:
@@ -141,9 +140,6 @@ class Mode:
         self.prompt.state = PromptState.NORMAL
         self.li.shell.set_prompt(self.prompt.as_str())
 
-    def get_context(self) -> Dict[str, Any]:
-        return {}
-
     def load(self) -> None:
         raise NotImplementedError()
 
@@ -152,9 +148,6 @@ class Mode:
 
     def on_shell_exit(self) -> None:
         self.stop()
-
-    def _on_unload(self) -> None:
-        raise NotImplementedError()
 
     def start(self) -> None:
         raise NotImplementedError()
@@ -245,7 +238,7 @@ class HeadlessMode(Mode):
 
     def unload(self) -> None:
         if self.env:
-            self.on_unload()
+            self.env.unload()
 
         self.li.shell.calls.reset()
 
@@ -256,16 +249,10 @@ class HeadlessMode(Mode):
 
         assert self.env
 
-        self.li.shell.calls.on_enter = Callback(self.env.on_create)
-        self.li.shell.calls.pre_cmd = Callback(self.on_precmd)
-        self.li.shell.calls.on_stdout = Callback(self.on_stdout)
-        self.li.shell.calls.on_stderr = Callback(self.on_stderr)
-        self.li.shell.calls.post_cmd = Callback(self.on_postcmd)
-
         self.li.shell.set_variable("env", self.env)
         self.li.shell.set_variable("environ", os.environ)
 
-        self.env.on_load()
+        self.env.load()
 
     def on_shell_exit(self) -> None:
         super(HeadlessMode, self).on_shell_exit()
@@ -273,49 +260,6 @@ class HeadlessMode(Mode):
         functions = self.env.get_magic_functions()["ondestroy"]
         for h in functions.values():
             h()
-
-    def on_unload(self) -> None:
-        self.env.deactivate()
-        functions = self.env.get_magic_functions()["onunload"]
-        for h in functions.values():
-            h()
-        self.li.shell.calls.reset()
-
-    def on_precmd(self, command: str) -> str:
-        command = super(HeadlessMode, self).on_precmd(command)
-        functions = self.env.get_magic_functions()["precmd"]
-        for h in functions.values():
-            if re.match(h.kwargs["cmd_regex"], command):
-                ret = h(command=command)  # type: ignore
-                if ret:
-                    command = ret
-        return command
-
-    def on_stdout(self, command: str, out: str) -> str:
-        functions = self.env.get_magic_functions()["onstdout"]
-        for h in functions.values():
-            if re.match(h.kwargs["cmd_regex"], command):
-                ret = h(command=command, out=out)  # type: ignore
-                if ret:
-                    out = ret
-        return out
-
-    def on_stderr(self, command: str, out: str) -> str:
-        functions = self.env.get_magic_functions()["onstderr"]
-        for h in functions.values():
-            if re.match(h.kwargs["cmd_regex"], command):
-                ret = h(command=command, out=out)  # type: ignore
-                if ret:
-                    out = ret
-        return out
-
-    def on_postcmd(self, command: str, stdout: List[str], stderr: List[str]) -> None:
-        functions = self.env.get_magic_functions()["postcmd"]
-        for h in functions.values():
-            if re.match(h.kwargs["cmd_regex"], command):
-                h(command=command, stdout=stdout, stderr=stderr)  # type: ignore
-
-        super(HeadlessMode, self).on_postcmd(command, stdout, stderr)
 
     def _find_env(self) -> Path:
         # TODO: Test this
@@ -471,7 +415,7 @@ class EmergencyMode(Mode):
             sleep(0.5)
             self.status.context_ready = True
 
-            self.li.shell.set_context(self.get_context())
+            self.li.shell.set_context({"logger": logger})
 
         if self.se.restart_nr != 0:
             Thread(target=_load_context, args=(self,)).start()
@@ -678,7 +622,7 @@ class EnvoCreator:
 
         env_dir = Path(".").absolute()
         package_name = misc.dir_name_to_pkg_name(env_dir.name)
-        class_name = misc.dir_name_to_class_name(package_name) + "Env"
+        class_name = f"{misc.dir_name_to_class_name(package_name)}{stage.capitalize()}Env"
 
         context = {"class_name": class_name, "name": env_dir.name, "stage": stage,
                    "emoji": const.STAGES.get_stage_name_to_emoji().get(stage, "🙂"),

@@ -1,5 +1,5 @@
 from env_comm import EnvoEnvComm
-from envo import Raw, command, run, logger, onload, dataclass  # noqa: F401
+from envo import Raw, command, dataclass, logger, onload, run  # noqa: F401
 
 
 @dataclass
@@ -26,27 +26,33 @@ class EnvoEnv(EnvoEnvComm):  # type: ignore
     def _dump_env(self) -> None:
         self.dump_dot_env()
 
-    @command(glob=True)
+    @command
     def test(self) -> None:
         logger.info("Running tests")
         run("pytest tests -v")
 
     @command
-    def flake(self) -> None:
-        self.black()
-        run("flake8")
+    def __some_cmd(self):
+        print("comm lol")
 
-    @command(glob=True)
+    @command
+    def flake(self, arg) -> None:
+        print(f"Flake good + {arg}")
+
+        # self.black()
+        # run("flake8")
+
+    @command
     def mypy(self) -> None:
         logger.info("Running mypy")
         run("mypy envo")
 
-    @command(glob=True)
+    @command
     def black(self) -> None:
         run("isort .")
         run("black .")
 
-    @command(glob=True)
+    @command
     def ci(self) -> None:
         self.flake()
         self.mypy()
@@ -54,3 +60,4 @@ class EnvoEnv(EnvoEnvComm):  # type: ignore
 
 
 Env = EnvoEnv
+

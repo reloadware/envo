@@ -1,4 +1,5 @@
 import atexit
+import fcntl
 import os
 import re
 import shutil
@@ -11,14 +12,11 @@ from pathlib import Path
 from subprocess import Popen
 from threading import Thread
 from time import sleep
-from typing import List, TYPE_CHECKING, Type, Optional
+from typing import TYPE_CHECKING, List, Optional, Type
 
 import pexpect
 import pyte
 import pyte.modes
-
-import fcntl
-
 import pytest
 from rhei import Stopwatch
 from stickybeak import Injector
@@ -27,18 +25,18 @@ from envo import const
 from envo.e2e import STICKYBEAK_PORT
 from envo.logging import Logger
 from envo.shell import PromptBase
+from tests.utils import add_namespace  # noqa F401
+from tests.utils import add_boot  # noqa F401
 from tests.utils import add_command  # noqa F401
+from tests.utils import add_context  # noqa F401
 from tests.utils import add_declaration  # noqa F401
 from tests.utils import add_definition  # noqa F401
-from tests.utils import add_hook  # noqa F401
-from tests.utils import change_file  # noqa F401
 from tests.utils import add_flake_cmd  # noqa F401
+from tests.utils import add_hook  # noqa F401
 from tests.utils import add_mypy_cmd  # noqa F401
-from tests.utils import replace_in_code  # noqa F401
-from tests.utils import add_context  # noqa F401
 from tests.utils import add_plugins  # noqa F401
-from tests.utils import add_boot  # noqa F401
-
+from tests.utils import change_file  # noqa F401
+from tests.utils import replace_in_code  # noqa F401
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
@@ -133,7 +131,6 @@ class Expecter:
         return self
 
     def exit(self, return_code=0) -> "Expecter":
-        self.expected.append(r"exit\n?")
         self._expect_exit = True
         self._return_code = return_code
         return self
@@ -176,9 +173,10 @@ class Spawn:
 
         @classmethod
         def wait_until_ready(cls, timeout=1) -> None:
+            from time import sleep
+
             import envo.e2e
             from envo.e2e import ReadyTimeout
-            from time import sleep
 
             passed_time = 0.0
             sleep_time = 0.01
@@ -200,9 +198,10 @@ class Spawn:
 
         @classmethod
         def assert_reloaded(cls, number: int = 1, path="env_test.py", timeout=1) -> None:
+            from time import sleep
+
             from envo import logger, logging
             from envo.e2e import ReloadTimeout
-            from time import sleep
 
             passed_time = 0.0
             sleep_time = 0.05
@@ -265,10 +264,7 @@ class Spawn:
 
         self.print_info()
 
-        self.send("exit", expect=False)
-        sleep(0.5)
-        self.send("\n", expect=False)
-        sleep(0.5)
+        self.send("\x04", expect=False)
 
     def on_exit(self) -> None:
         self.print_info()

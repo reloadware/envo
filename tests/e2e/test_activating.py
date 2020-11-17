@@ -1,9 +1,11 @@
-from envo import const
-from tests.e2e import utils
 import os
 from pathlib import Path
+
 import pytest
 from pexpect import run
+
+from envo import const
+from tests.e2e import utils
 
 
 class TestActivating:

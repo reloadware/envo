@@ -28,6 +28,7 @@ class ReadyTimeout(Exception):
 
 if enabled:
     import os
+
     import stickybeak
 
     project_root = Path(__file__).parent

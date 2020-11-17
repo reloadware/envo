@@ -1,4 +1,5 @@
 from tests.e2e import utils
+from tests.e2e.utils import PromptState
 
 
 class TestHooks(utils.TestBase):
@@ -217,20 +218,20 @@ class TestHooks(utils.TestBase):
         e.prompt().eval()
 
         shell.exit()
-        e.exit()
-        e.output(r"on destroy\n")
+
+        e.output(r"\non destroy\n")
         e.output(r"on unload")
-        e.eval()
+        e.exit().eval()
 
     def test_onload_onunload_reload(self, shell):
         utils.add_hook(
             r"""
             @onload
             def init_sth(self) -> None:
-                print("on load")
+                print("\non load")
             @onunload
             def deinit_sth(self) -> None:
-                print("on unload")
+                print("\non unload")
             """
         )
 
@@ -238,8 +239,16 @@ class TestHooks(utils.TestBase):
         e = shell.expecter
 
         e.output(r"on load\n")
-        e.prompt().eval()
+        e.prompt(PromptState.MAYBE_LOADING).eval()
+
+        shell.trigger_reload()
+        shell.envo.assert_reloaded(1)
+
+        e.output(r"\non unload\n")
+        e.output(r"on load\n")
+        e.prompt(PromptState.MAYBE_LOADING).eval()
 
         shell.exit()
-        e.exit()
-        e.output(r"on unload").eval()
+
+        e.output(r"\non unload").eval()
+        e.exit().eval()

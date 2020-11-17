@@ -1,41 +1,16 @@
-from tests.e2e import utils
 import os
 from pathlib import Path
 
 import pexpect
 
+from tests.e2e import utils
+
 
 class TestCommands(utils.TestBase):
-    def test_command_no_prop_no_glob(self, shell):
-        utils.add_flake_cmd(prop=False, glob=False)
-        utils.add_mypy_cmd(prop=False, glob=False)
-
-        shell.start()
-        e = shell.expecter
-        e.prompt()
-
-        shell.sendline("repr(env.flake)")
-        e.output(r"""'Command\(name=\\'flake\\', type=\\'command\\'.*?\n""").prompt().eval()
-
-        shell.sendline("env.flake()")
-        e.output(r"Flake all good\n'Flake return value'\n").prompt().eval()
-
-        shell.sendline("env.mypy()")
-        e.output(r"Mypy all good\n").prompt().eval()
-
-        shell.sendline("flake")
-        e.output(r".*not found.*\n").prompt().eval()
-
-        shell.sendline("flake()")
-        e.output(r".*NameError: name 'flake' is not defined\n").prompt().eval()
-
-        shell.exit()
-        e.exit().eval()
-
     def test_decorator_kwargs_validation(self, shell):
         utils.add_command(
             """
-            @command(unexistent_arg1=False, unexistent_arg2=False, prop=True)
+            @command(unexistent_arg1=False, unexistent_arg2=False)
             def flake(self) -> None:
                 print("Flake all good")
                 return "Flake return value"
@@ -51,83 +26,14 @@ class TestCommands(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    def test_command_prop_no_glob(self, shell):
-        utils.add_flake_cmd(prop=True, glob=False)
-        utils.add_mypy_cmd(prop=True, glob=False)
+    def test_command_simple_case(self, shell):
+        utils.add_flake_cmd()
+        utils.add_mypy_cmd()
 
         shell.start()
         e = shell.expecter
 
         e.prompt().eval()
-        shell.sendline("repr(env.flake)")
-        e.output(r"Flake all good\n'Flake return value'\n").prompt().eval()
-
-        shell.sendline("env.flake()")
-        e.output(r"Flake all good\n'Flake return value'\n").prompt().eval()
-
-        shell.sendline("repr(env.mypy)")
-        e.output(r"Mypy all good\n''\n").prompt().eval()
-
-        shell.sendline("env.mypy()")
-        e.output(r"Mypy all good\n").prompt().eval()
-
-        shell.sendline("flake")
-        e.output(r".*not found.*\n").prompt().eval()
-
-        shell.sendline("flake()")
-        e.output(r".*NameError: name 'flake' is not defined\n").prompt().eval()
-
-        shell.exit()
-        e.exit().eval()
-
-    def test_command_no_prop_glob(self, shell):
-        utils.add_flake_cmd(prop=False, glob=True)
-        utils.add_mypy_cmd(prop=False, glob=True)
-
-        shell.start()
-        e = shell.expecter
-
-        e.prompt().eval()
-        shell.sendline("repr(env.flake)")
-        e.output(r"""'Command\(name=\\'flake\\', type=\\'command\\'.*?\n""").prompt().eval()
-
-        shell.sendline("env.flake()")
-        e.output(r"Flake all good\n'Flake return value'\n").prompt().eval()
-
-        shell.sendline("env.mypy()")
-        e.output(r"Mypy all good\n").prompt().eval()
-
-        shell.sendline("repr(mypy)")
-        e.output(r"""'Command\(name=\\'mypy\\', type=\\'command\\'.*?\n""").prompt().eval()
-        shell.sendline("flake()")
-        e.output(r"Flake all good\n'Flake return value'\n").prompt().eval()
-
-        shell.sendline("mypy()")
-        e.output(r"Mypy all good\n").prompt().eval()
-
-        shell.exit()
-        e.exit().eval()
-
-    def test_command_prop_glob(self, shell):
-        utils.add_flake_cmd(prop=True, glob=True)
-        utils.add_mypy_cmd(prop=True, glob=True)
-
-        shell.start()
-        e = shell.expecter
-
-        e.prompt().eval()
-
-        shell.sendline("repr(env.flake)")
-        e.output(r"Flake all good\n'Flake return value'\n").prompt().eval()
-
-        shell.sendline("repr(env.mypy)")
-        e.output(r"Mypy all good\n''\n").prompt().eval()
-
-        shell.sendline("env.flake()")
-        e.output(r"Flake all good\n'Flake return value'\n").prompt().eval()
-
-        shell.sendline("env.mypy()")
-        e.output(r"Mypy all good\n").prompt().eval()
 
         shell.sendline("flake")
         e.output(r"Flake all good\nFlake return value\n").prompt().eval()
@@ -147,7 +53,7 @@ class TestCommands(utils.TestBase):
     def test_cmd_in_non_root_dir(self, shell):
         utils.add_command(
             """
-            @command(glob=True, prop=True)
+            @command
             def flake(self) -> None:
                 print("flake good")
             """
@@ -169,37 +75,8 @@ class TestCommands(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    def test_cmd_without_args(self, shell):
-        utils.add_command(
-            """
-            @command
-            def flake(self) -> None:
-                print("Flake all good")
-                return "Flake return value"
-            """
-        )
-        shell.start()
-        e = shell.expecter
-
-        e.prompt().eval()
-
-        shell.sendline("repr(env.flake)")
-        e.output(r"Flake all good\n'Flake return value'\n").prompt().eval()
-
-        shell.sendline("env.flake()")
-        e.output(r"Flake all good\n'Flake return value'\n").prompt().eval()
-
-        shell.sendline("flake")
-        e.output(r"Flake all good\nFlake return value\n").prompt().eval()
-
-        shell.sendline("flake()")
-        e.output(r"Flake all good\n'Flake return value'\n").prompt().eval()
-
-        shell.exit()
-        e.exit().eval()
-
     def test_cmd_execution_with_args(self, shell):
-        utils.add_flake_cmd(prop=True, glob=True)
+        utils.add_flake_cmd()
         shell.start()
 
         e = shell.expecter
@@ -208,6 +85,9 @@ class TestCommands(utils.TestBase):
 
         shell.sendline('flake("dd")')
         e.output(r"Flake all gooddd\n'Flake return value'\n").prompt().eval()
+
+        shell.sendline('flake dd')
+        e.output(r"Flake all gooddd\nFlake return value\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()
@@ -251,8 +131,8 @@ class TestCommands(utils.TestBase):
         s.close()
         assert s.exitstatus == 1
 
-    def test_cant_find_env(self):
-        utils.add_flake_cmd(prop=True, glob=True)
+    def test_single_command_fire(self):
+        utils.add_flake_cmd()
         res = utils.single_command("flake")
 
         assert res == "Flake all good\r\nFlake return value\r\n"
@@ -275,6 +155,42 @@ class TestCommands(utils.TestBase):
         shell.sendline("print_path")
         e.output(r"test_value\n")
         e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_namespaces(self, shell):
+        namespace_name = "test_namespace"
+        utils.add_namespace(namespace_name, file=Path("env_test.py"))
+        utils.add_flake_cmd(namespace=namespace_name, message="Namespaced flake", file=Path("env_test.py"))
+        utils.add_flake_cmd(file=Path("env_comm.py"))
+        utils.add_mypy_cmd(namespace=namespace_name, file=Path("env_test.py"))
+
+        shell.start()
+        e = shell.expecter
+
+        e.prompt().eval()
+
+        shell.sendline("flake")
+        e.output(r"Flake all good\nFlake return value\n").prompt().eval()
+
+        shell.sendline("flake()")
+        e.output(r"Flake all good\n'Flake return value'\n").prompt().eval()
+
+        shell.sendline("test_namespace.flake")
+        e.output(r"Namespaced flake\nFlake return value\n").prompt().eval()
+
+        shell.sendline("test_namespace.flake()")
+        e.output(r"Namespaced flake\n'Flake return value'\n").prompt().eval()
+
+        shell.sendline("mypy")
+        e.output(r".*mypy: error: Missing target module, package, files, or command.\n").prompt().eval()
+
+        shell.sendline("test_namespace.mypy")
+        e.output(r"Mypy all good\n").prompt().eval()
+
+        shell.sendline("test_namespace.mypy()")
+        e.output(r"Mypy all good\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()

@@ -2,11 +2,13 @@ import builtins
 import os
 import sys
 import time
+
+import fire
+from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
-from typing import Any, Dict, Callable, Optional, List, TextIO
+from typing import Any, Callable, Dict, List, Optional, TextIO
 
-from dataclasses import dataclass
 from prompt_toolkit.data_structures import Size
 from xonsh.base_shell import BaseShell
 from xonsh.execer import Execer
@@ -58,6 +60,7 @@ class Shell(BaseShell):  # type: ignore
         pre_cmd: Callback = Callback(None)
         on_stdout: Callback = Callback(None)
         on_stderr: Callback = Callback(None)
+        on_cmd: Callback = Callback(None)
         post_cmd: Callback = Callback(None)
         on_enter: Callback = Callback(None)
         on_exit: Callback = Callback(None)
@@ -66,6 +69,7 @@ class Shell(BaseShell):  # type: ignore
             self.pre_cmd = Callback(None)
             self.on_stdout = Callback(None)
             self.on_stderr = Callback(None)
+            self.on_cmd: Callback = Callback(None)
             self.post_cmd = Callback(None)
             self.on_enter = Callback(None)
             self.on_exit = Callback(None)
@@ -82,6 +86,14 @@ class Shell(BaseShell):  # type: ignore
         self.context: Dict[str, Any] = {}
 
         self.cmd_lock = Lock()
+
+        self.bootload()
+
+    def bootload(self) -> None:
+        self._run_code("import fire")
+        self._run_code("import sys")
+
+        self.set_variable("_execute_with_fire", self._execute_with_fire)
 
     def set_prompt(self, prompt: str) -> None:
         self.environ["PROMPT"] = prompt
@@ -103,8 +115,21 @@ class Shell(BaseShell):  # type: ignore
         logger.debug(f'Setting "{name} = {log_value}" variable')
 
         built_in_name = f"__envo_{name}__"
+        built_in_name = built_in_name.replace(".", "_")
         setattr(builtins, built_in_name, value)
         exec(f"{name} = {built_in_name}", builtins.__dict__)
+
+    def _execute_with_fire(self, fun: Callable, command: str) -> Any:
+        command_name = command.split()[0]
+        command_args = command.split()[1:]
+
+        argv_before = sys.argv.copy()
+        sys.argv = [command_name, *command_args]
+
+        try:
+            fire.Fire(fun)
+        finally:
+            sys.argv = argv_before
 
     def set_context(self, context: Dict[str, Any]) -> None:
         for k, v in context.items():
@@ -112,9 +137,12 @@ class Shell(BaseShell):  # type: ignore
 
         self.context.update(**context)
 
+    def _run_code(self, code: str) -> None:
+        exec(code, builtins.__dict__)
+
     def run_code(self, code: str) -> None:
         logger.debug(f'Running code "{code}"')
-        exec(code, builtins.__dict__)
+        self._run_code(code)
 
     def start(self) -> None:
         pass
@@ -134,11 +162,11 @@ class Shell(BaseShell):  # type: ignore
     @classmethod
     def create(cls) -> "Shell":
         import signal
-        from xonsh.built_ins import load_builtins
-        from xonsh.built_ins import XonshSession
+
+        import xonsh.history.main as xhm
+        from xonsh.built_ins import XonshSession, load_builtins
         from xonsh.imphooks import install_import_hooks
         from xonsh.xontribs import xontribs_load
-        import xonsh.history.main as xhm
 
         ctx: Dict[str, Any] = {}
 
@@ -148,7 +176,8 @@ class Shell(BaseShell):  # type: ignore
 
         load_builtins(ctx=ctx, execer=execer)
         env = builtins.__xonsh__.env  # type: ignore
-        env.update({"XONSH_INTERACTIVE": True, "SHELL_TYPE": "prompt_toolkit"})
+        env.update({"XONSH_INTERACTIVE": True, "SHELL_TYPE": "prompt_toolkit",
+                    "COMPLETIONS_BRACKETS": False})
 
         if "ENVO_SHELL_NOHISTORY" not in os.environ:
             builtins.__xonsh__.history = xhm.construct_history(  # type: ignore
@@ -171,6 +200,9 @@ class Shell(BaseShell):  # type: ignore
         builtins.__xonsh__.shell.shell = shell  # type: ignore
 
         return shell
+
+    def execute(self, line: str) -> Any:
+        return BaseShell.default(self, line)
 
     def default(self, line: str) -> Any:
         logger.info("Executing command", {"command": line})
@@ -201,22 +233,22 @@ class Shell(BaseShell):  # type: ignore
         class StdErr(Stream):
             device = sys.__stderr__
 
-        if self.calls.pre_cmd:
-            line = self.calls.pre_cmd(line)
-
-        out = None
-        if self.calls.on_stdout:
-            out = StdOut(command=line, on_write=self.calls.on_stdout)
-            sys.stdout = out  # type: ignore
-
-        err = None
-        if self.calls.on_stderr:
-            err = StdErr(command=line, on_write=self.calls.on_stderr)
-            sys.stderr = err  # type: ignore
-
         try:
+            out = None
+            err = None
+
             # W want to catch all exceptions just in case the command fails so we can handle std_err and post_cmd
-            ret = super().default(line)
+            if self.calls.pre_cmd:
+                line = self.calls.pre_cmd(line)
+
+            if self.calls.on_stdout:
+                out = StdOut(command=line, on_write=self.calls.on_stdout)
+                sys.stdout = out  # type: ignore
+
+            if self.calls.on_stderr:
+                err = StdErr(command=line, on_write=self.calls.on_stderr)
+                sys.stderr = err  # type: ignore
+            ret = self.execute(line)
         finally:
             if self.calls.on_stdout:
                 sys.stdout = sys.__stdout__

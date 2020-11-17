@@ -1,8 +1,7 @@
 import inspect
 import re
-from typing import Dict, Optional
-
 from dataclasses import dataclass
+from typing import Dict, Optional
 
 __all__ = ["STAGES", "emojis"]
 

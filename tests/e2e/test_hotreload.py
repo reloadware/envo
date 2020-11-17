@@ -1,14 +1,12 @@
+import os
 import shutil
+from pathlib import Path
+from time import sleep
 
 import pytest
 
 from envo.e2e import ReloadTimeout
 from tests.e2e import utils
-import os
-from time import sleep
-from pathlib import Path
-
-
 from tests.e2e.utils import PromptState
 
 

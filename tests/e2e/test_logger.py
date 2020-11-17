@@ -1,7 +1,7 @@
 from time import sleep
 
-from tests.e2e import utils
 from envo import logging
+from tests.e2e import utils
 
 
 class TestLogger(utils.TestBase):

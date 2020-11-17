@@ -5,9 +5,9 @@ from getpass import getpass
 from typing import List
 
 import pexpect
-from envo import logger
 from tqdm import tqdm
 
+from envo import logger
 
 __all__ = ["CommandError", "run"]
 
