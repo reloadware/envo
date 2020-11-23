@@ -1,48 +1,24 @@
 import inspect
 import re
+
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, GenericMeta, List, Optional, Type
 
-from envo.env import MagicFunction
-from envo.misc import render
+from envo.env import MagicFunction, magic_function
+
+from envo import misc
 
 if TYPE_CHECKING:
     from envo import Env
 
-
 template = """
-from pathlib import PosixPath, Path
 import typing
-from typing import Dict, Any, List, Type, Optional
-import envo.env
-
-from envo import (  # noqa: F401
-    logger,
-    command,
-    context,
-    Raw,
-    run,
-    precmd,
-    onstdout,
-    onstderr,
-    postcmd,
-    onload,
-    oncreate,
-    onunload,
-    ondestroy,
-    dataclass,
-    Plugin,
-    VirtualEnv,
-)
 
 from envo.env import (
 MagicFunction
 )
-
-from envo.misc import Inotify
-
-
+{{ ctx.prologue }}
 class {{ ctx.env_name }}:
     class Meta:
         {% for f in ctx.meta -%}
@@ -67,6 +43,8 @@ class Field:
     def __hash__(self) -> int:
         return hash(self.name)
 
+    def __eq__(self, other) -> bool:
+        return self.name == other.name
 
 @dataclass
 class Method:
@@ -80,6 +58,9 @@ class Method:
     def __hash__(self) -> int:
         return hash(self.name)
 
+    def __eq__(self, other) -> bool:
+        return self.name == other.name
+
 
 @dataclass
 class Ctx:
@@ -87,6 +68,7 @@ class Ctx:
     fields: List[Field]
     meta: List[Field]
     methods: List[Method]
+    prologue: str
 
 
 class StubGen:
@@ -100,15 +82,28 @@ class StubGen:
         for p in self.env._parents:
             self._generate_parent(p)
 
-    def _annotations_for_obj(self, obj: Any) -> List[Field]:
+    def _get_fields_for_obj(self, obj: Type["Env"]) -> List[Field]:
         fields = []
         if not hasattr(obj, "__annotations__"):
             return []
 
-        for n, a in obj.__annotations__.items():
-            if n.startswith("_"):
+        annotations = obj.__annotations__.copy()
+
+        for p in obj.__mro__:
+            if not hasattr(p, "__annotations__"):
                 continue
 
+            p_a = p.__annotations__
+
+            for k, v in p_a.items():
+                if k.startswith("_"):
+                    annotations.pop(k, None)
+                    continue
+
+                if k not in annotations:
+                    annotations[k] = v
+
+        for n, a in annotations.items():
             type_ = a if isinstance(a, GenericMeta) else a.__name__
 
             f = Field(n, type_)
@@ -116,14 +111,52 @@ class StubGen:
 
         return fields
 
-    def _ctx_from_env(self, env: "Env") -> Ctx:
-        fields = self._annotations_for_obj(env)
-        meta = self._annotations_for_obj(env.Meta)
+    def _is_envo_code(self, obj: Any):
+        ret = "envo." in obj.__module__
+        return ret
 
-        for p in self.env.__class__.mro():
-            p_fields = self._annotations_for_obj(p)
+    def _ctx_from_env(self, env: Type["Env"]) -> Ctx:
+        from envo import misc
 
-            fields.extend(p_fields)
+        # env.__mro__[1] because first one is always InheritedEnv and second is Env (joined)
+        env_class = next(c for c in env.__mro__ if not self._is_envo_code(c))
+
+        fields = self._get_fields_for_obj(env)
+        meta = self._get_fields_for_obj(env.Meta)
+        methods: List[Method] = []
+
+        env_module = misc.import_from_file(Path(env_class.__module__))
+        imports_src = inspect.getsource(env_module)
+        prologue = re.search(r"(.*?)(?:class)", imports_src, re.DOTALL)[1]
+
+        for p in env.__mro__:
+            if self._is_envo_code(p):
+                continue
+
+            # collect methods
+            for n, o in inspect.getmembers(p):
+                if not inspect.isfunction(o):
+                    continue
+
+                if (o.__module__ != env_class.__module__ or self._is_envo_code(o)) and n.startswith("_"):
+                    continue
+
+                if isinstance(o, magic_function):
+                    continue
+
+                methods.append(Method(name=n, source=inspect.getsource(o)))
+
+            # collect magic functions
+            for n, o in inspect.getmembers(p):
+                if not isinstance(o, MagicFunction):
+                    continue
+
+                func = o.func
+
+                if (func.__module__ != env_class.__module__ or self._is_envo_code(func)) and n.startswith("_"):
+                    continue
+
+                methods.append(Method(name=n, source=inspect.getsource(o.func)))
 
         fields = list(set(fields))
         fields.sort(key=lambda x: x.name)
@@ -131,46 +164,26 @@ class StubGen:
         meta = list(set(meta))
         meta.sort(key=lambda x: x.name)
 
-        # collect methods
-        methods: List[Method] = []
-        for n, o in inspect.getmembers(self.env):
-            if not inspect.ismethod(o):
-                continue
-
-            if n.startswith("__"):
-                continue
-
-            methods.append(Method(name=n, source=inspect.getsource(o)))
-
-        # collect magic functions
-        for n, o in inspect.getmembers(self.env):
-            if not isinstance(o, MagicFunction):
-                continue
-
-            if n.startswith("__"):
-                continue
-
-            methods.append(Method(name=n, source=inspect.getsource(o.func)))
-
         methods = list(set(methods))
         methods.sort(key=lambda x: x.name)
 
-        ctx = Ctx(env_name=env.__class__.__name__,
+        ctx = Ctx(env_name=env.__name__,
                   fields=fields,
                   meta=meta,
-                  methods=methods)
+                  methods=methods,
+                  prologue=prologue)
 
         return ctx
 
     def _generate_env(self) -> None:
-        ctx = self._ctx_from_env(self.env)
+        ctx = self._ctx_from_env(self.env.__class__)
 
         file = Path(f"{str(self.env.root.absolute())}/env_{self.env.stage}.pyi")
-        render(template, file, {"ctx": ctx})
+        misc.render(template, file, {"ctx": ctx})
 
     def _generate_parent(self, parent: Type["Env"]) -> None:
         ctx = self._ctx_from_env(parent)
 
         file = Path(f"{str(parent.Meta.root.absolute())}/env_{parent.Meta.stage}.pyi")
-        render(template, file, {"ctx": ctx})
+        misc.render(template, file, {"ctx": ctx})
 

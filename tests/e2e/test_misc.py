@@ -30,11 +30,11 @@ class TestMisc(utils.TestBase):
         ret = utils.run("envo test --dry-run")
         assert re.match(
             (
-                r'export SANDBOX_ROOT=".*sandbox"\r\n'
-                r'export PATH=".*"\r\n'
-                r'export SANDBOX_STAGE="test"\r\n'
                 r'export ENVO_STAGE="test"\r\n'
+                r'export PATH=".*"\r\n'
                 r'export PYTHONPATH=".*"'
+                r'export SANDBOX_STAGE="test"\r\n'
+                r'export SANDBOX_ROOT=".*sandbox"\r\n'
             ),
             ret,
         )
@@ -51,13 +51,14 @@ class TestMisc(utils.TestBase):
 
         # remove PYTHONPATH since it'll be different depending on the machine
         content = dot_env.read_text()
+        print(f"Comparing:\n{content}")
         assert re.match(
             (
-                r'SANDBOX_ROOT=".*sandbox"\n'
-                r'PATH=".*"\n'
-                r'SANDBOX_STAGE="test"\n'
                 r'ENVO_STAGE="test"\n'
+                r'PATH=".*"\n'
                 r'PYTHONPATH=".*\n'
+                r'SANDBOX_ROOT=".*sandbox"\n'
+                r'SANDBOX_STAGE="test"\n'
                 r'SANDBOX_TESTVAR="test_value"'
             ),
             content,

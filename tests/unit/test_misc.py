@@ -45,7 +45,7 @@ class TestMisc(utils.TestBase):
 
     @pytest.mark.skip
     def test_stage(self, env):
-        env.activate()
+        env._activate()
         assert os.environ["SANDBOX_STAGE"] == "test"
         assert os.environ["ENVO_STAGE"] == "test"
 
@@ -60,7 +60,7 @@ class TestMisc(utils.TestBase):
 
     @pytest.mark.skip
     def test_activating(self, env):
-        env.activate()
+        env._activate()
         assert os.environ["SANDBOX_STAGE"] == "test"
 
     @pytest.mark.skip
@@ -79,7 +79,7 @@ class TestMisc(utils.TestBase):
         )
 
         e = utils.env()
-        e.activate()
+        e._activate()
 
         assert os.environ["SANDBOX_STAGE"] == "test"
         assert os.environ["SANDBOX_PYTHON_VERSION"] == "3.8.2"
@@ -148,7 +148,7 @@ class TestMisc(utils.TestBase):
         )
 
         e = utils.env()
-        e.activate()
+        e._activate()
         assert os.environ["VERSION"] == "3.8.2.1"
 
     @pytest.mark.skip
@@ -157,6 +157,6 @@ class TestMisc(utils.TestBase):
         utils.add_definition("self.value = 'test_value'")
 
         e = utils.env()
-        e.activate()
+        e._activate()
         assert os.environ["VALUE"] == "test_value"
 

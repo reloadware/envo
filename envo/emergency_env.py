@@ -21,34 +21,29 @@ from envo import (  # noqa: F401
     boot_code,
     Plugin,
     VirtualEnv,
-    BaseEnv
+    const
 )
 
-# Declare your command namespaces here
-# like this:
-# my_namespace = command(namespace="my_namespace")
 
-
-class {{ class_name }}(BaseEnv):  # type: ignore
+class EnvoCommEnv(envo.BaseEnv):  # type: ignore
     class Meta(envo.BaseEnv.Meta):  # type: ignore
         root = Path(__file__).parent.absolute()
-        stage: str = "{{ stage }}"
-        emoji: str = "{{ emoji }}"
-        parents: List[str] = [{{ parents }}]
+        stage: str = "emergency"
+        emoji: str = const.emojis["emergency"]
+        parents: List[str] = []
         plugins: List[Plugin] = []
-        name: str = "{{ name }}"
+        name: str = ""
         version: str = "0.1.0"
         watch_files: List[str] = []
         ignore_files: List[str] = []
 
-    # Declare your variables here
+    poetry_ver: str
+    some_var: str
 
     def __init__(self) -> None:
-        # Define your variables here
-        pass
-
-    # Define your commands, hooks and properties here
+        self.poetry_ver = "1.0.5"
+        self.some_var = "test"
 
 
-Env = {{ class_name }}
+Env = EnvoCommEnv
 

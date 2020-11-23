@@ -1,26 +1,56 @@
-from env_comm import EnvoEnvComm
-from envo import Raw, command, dataclass, logger, onload, run  # noqa: F401
+from typing import List, Dict, Any, Optional, Tuple  # noqa: F401
+
+from pathlib import Path
+
+import envo  # noqa: F401
+
+from envo import (  # noqa: F401
+    logger,
+    command,
+    context,
+    Raw,
+    run,
+    precmd,
+    onstdout,
+    onstderr,
+    postcmd,
+    onload,
+    oncreate,
+    onunload,
+    ondestroy,
+    boot_code,
+    Plugin,
+    VirtualEnv,
+BaseEnv
+)
+
+# Declare your command namespaces here
+# like this:
+# my_namespace = command(namespace="my_namespace")
 
 
-@dataclass
-class EnvoEnv(EnvoEnvComm):  # type: ignore
-    class Meta(EnvoEnvComm.Meta):  # type: ignore
-        name = "envo"
-        stage = "local"
-        emoji = "🐣"
-        parents = ["env_comm.py"]
+class EnvoLocalEnv(BaseEnv):  # type: ignore
+    class Meta(envo.BaseEnv.Meta):  # type: ignore
+        root = Path(__file__).parent.absolute()
+        stage: str = "local"
+        emoji: str = "🐣"
+        parents: List[str] = ["env_comm.py"]
+        plugins: List[Plugin] = [VirtualEnv]
+        name: str = "envo"
+        version: str = "0.1.0"
+        watch_files: List[str] = []
+        ignore_files: List[str] = []
 
     # Declare your variables here
-    var: int
-    raw_var: Raw[float]
+    local_var: str
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        self.var = 12
-        self.raw_var = 12.03
+    def __init__(self) -> None:
+        self.local_var = "fdsf"
 
         # Define your variables here
+
+    def init(self) -> None:
+        VirtualEnv.init(self, venv_dir=".venv")
 
     @onload
     def _dump_env(self) -> None:
@@ -59,5 +89,6 @@ class EnvoEnv(EnvoEnvComm):  # type: ignore
         self.test()
 
 
-Env = EnvoEnv
+Env = EnvoLocalEnv
+
 

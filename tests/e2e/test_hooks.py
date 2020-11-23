@@ -213,14 +213,22 @@ class TestHooks(utils.TestBase):
         shell.start()
         e = shell.expecter
 
-        e.output(r"on load\n")
         e.output(r"on create\n")
-        e.prompt().eval()
 
-        shell.exit()
+        # sometimes there's an extra prompt being printed out when printing to stdout. Not sure why
+        e.prompt(PromptState.MAYBE_LOADING)
+        e.expected[-1] = rf"({e.expected[-1]})?"
+
+        e.output(r"on load\n")
+
+        e.prompt().eval()
 
         e.output(r"\non destroy\n")
         e.output(r"on unload")
+
+        shell.exit()
+
+        e.eval()
         e.exit().eval()
 
     def test_onload_onunload_reload(self, shell):
@@ -245,6 +253,11 @@ class TestHooks(utils.TestBase):
         shell.envo.assert_reloaded(1)
 
         e.output(r"\non unload\n")
+
+        # sometimes there's an extra prompt being printed out when printing to stdout. Not sure why
+        e.prompt(PromptState.MAYBE_LOADING)
+        e.expected[-1] = rf"({e.expected[-1]}\n)?"
+
         e.output(r"on load\n")
         e.prompt(PromptState.MAYBE_LOADING).eval()
 

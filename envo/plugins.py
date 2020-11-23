@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from envo import Env, logger, onload, onunload
+from envo import Env, logger, onload, onunload, BaseEnv
 
 __all__ = [
     "Plugin",
@@ -12,27 +12,25 @@ __all__ = [
 ]
 
 
-@dataclass
-class Plugin(Env):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+class Plugin(BaseEnv):
+    pass
 
 
-@dataclass
 class VirtualEnv(Plugin):
     """
     Env that activates virtual environment.
     """
 
-    # TODO: change it to a mixin?
     venv_path: Path
     venv_lib_path: Path
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self) -> None:
+        self.venv_path = Path()
+        self.venv_lib_path = Path()
+        self._possible_site_packages = []
+
         logger.info("VirtualEnv plugin init")
 
-        self.venv_path = Path()
         self.venv_lib_path = self.root / ".venv/lib"
 
         # possible python site-packages
@@ -40,9 +38,6 @@ class VirtualEnv(Plugin):
         versions += [f"python2.{v}" for v in range(0, 10)]
         self._possible_site_packages = [self.venv_lib_path / v / "site-packages" for v in versions]
 
-    @onload
-    def __onload(self) -> None:
-        logger.info("VirtualEnv plugin onload")
         self.venv_path = self.root / ".venv/bin"
 
         self.path = f"""{str(self.venv_path)}:{os.environ['PATH']}"""
@@ -61,8 +56,6 @@ class VirtualEnv(Plugin):
 
             if path not in sys.path:
                 sys.path.insert(0, path)
-
-        self.activate()
 
     @onunload
     def __onunload(self) -> None:

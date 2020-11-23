@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "envo"
-version = "0.9.0.8b"
+version = "0.9.1.5b"
 description = "Smart Environments handling - Define command hooks, file hooks and env variables in python and activate hot reloaded shells."
 authors = ["Damian Krystkiewicz <damian.krystkiewicz@gmail.com>"]
 classifiers = [
@@ -39,6 +39,7 @@ rhei = "^0.5.2"
 globmatch-temp = "^0.1.1"
 pygments = "^2.6.1"
 xonsh = "^0.9.21"
+fire = "^0.3.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.4.1"
@@ -53,19 +54,18 @@ pytest-cov = "^2.9.0"
 rhei = "^0.5.2"
 pyte = "^0.8.0"
 pytest-rerunfailures = "^9.0"
-stickybeak = "0.5.0"
 flask = "^1.1.2"
 wheel = "^0.35.1"
 isort = "^5.6.4"
+stickybeak = "0.5.1b"
 
 [tool.poetry.scripts]
 envo = "envo.scripts:_main"
 
+[tool.isort]
+profile = "hug"
+skip = ["__init__.py", ".venv"]
 [build-system]
 requires = ["poetry>=0.12"]
 build-backend = "poetry.masonry.api"
 
-
-[tool.isort]
-profile = "hug"
-skip=["__init__.py", ".venv"]

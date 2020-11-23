@@ -33,6 +33,21 @@ class Msg:
     def print(self) -> None:
         print(self.render_all(with_color=True))
 
+    def _fix_formatting(self, text: str) -> str:
+        from loguru._colorizer import AnsiParser, TokenType
+
+        parser = AnsiParser()
+
+        for match in parser._regex_tag.finditer(text):
+            markup, tag = match.group(0), match.group(1)
+
+            if tag not in {"lvl", "level"}:
+                ansi = parser._get_ansicode(tag)
+                if ansi is None:
+                    text = text.replace(markup, markup.replace("<", "< ").replace(">", " >"))
+
+        return text
+
     def render_message(self, with_color: bool = True) -> str:
         def color(clr:str) -> str:
             if with_color:
@@ -53,6 +68,8 @@ class Msg:
         msg = f"@{self.time:.4f}]{descriptor}{self.body}; {metadata}"
 
         if with_color:
+            # fix escaping colors
+            msg = self._fix_formatting(msg)
             msg = highlight(msg, XonshConsoleLexer(), TerminalFormatter(style=get_style_by_name('emacs')))
             msg = Colorizer.ansify(msg)
         return msg
@@ -158,7 +175,9 @@ class Logger:
         )
 
     def create_child(self, name: str, descriptor: str) -> "Logger":
-        return Logger(parent=self, name=name, descriptor=descriptor)
+        logger = Logger(parent=self, name=name, descriptor=descriptor)
+        logger.sw = self.sw
+        return logger
 
     def clean(self) -> None:
         self.messages = Messages()

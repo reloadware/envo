@@ -23,14 +23,12 @@ class CustomPrint:
         self.prompt = prompt
 
     def write(self, text: bytes) -> None:
-        text_str: str = text.decode("utf-8")
-
-        for line in text_str.splitlines(keepends=True):
-            if len(text_str) == 0:
+        for line in text.splitlines(keepends=True):
+            if len(text) == 0:
                 return
 
-            if not any((s in line) for s in [self.command, self.prompt]):
-                self.old_stdout.write(line)
+            if not any((s in line) for s in [self.command.encode("utf-8"), self.prompt.encode("utf-8")]):
+                self.old_stdout.buffer.write(line)
 
     def flush(self) -> None:
         self.old_stdout.flush()

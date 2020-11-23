@@ -18,6 +18,7 @@ import pexpect
 import pyte
 import pyte.modes
 import pytest
+import requests
 from rhei import Stopwatch
 from stickybeak import Injector
 
@@ -110,7 +111,6 @@ class Expecter:
     def __init__(self, spawn: "Spawn") -> None:
         self._spawn = spawn
         self.expected: List[str] = []
-        self.prompt_re = PromptRe(state=PromptState.NORMAL, name="sandbox")
         self._return_code = 0
         self._expect_exit = False
 
@@ -340,8 +340,11 @@ class Spawn:
         print(f"\nExpected (multiline):\n{expected_multiline}")
         print(f"\nExpected (raw):\n{self.expecter.expected_regex}")
 
-        print("\nLog:")
-        self.envo.get_logger().print_all()
+        try:
+            print("\nLog:")
+            self.envo.get_logger().print_all()
+        except requests.exceptions.ConnectionError:
+            print("COuldn't retrieve log")
 
 
 def shell() -> Spawn:

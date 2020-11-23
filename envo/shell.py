@@ -7,7 +7,7 @@ import fire
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
-from typing import Any, Callable, Dict, List, Optional, TextIO
+from typing import Any, Callable, Dict, List, Optional, TextIO, Union
 
 from prompt_toolkit.data_structures import Size
 from xonsh.base_shell import BaseShell
@@ -141,7 +141,7 @@ class Shell(BaseShell):  # type: ignore
         exec(code, builtins.__dict__)
 
     def run_code(self, code: str) -> None:
-        logger.debug(f'Running code "{code}"')
+        logger.debug(f'Running code """{code}"""')
         self._run_code(code)
 
     def start(self) -> None:
@@ -214,15 +214,16 @@ class Shell(BaseShell):  # type: ignore
             def __init__(self, command: str, on_write: Callable) -> None:
                 self.command = command
                 self.on_write = on_write
-                self.output: List[str] = []
+                self.output: List[bytes] = []
 
-            def write(self, text: str) -> None:
-                if isinstance(text, bytes):
-                    text = text.decode("utf-8")
-
+            def write(self, text: Union[bytes, str]) -> None:
                 text = self.on_write(command=self.command, out=text)
                 self.output.append(text)
-                self.device.write(text)
+
+                if isinstance(text,str):
+                    self.device.write(text)
+                else:
+                    self.device.buffer.write(text)
 
             def flush(self) -> None:
                 self.device.flush()

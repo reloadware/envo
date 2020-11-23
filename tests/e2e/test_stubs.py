@@ -39,6 +39,15 @@ class TestStubs:
         self.init()
 
         utils.add_flake_cmd(file=Path("env_comm.py"))
+        utils.add_hook(
+            r"""
+            @precmd(cmd_regex=r"print\(.*\)")
+            def pre_print(self, command: str) -> str:
+                assert command == 'print("pancake");'
+                print("pre")
+                return command * 2
+            """
+        )
 
         stub = """
         class SandboxCommEnv:
@@ -191,6 +200,11 @@ class TestStubs:
         utils.add_declaration("comm_var: str", Path("env_comm.py"))
         utils.add_definition("self.comm_var = 'test'", Path("env_comm.py"))
 
+        utils.add_declaration("test_var: int", Path("env_test.py"))
+        utils.add_definition("self.test_var = 1", Path("env_test.py"))
+        utils.add_mypy_cmd(file=Path("env_test.py"))
+
+
         comm_stub = """
         class SandboxCommEnv:
             class Meta:
@@ -257,11 +271,7 @@ class TestStubs:
             def unload(self) -> None: ... 
             def validate(self) -> None: ... 
         """
-        self.assert_stub_equal("env_comm.pyi", comm_stub)
-
-        utils.add_declaration("test_var: int", Path("env_test.py"))
-        utils.add_definition("self.test_var = 1", Path("env_test.py"))
-        utils.add_mypy_cmd(file=Path("env_test.py"))
+        self.assert_stub_equal("env_comm.pyi", comm_stub, stage="test")
 
         test_stub = """
         class SandboxEnv:

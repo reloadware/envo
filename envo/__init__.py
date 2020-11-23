@@ -1,8 +1,5 @@
 import warnings
 
-from dataclasses import dataclass
-dataclass = dataclass(repr=False)
-
 warnings.warn = lambda *args, **kwargs: None
 
 from .logging import logger  # noqa F401

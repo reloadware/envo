@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import types
+from collections import OrderedDict
 from copy import copy
 from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
@@ -95,7 +96,7 @@ class MagicFunction:
             kwargs["self"] = self.env  # type: ignore
         return self.func(*args, **kwargs)
 
-    def __str__(self) -> str:
+    def render(self) -> str:
         kwargs_str = ", ".join([f"{k}={repr(v)}" for k, v in self.kwargs.items()])
         return f"{self.decl}   {{{kwargs_str}}}"
 
@@ -142,7 +143,6 @@ class Command(MagicFunction):
     def _validate_fun_args(self) -> None:
         """
         Commands have user defined arguments so we disable this
-        :return:
         """
         pass
 
@@ -266,39 +266,129 @@ class Field:
     name: str
     type: Any
     value: Any
+    raw: bool
 
 
-@dataclass
-class BaseEnv:
-    def __init__(self, _name: Optional[str] = None) -> None:
-        """
-        :param _name: with underscore so it doesn't conflict with possible field with name "name"
-        """
-        if _name:
-            self._name = _name
-        else:
-            self._name = str(self.__class__.__name__)
+class BaseFields:
+    root: Path
+    path: Raw[str]
+    stage: str
+    envo_stage: Raw[str]
+    pythonpath: Raw[str]
 
-    def __post_init__(self) -> None:
+
+class BaseEnv(BaseFields):
+    class Meta:
         """
-        Repeating this code to populate _name when super().__init__() is not called in subclasses
+        Environment metadata.
         """
+        root: Path
+        name: Optional[str] = None
+        version: str = "0.1.0"
+        parents: List[str] = []
+        plugins: List["Plugin"] = []
+        watch_files: List[str] = []
+        ignore_files: List[str] = []
+        emoji: str = ""
+        stage: str = "comm"
+
+
+class Env(BaseFields):
+    """
+    Defines environment.
+    """
+
+    @dataclass
+    class Callbacks:
+        restart: Callback
+        reloader_ready: Callback
+        context_ready: Callback
+        on_error: Callable
+
+
+    _parents: List[Type["Env"]]
+    _files_watchers: List[Inotify]
+    _default_watch_files = ["**/", "env_*.py"]
+    _default_ignore_files = [
+        r"**/.*",
+        r"**/*~",
+        r"**/__pycache__",
+        r"**/__envo_lock__"
+    ]
+
+    def __init__(self, shell: Optional["Shell"], calls: Callbacks,
+                 reloader_enabled: bool=True) -> None:
+        super().__init__()
+        self._calls = calls
+
+        self._reloader_enabled = reloader_enabled
+        self._shell = shell
+
+        self.meta = self.Meta()
+
+        self._name = self.meta.name
 
         self.logger: Logger = logger
 
-        if not hasattr(self, "_name"):
-            self._name = str(self.__class__.__name__)
+        self._exiting = False
+        self._executing_cmd = False
+
+        self._files_watchers = []
+        self._reload_lock = Lock()
+
+        self.logger: Logger = logger.create_child("envo", descriptor=self.meta.name)
+
+        self._environ_before = None
+        self._shell_environ_before = None
+
+        self.root = self.meta.root
+        self.stage = self.meta.stage
+        self.envo_stage = self.stage
+        self.logger.info("Starting env", metadata={"root": self.root, "stage": self.stage})
+
+        self.path = os.environ["PATH"]
+
+        if "PYTHONPATH" not in os.environ:
+            self.pythonpath = ""
+        else:
+            self.pythonpath = os.environ["PYTHONPATH"]
+        self.pythonpath = str(self.root) + ":" + self.pythonpath
+
+        self._magic_functions: Dict[str, Any] = {}
+
+        self._magic_functions["context"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["precmd"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["onstdout"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["onstderr"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["postcmd"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["onload"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["oncreate"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["ondestroy"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["onunload"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["boot_code"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["command"]: Dict[str, Command] = {}
+
+        self._collect_magic_functions()
+
+        for p in self.__class__.__mro__:
+            if "InheritedEnv" in str(p):
+                continue
+
+            if issubclass(p, BaseEnv):
+                p.__init__(self)
+
+        self.validate()
 
     def validate(self) -> None:
         """
         Validate env
         """
         self.logger.debug("Validating env")
-        errors = self.get_errors()
+        errors = self._get_errors()
         if errors:
             raise EnvoError("\n".join(errors))
 
-    def get_errors(self) -> List[str]:
+    def _get_errors(self) -> List[str]:
         """
         Return list of detected errors (unset, undeclared)
 
@@ -309,9 +399,9 @@ class BaseEnv:
 
         field_names = set()
         for c in self.__class__.mro():
-            if not is_dataclass(c):
+            if not hasattr(c, "__annotations__"):
                 continue
-            field_names |= set([f.name for f in fields(c) if not f.name.startswith("_")])
+            field_names |= set([f for f in c.__annotations__.keys() if not f.startswith("_")])
 
         var_names = set()
         f: str
@@ -349,7 +439,7 @@ class BaseEnv:
         for f in fields_to_check:
             attr2check: Any = getattr(self, f)
             if issubclass(type(attr2check), BaseEnv):
-                error_msgs += attr2check.get_errors()
+                error_msgs += attr2check._get_errors()
 
         return error_msgs
 
@@ -364,20 +454,20 @@ class BaseEnv:
         """
         Return fields.
         """
-        ret = {}
-        for f in fields(self):
-            if f.name.startswith("_"):
-                continue
+        ret = OrderedDict()
 
-            if hasattr(self, f.name):
-                attr = getattr(self, f.name)
-                if hasattr(f.type, "__origin__"):
-                    t = f.type.__origin__
-                else:
-                    t = type(attr)
-                ret[f.name] = Field(name=f.name, type=t, value=attr)
-            else:
-                ret[f.name] = Field(name=f.name, type="undefined", value="undefined")
+        for c in self.__class__.mro():
+            if not hasattr(c, "__annotations__"):
+                continue
+            for f, a in c.__annotations__.items():
+                if f.startswith("_"):
+                    continue
+                attr = getattr(self, f)
+                t = type(attr)
+                raw = "Raw" in str(a)
+                ret[f] = Field(name=f, type=t, value=attr, raw=raw)
+
+        ret = OrderedDict(sorted(ret.items(), key=lambda x: x[0]))
 
         return ret
 
@@ -394,7 +484,7 @@ class BaseEnv:
             if isinstance(f.value, BaseEnv):
                 envs.update(f.value.get_env_vars(owner_name=namespace))
             else:
-                if f.type == Raw:
+                if f.raw:
                     var_name = f.name.upper()
                 else:
                     var_name = namespace + f.name.replace("_", "").upper()
@@ -402,12 +492,6 @@ class BaseEnv:
                 envs[var_name] = str(f.value)
 
         return envs
-
-    def __str__(self) -> str:
-        return self._name
-
-    def __repr__(self) -> str:
-        return self._repr()
 
     def _repr(self, level: int = 0) -> str:
         ret = []
@@ -420,115 +504,14 @@ class BaseEnv:
 
         return "\n".join(ret) + "\n"
 
-
-@dataclass
-class Env(BaseEnv):
-    """
-    Defines environment.
-    """
-
-    class Meta:
-        """
-        Environment metadata.
-        """
-        root: Path
-        name: Optional[str] = None
-        version: str = "0.1.0"
-        parents: List[str] = []
-        plugins: List["Plugin"] = []
-        watch_files: List[str] = []
-        ignore_files: List[str] = []
-        emoji: str = ""
-        stage: str = "comm"
-
-    @dataclass
-    class Callbacks:
-        restart: Callback
-        reloader_ready: Callback
-        context_ready: Callback
-
-    root: Path
-    path: Raw[str]
-    stage: str
-    envo_stage: Raw[str]
-    pythonpath: Raw[str]
-
-    _parents: List[Type["Env"]]
-    _files_watchers: List[Inotify]
-    _default_watch_files = ["**/", "env_*.py"]
-    _default_ignore_files = [
-        r"**/.*",
-        r"**/*~",
-        r"**/__pycache__",
-        r"**/__envo_lock__"
-    ]
-
-    def __init__(self, shell: Optional["Shell"], calls: Callbacks,
-                 reloader_enabled: bool=True) -> None:
-        self._calls = calls
-        self.meta = self.Meta()
-        super().__init__(self.meta.name)
-
-        self._exiting = False
-        self._executing_cmd = False
-
-        self._reloader_enabled = reloader_enabled
-        self._files_watchers = []
-        self._reload_lock = Lock()
-
-        if self._reloader_enabled:
-            self._start_watchers()
-
-        self.logger: Logger = logger.create_child("envo", descriptor=self.meta.name)
-
-        self._environ_before = None
-        self._shell_environ_before = None
-
-        self._shell = shell
-
-        self.root = self.meta.root
-        self.stage = self.meta.stage
-        self.envo_stage = self.stage
-        self.logger.info("Starting env", metadata={"root": self.root, "stage": self.stage})
-
-        self.path = os.environ["PATH"]
-
-        if "PYTHONPATH" not in os.environ:
-            self.pythonpath = ""
-        else:
-            self.pythonpath = os.environ["PYTHONPATH"]
-        self.pythonpath = str(self.root) + ":" + self.pythonpath
-
-        self._magic_functions: Dict[str, Any] = {}
-
-        self._magic_functions["context"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["precmd"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["onstdout"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["onstderr"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["postcmd"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["onload"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["oncreate"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["ondestroy"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["onunload"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["boot_code"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["command"]: Dict[str, Command] = {}
-
-        self._collect_magic_functions()
-
-    def __post_init__(self):
-        self.validate()
-
     def _add_namespace_if_not_exists(self, name: str) -> None:
         self._shell.run_code(f'class Namespace: pass\n{name} = Namespace() if "{name}" not in globals() else {name}')
 
-    def load(self) -> None:
+    def _load(self) -> None:
         """
         Called after creation and reload.
         :return:
         """
-        self.validate()
-        self.activate()
-
         def thread(self: Env) -> None:
             logger.debug("Starting onload thread")
 
@@ -537,12 +520,26 @@ class Env(BaseEnv):
             self._shell.calls.on_stdout = Callback(self._on_stdout)
             self._shell.calls.on_stderr = Callback(self._on_stderr)
             self._shell.calls.post_cmd = Callback(self._on_postcmd)
+            self._shell.calls.post_cmd = Callback(self._on_postcmd)
+            self._shell.calls.on_exit = Callback(self._on_destroy)
+
+            if self._reloader_enabled:
+                self._start_watchers()
 
             sw = Stopwatch()
             sw.start()
             functions = self._magic_functions["onload"].values()
+
             for h in functions:
-                h()
+                try:
+                    h()
+                except BaseException as e:
+                    # TODO: pass env code to exception to get relevant traceback?
+                    self._calls.on_error(e)
+                    self._exit()
+                    return
+
+            self._activate()
 
             # declare commands
             for name, c in self._magic_functions["command"].items():
@@ -568,6 +565,13 @@ class Env(BaseEnv):
         functions = self._magic_functions["oncreate"].values()
         for h in functions:
             h()
+
+    def _on_destroy(self) -> None:
+        functions = self._magic_functions["ondestroy"]
+        for h in functions.values():
+            h()
+
+        self._exit()
 
     def _start_watchers(self) -> None:
         constituents = self._parents + [self.__class__]
@@ -613,12 +617,12 @@ class Env(BaseEnv):
 
         self._reload_lock.release()
 
-    def exit(self) -> None:
+    def _exit(self) -> None:
         self.logger.info("Exiting env")
         if self._reloader_enabled:
             self._stop_watchers()
 
-    def activate(self) -> None:
+    def _activate(self) -> None:
         """
         Validate env and send vars to os.environ
 
@@ -627,29 +631,26 @@ class Env(BaseEnv):
         if not self._environ_before:
             self._environ_before = os.environ.copy()
 
-        if self._shell:
-            if not self._shell_environ_before:
-                self._shell_environ_before = dict(self._shell.environ.items())
-            self._shell.environ.update(**self.get_env_vars())
+        if not self._shell_environ_before:
+            self._shell_environ_before = dict(self._shell.environ.items())
+        self._shell.environ.update(**self.get_env_vars())
 
         os.environ.update(**self.get_env_vars())
 
-    def deactivate(self) -> None:
+    def _deactivate(self) -> None:
         """
         Validate env and send vars to os.environ
 
         :param owner_namespace:
         """
-        os.environ = self._environ_before.copy()
+        if self._environ_before:
+            os.environ = self._environ_before.copy()
 
-        if self._shell:
-            tmp_environ = copy(self._shell.environ)
-            for i, v in tmp_environ.items():
-                self._shell.environ.pop(i)
-            self._shell.environ.update(**self._shell_environ_before)
-
-    def get_magic_functions(self) -> Dict[str, Dict[str, MagicFunction]]:
-        return self._magic_functions
+            if self._shell:
+                tmp_environ = copy(self._shell.environ)
+                for i, v in tmp_environ.items():
+                    self._shell.environ.pop(i)
+                self._shell.environ.update(**self._shell_environ_before)
 
     def dump_dot_env(self) -> Path:
         """
@@ -663,27 +664,10 @@ class Env(BaseEnv):
         return path
 
     @classmethod
-    def get_name(cls) -> str:
-        return cls.Meta.name if cls.Meta.name else ""
+    def _build_env(cls, env: Type[BaseEnv]) -> Type["Env"]:
+        parents = cls._get_parents_env(env)
 
-    @classmethod
-    def get_current_env(cls) -> "Env":
-        """
-        Return current activated environment.
-
-        Useful in python scripts.
-        Import env_comm and run this function to retrieve current environment.
-        :return: Current environment object
-        """
-        stage = os.environ["ENVO_STAGE"]
-        env: "Env" = cls.get_env_by_stage(stage)
-        return env
-
-    @classmethod
-    def build_env(cls) -> Type["Env"]:
-        parents = list(reversed([cls.get_parent_env(p) for p in cls.Meta.parents]))
-
-        class InheritedEnv(*cls.Meta.plugins, cls, *parents):
+        class InheritedEnv(cls, env, *parents, *env.Meta.plugins):
             pass
 
         env = InheritedEnv
@@ -692,23 +676,18 @@ class Env(BaseEnv):
         return env
 
     @classmethod
-    def build_env_from_file(cls, file: Path) -> Type["Env"]:
-        Env = import_from_file(file).Env  # type: ignore
-        return Env.build_env()
+    def _build_env_from_file(cls, file: Path) -> Type["Env"]:
+        env = import_from_file(file).Env  # type: ignore
+        return cls._build_env(env)
 
     @classmethod
-    def get_parent_env(cls, parent_path: str) -> Type["Env"]:
-        return cls.build_env_from_file(Path(str(cls.Meta.root / parent_path)))
-
-    @classmethod
-    def get_env_by_stage(cls, stage: str) -> Type["Env"]:
-        """
-        Return env by stage
-        :param stage:
-        """
-
-        env: Type["Env"] = cls.build_env_from_file(Path(f"env_{stage}.py"))  # type: ignore
-        return env
+    def _get_parents_env(cls, env: Type[BaseEnv]) -> List[BaseEnv]:
+        parents = []
+        for p in env.Meta.parents:
+            parent = import_from_file(Path(str(env.Meta.root / p))).Env
+            parents.append(parent)
+            parents.extend(cls._get_parents_env(parent))
+        return parents
 
     def _get_context(self) -> Dict[str, Any]:
         context = {}
@@ -742,7 +721,7 @@ class Env(BaseEnv):
                 attr.env = self
                 self._magic_functions[attr.type][name] = attr
 
-    def __repr__(self) -> str:
+    def get_repr(self) -> str:
         ret = []
 
         for type, functions in self._magic_functions.items():
@@ -788,7 +767,7 @@ class Env(BaseEnv):
 
     @onload
     def _on_load(self) -> None:
-        boot_codes_f = self.get_magic_functions()["boot_code"]
+        boot_codes_f = self._magic_functions["boot_code"]
 
         codes = []
 
@@ -812,7 +791,7 @@ class Env(BaseEnv):
                 command = ret
         return command
 
-    def _on_stdout(self, command: str, out: str) -> str:
+    def _on_stdout(self, command: str, out: bytes) -> str:
         functions = self._magic_functions["onstdout"]
         for f in functions.values():
             if re.match(f.kwargs["cmd_regex"], command):
@@ -821,7 +800,7 @@ class Env(BaseEnv):
                     out = ret
         return out
 
-    def _on_stderr(self, command: str, out: str) -> str:
+    def _on_stderr(self, command: str, out: bytes) -> str:
         functions = self._magic_functions["onstderr"]
         for f in functions.values():
             if re.match(f.kwargs["cmd_regex"], command):
@@ -830,14 +809,14 @@ class Env(BaseEnv):
                     out = ret
         return out
 
-    def _on_postcmd(self, command: str, stdout: List[str], stderr: List[str]) -> None:
+    def _on_postcmd(self, command: str, stdout: List[bytes], stderr: List[bytes]) -> None:
         functions = self._magic_functions["postcmd"]
         for f in functions.values():
             if re.match(f.kwargs["cmd_regex"], command):
                 f(command=command, stdout=stdout, stderr=stderr)  # type: ignore
 
-    def unload(self) -> None:
-        self.deactivate()
+    def _unload(self) -> None:
+        self._deactivate()
         functions = self._magic_functions["onunload"]
         for f in functions.values():
             f()

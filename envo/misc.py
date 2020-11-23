@@ -1,7 +1,11 @@
 import importlib.machinery
 import importlib.util
 import inspect
+import re
+import sys
 import time
+import traceback
+
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Thread
@@ -202,6 +206,7 @@ class Inotify:
         # Save the same content to trigger inotify event
         env_comm.read_text()
 
+
 def dir_name_to_class_name(dir_name: str) -> str:
     class_name = dir_name.replace("_", " ")
     class_name = class_name.replace("-", " ")
@@ -258,3 +263,25 @@ def import_from_file(path: Path) -> Any:
     loader.exec_module(module)
 
     return module
+
+
+def get_envo_relevant_traceback(exc: BaseException) -> List[str]:
+    if isinstance(exc, EnvoError):
+        msg = str(exc).splitlines(keepends=True)
+        return msg
+
+    msg = []
+    msg.extend(traceback.format_stack()[:-2])
+    msg.extend(traceback.format_exception(*sys.exc_info())[1:])
+    msg_relevant = ["Traceback (Envo relevant):\n"]
+    relevant = False
+    for m in msg:
+        if re.search(r"env_.*\.py", m):
+            relevant = True
+        if relevant:
+            msg_relevant.append(m)
+
+    if relevant:
+        msg = msg_relevant
+
+    return msg

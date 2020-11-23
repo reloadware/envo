@@ -124,6 +124,7 @@ Bugs:
 * AttributeError on exit from emergency mode
 * Name error in context no emergency mode
 * .venv issue
+* nothing is being printed after running envo --init with existing envo
 
 Improvements:
 * type checking ?

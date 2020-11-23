@@ -8,7 +8,6 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock, Thread
-from time import sleep
 from typing import Any, Dict, List, Optional
 
 from ilock import ILock
@@ -101,10 +100,12 @@ class Mode:
     class Sets:
         stage: str
         restart_nr: int
+        msg: str = ""
 
     @dataclass
     class Callbacks:
         restart: Callback
+        on_error: Callback
 
     prompt: PromptBase = NotImplemented
     reloader_enabled: bool = NotImplemented
@@ -122,7 +123,6 @@ class Mode:
         self.status = Status(calls=Status.Callbacks(on_ready=Callback(self._on_ready)))
 
         self.li.shell.calls.reset()
-        self.li.shell.calls.on_exit = Callback(self.on_shell_exit)
 
         self.status.shell_ready = True
 
@@ -140,21 +140,6 @@ class Mode:
         self.prompt.state = PromptState.NORMAL
         self.li.shell.set_prompt(self.prompt.as_str())
 
-    def load(self) -> None:
-        raise NotImplementedError()
-
-    def unload(self) -> None:
-        raise NotImplementedError()
-
-    def on_shell_exit(self) -> None:
-        self.stop()
-
-    def start(self) -> None:
-        raise NotImplementedError()
-
-    def stop(self) -> None:
-        pass
-
     def _get_env_dirs(self) -> List[Path]:
         ret = []
         path = Path(".").absolute()
@@ -170,18 +155,6 @@ class Mode:
 
         return ret
 
-    def on_precmd(self, command: str) -> str:
-        return command
-
-    def on_stdout(self, command: str, out: str) -> str:
-        return out
-
-    def on_stderr(self, command: str, out: str) -> str:
-        return out
-
-    def on_postcmd(self, command: str, stdout: List[str], stderr: List[str]) -> None:
-        pass
-
     def _create_env_object(self, file: Path) -> Env:
         def on_reloader_ready():
             self.status.reloader_ready=True
@@ -189,22 +162,33 @@ class Mode:
         def on_context_ready():
             self.status.context_ready=True
 
-        env_class = Env.build_env_from_file(file)
+        env_class = Env._build_env_from_file(file)
         env = env_class(self.li.shell,
                         calls=Env.Callbacks(restart=self.calls.restart,
                                             reloader_ready=Callback(on_reloader_ready),
-                                            context_ready=Callback(on_context_ready)),
+                                            context_ready=Callback(on_context_ready),
+                                            on_error=self.calls.on_error),
                         reloader_enabled=self.reloader_enabled)
         return env
 
 
 class NormalPrompt(PromptBase):
+    msg: str = ""
+
+    @property
+    def p_name(self) -> str:
+        return f"({self.name})" if self.name else ""
+
+    @property
+    def p_msg(self) -> str:
+        return f"{{BOLD_RED}}{self.msg}{{NO_COLOR}}\n" if self.msg else ""
+
     def __init__(self) -> None:
         super().__init__()
 
         self.state_prefix_map = {
-            PromptState.LOADING: lambda: f"{const.emojis['loading']}({self.name}){self.default}",
-            PromptState.NORMAL: lambda: f"{self.emoji}({self.name}){self.default}",
+            PromptState.LOADING: lambda: f"{self.p_msg}{const.emojis['loading']}{self.p_name}{self.default}",
+            PromptState.NORMAL: lambda: f"{self.p_msg}{self.emoji}{self.p_name}{self.default}",
         }
 
 
@@ -238,7 +222,7 @@ class HeadlessMode(Mode):
 
     def unload(self) -> None:
         if self.env:
-            self.env.unload()
+            self.env._unload()
 
         self.li.shell.calls.reset()
 
@@ -247,19 +231,18 @@ class HeadlessMode(Mode):
 
         self._create_env()
 
-        assert self.env
+        self.prompt = NormalPrompt()
+        self.prompt.state = PromptState.LOADING
+        self.prompt.emoji = self.env.meta.emoji
+        self.prompt.name = self.env.get_name()
+        self.prompt.msg = self.se.msg
+
+        self.li.shell.set_prompt(str(self.prompt))
 
         self.li.shell.set_variable("env", self.env)
         self.li.shell.set_variable("environ", os.environ)
 
-        self.env.load()
-
-    def on_shell_exit(self) -> None:
-        super(HeadlessMode, self).on_shell_exit()
-
-        functions = self.env.get_magic_functions()["ondestroy"]
-        for h in functions.values():
-            h()
+        self.env._load()
 
     def _find_env(self) -> Path:
         # TODO: Test this
@@ -288,9 +271,11 @@ class HeadlessMode(Mode):
 
         raise CantFindEnvFile()
 
-    def _create_env(self) -> None:
-        env_file = self._find_env()
+    def _get_env_file(self) -> Path:
+        return self._find_env()
 
+    def _create_env(self) -> None:
+        env_file = self._get_env_file()
         logger.debug(f'Creating Env from file "{env_file}"')
 
         # unload modules
@@ -325,60 +310,27 @@ class NormalMode(HeadlessMode):
         self.li = li
         self.calls = calls
 
-        self.prompt = NormalPrompt()
-
         logger.set_level(logging.Level.ERROR)
         logger.debug("Creating NormalMode")
 
-    def load(self) -> None:
-        super(NormalMode, self).load()
-        self.prompt.emoji = self.env.meta.emoji
-        self.prompt.name = self.env.get_name()
-
-        self.li.shell.set_prompt(str(self.prompt))
-
     def stop(self) -> None:
-        self.env.exit()
+        self.env._exit()
 
 
-class EmergencyPrompt(PromptBase):
-    msg: str
-
-    def __init__(self) -> None:
-        super(PromptBase, self).__init__()
-
-        self.emoji = const.emojis["emergency"]
-
-        self.state_prefix_map = {
-            PromptState.LOADING: lambda: f"{{BOLD_RED}}{self.msg}{{NO_COLOR}}\n{const.emojis['loading']}{self.default}",
-            PromptState.NORMAL: lambda: f"{{BOLD_RED}}{self.msg}{{NO_COLOR}}\n{self.emoji}{self.default}",
-        }
-
-
-class EmergencyMode(Mode):
+class EmergencyMode(HeadlessMode):
     @dataclass
     class Links(Mode.Links):
         pass
 
     @dataclass
     class Sets(Mode.Sets):
-        msg: str
+        pass
 
     @dataclass
     class Callbacks(Mode.Callbacks):
         pass
 
-    def _on_env_edit(self, event: Inotify.Event) -> None:
-        if "IN_CLOSE_WRITE" in event.type_names:
-            self._reload_lock.acquire()
-            self.files_watcher.stop()
-
-            logger.info('Reloading',
-                        metadata={"type": "reload", "event": event.type_names, "path": event.path.absolute.resolve()})
-
-            self.calls.restart()
-
-            self._reload_lock.release()
+    reloader_enabled: bool = True
 
     def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
         super().__init__(se=se, li=li, calls=calls)
@@ -387,43 +339,21 @@ class EmergencyMode(Mode):
         self.li = li
         self.calls = calls
 
-        self.prompt = EmergencyPrompt()
-        self.prompt.state = PromptState.NORMAL
-        self.prompt.msg = self.se.msg
-
-        self._reload_lock = Lock()
-
-        self.li.shell.set_prompt(str(self.prompt))
-
         logger.set_level(logging.Level.ERROR)
-
         logger.debug("Creating EmergencyMode")
 
-        self.files_watcher = Inotify(
-            Inotify.Sets(root=self.env_dirs[0], include=["env_*.py"],
-                         exclude=[r"**/.*", r"**/*~", r"**/__pycache__"]),
-            calls=Inotify.Callbacks(on_event=Callback(self._on_env_edit)),
-        )
-        self.files_watcher.start()
-        self.status.reloader_ready = True
+        self.li.shell.calls.on_exit = Callback(self.stop)
+
+    def _get_env_file(self) -> Path:
+        return Path(__file__).parent / "emergency_env.py"
+
+    def _create_env(self) -> None:
+        super()._create_env()
+
+        self.env.Meta.root = self.env_dirs[0]
 
     def stop(self) -> None:
-        self.files_watcher.stop()
-
-    def load(self) -> None:
-        def _load_context(self: EmergencyMode) -> None:
-            sleep(0.5)
-            self.status.context_ready = True
-
-            self.li.shell.set_context({"logger": logger})
-
-        if self.se.restart_nr != 0:
-            Thread(target=_load_context, args=(self,)).start()
-        else:
-            self.status.context_ready = True
-
-    def unload(self) -> None:
-        self.stop()
+        self.env._exit()
 
 
 class EnvoBase:
@@ -546,38 +476,28 @@ class Envo(EnvoBase):
             self.mode = NormalMode(
                 se=NormalMode.Sets(stage=self.se.stage, restart_nr=self.restart_count),
                 li=NormalMode.Links(shell=self.shell, envo=self),
-                calls=NormalMode.Callbacks(restart=Callback(self.restart)),
+                calls=NormalMode.Callbacks(restart=Callback(self.restart),
+                                           on_error=Callback(self.on_error)),
             )
             self.mode.load()
 
-        except (EnvoError, Exception) as exc:
-            logger.error(f"Cought {type(exc).__name__}", {"error_msg": str(exc)})
+        except BaseException as exc:
+            self.on_error(exc)
 
-            if isinstance(exc, EnvoError):
-                msg = str(exc)
-            else:
-                msg_raw = []
-                msg_raw.extend(traceback.format_stack(limit=25)[:-2])
-                msg_raw.extend(traceback.format_exception(*sys.exc_info())[1:])
-                msg_relevant = ["Traceback (Envo relevant):\n"]
-                relevant = False
-                for m in msg_raw:
-                    if re.search(r"env_.*\.py", m):
-                        relevant = True
-                    if relevant:
-                        msg_relevant.append(m)
+    def on_error(self, exc: BaseException) -> None:
+        msg = misc.get_envo_relevant_traceback(exc)
+        msg = "".join(msg)
+        msg = msg.rstrip()
 
-                if relevant:
-                    msg = "".join(msg_relevant).rstrip()
-                else:
-                    msg = "".join(msg_raw).rstrip() + "\n"
+        logger.error(msg)
 
-            self.mode = EmergencyMode(
-                se=EmergencyMode.Sets(stage=self.se.stage, restart_nr=self.restart_count, msg=msg),
-                li=EmergencyMode.Links(shell=self.shell, envo=self),
-                calls=EmergencyMode.Callbacks(restart=Callback(self.restart)),
-            )
-            self.mode.load()
+        self.mode = EmergencyMode(
+            se=EmergencyMode.Sets(stage=self.se.stage, restart_nr=self.restart_count, msg=msg),
+            li=EmergencyMode.Links(shell=self.shell, envo=self),
+            calls=EmergencyMode.Callbacks(restart=Callback(self.restart),
+                                          on_error=Callback(None)),
+        )
+        self.mode.load()
 
     def spawn_shell(self, type: Literal["fancy", "simple"]) -> None:
         """

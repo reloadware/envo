@@ -1,51 +1,53 @@
-import time
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, List, Tuple  # noqa: F401
+from typing import List, Dict, Any, Optional, Tuple  # noqa: F401
 
-import envo
+from pathlib import Path
+
+import envo  # noqa: F401
+
 from envo import (  # noqa: F401
-    Raw,
-    VirtualEnv,
-    boot_code,
+    logger,
     command,
     context,
-    logger,
-    onload,
-    onstderr,
-    onstdout,
-    onunload,
-    postcmd,
-    precmd,
+    Raw,
     run,
+    precmd,
+    onstdout,
+    onstderr,
+    postcmd,
+    onload,
+    oncreate,
+    onunload,
+    ondestroy,
+    boot_code,
+    Plugin,
+    VirtualEnv
 )
 
-# from typing import List
-
-
+# Declare your command namespaces here
+# like this:
+# my_namespace = command(namespace="my_namespace")
 
 trop = command(namespace="trop")
 
 
-@dataclass
-class EnvoEnvComm(VirtualEnv, envo.Env):
-    class Meta(envo.Env.Meta):
-        root = Path(__file__).parent
-        version = "0.1.0"
+class EnvoCommEnv(envo.BaseEnv):  # type: ignore
+    class Meta(envo.BaseEnv.Meta):  # type: ignore
+        root = Path(__file__).parent.absolute()
+        stage: str = "comm"
+        emoji: str = "👌"
+        parents: List[str] = []
+        plugins: List[Plugin] = []
+        name: str = "envo"
+        version: str = "0.1.0"
         watch_files: List[str] = []
-        ignore_files: List[str] = ["**/tests/**"]
-        parent = None
+        ignore_files: List[str] = []
 
     poetry_ver: str
-    poetry_ver4: str
     some_var: str
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
+    def __init__(self) -> None:
         self.poetry_ver = "1.0.5"
         self.some_var = "test"
-        self.poetry_ver4 = "fds"
 
     @trop
     def __bootstrap(self):
@@ -54,14 +56,20 @@ class EnvoEnvComm(VirtualEnv, envo.Env):
 
     @trop
     def __some_cmd(self):
-        print("trop lol")
+        # run("echo 'test' && sleep 2 && echo 'test 2'")
+        a = 1/0
+
+    @onload
+    def __on_load(self) -> None:
+        import time
+        return
 
     @boot_code
     def __boot(self) -> List[str]:
         return [
-            "import math"
+            "import math",
         ]
 
 
-Env = EnvoEnvComm
+Env = EnvoCommEnv
 
