@@ -125,6 +125,22 @@ class TestCommands(utils.TestBase):
         s.close()
         assert s.exitstatus == 127
 
+    def test_single_command_command_fail_traceback(self):
+        utils.add_command(
+            """
+            @command
+            def some_cmd(self) -> None:
+                a = 1/0
+                return a
+            """
+        )
+
+        s = utils.pexpect_spaw("""envo test -c "some_cmd" """)
+        s.expect(r".*Traceback .*ZeroDivisionError: division by zero")
+        s.expect(pexpect.EOF)
+        s.close()
+        assert s.exitstatus == 1
+
     def test_headless_error(self):
         s = utils.pexpect_spaw("""envo some_env -c "print('test')" """)
         s.expect(pexpect.EOF)
@@ -191,6 +207,50 @@ class TestCommands(utils.TestBase):
 
         shell.sendline("test_namespace.mypy()")
         e.output(r"Mypy all good\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_namespaces_shadowing(self, shell, env_test_file, env_comm_file):
+        namespace_name = "test_namespace"
+
+        utils.add_namespace(namespace_name, file=env_test_file)
+        utils.add_command(
+        f"""
+        @test_namespace.command
+        def __some_cmd(self, test_arg: str = "") -> str:
+            print("from env_test!")
+            return "from env_test!"
+        """,
+        file=env_test_file
+    )
+
+        utils.add_command(
+            f"""
+                @command
+                def __some_cmd(self, test_arg: str = "") -> str:
+                    print("from env_comm!")
+                    return "from env_comm!"
+                """,
+            file=env_comm_file
+        )
+
+        shell.start()
+        e = shell.expecter
+
+        e.prompt().eval()
+
+        shell.sendline("test_namespace.some_cmd")
+        e.output(r"from env_test!\nfrom env_test!\n").prompt().eval()
+
+        shell.sendline("test_namespace.some_cmd()")
+        e.output(r"from env_test!\n'from env_test!'\n").prompt().eval()
+
+        shell.sendline("some_cmd")
+        e.output(r"from env_comm!\nfrom env_comm!\n").prompt().eval()
+
+        shell.sendline("some_cmd()")
+        e.output(r"from env_comm!\n'from env_comm!'\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()

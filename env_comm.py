@@ -20,14 +20,15 @@ from envo import (  # noqa: F401
     ondestroy,
     boot_code,
     Plugin,
-    VirtualEnv
+    VirtualEnv,
+    Namespace
 )
 
 # Declare your command namespaces here
 # like this:
 # my_namespace = command(namespace="my_namespace")
 
-trop = command(namespace="trop")
+trop = Namespace("trop")
 
 
 class EnvoCommEnv(envo.BaseEnv):  # type: ignore
@@ -49,15 +50,20 @@ class EnvoCommEnv(envo.BaseEnv):  # type: ignore
         self.poetry_ver = "1.0.5"
         self.some_var = "test"
 
-    @trop
+    @trop.command
     def __bootstrap(self):
         run(f"pip install poetry=={self.poetry_ver}")
         run("poetry install")
 
-    @trop
+    @trop.command
     def __some_cmd(self):
-        # run("echo 'test' && sleep 2 && echo 'test 2'")
-        a = 1/0
+        run("echo 'test' && sleep 2 && echo 'test 2'")
+
+    @trop.context
+    def __some_context(self):
+        return {
+            "df": 123
+        }
 
     @onload
     def __on_load(self) -> None:

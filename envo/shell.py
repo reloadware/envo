@@ -108,6 +108,10 @@ class Shell(BaseShell):  # type: ignore
         """
         self.context[name] = value
 
+        if "." in name:
+            namespace = name.split(".")[0]
+            self.add_namespace_if_not_exists(namespace)
+
         max_lenght = 50
         log_value = str(value) if len(str(value)) < max_lenght else f"{str(value)[0:max_lenght]}(...)"
         log_value = log_value.replace("{", "{{")
@@ -130,6 +134,9 @@ class Shell(BaseShell):  # type: ignore
             fire.Fire(fun)
         finally:
             sys.argv = argv_before
+
+    def add_namespace_if_not_exists(self, name: str) -> None:
+        self.run_code(f'class Namespace: pass\n{name} = Namespace() if "{name}" not in globals() else {name}')
 
     def set_context(self, context: Dict[str, Any]) -> None:
         for k, v in context.items():
@@ -177,7 +184,8 @@ class Shell(BaseShell):  # type: ignore
         load_builtins(ctx=ctx, execer=execer)
         env = builtins.__xonsh__.env  # type: ignore
         env.update({"XONSH_INTERACTIVE": True, "SHELL_TYPE": "prompt_toolkit",
-                    "COMPLETIONS_BRACKETS": False})
+                    "COMPLETIONS_BRACKETS": False,
+                    "XONSH_SHOW_TRACEBACK": True})
 
         if "ENVO_SHELL_NOHISTORY" not in os.environ:
             builtins.__xonsh__.history = xhm.construct_history(  # type: ignore
@@ -283,6 +291,7 @@ class FancyShell(Shell, PromptToolkitShell):  # type: ignore
             self.prompter.output.get_size = lambda: Size(50, 200)
 
         self.calls.on_enter()
+
         self.cmdloop()
 
         self.calls.on_exit()

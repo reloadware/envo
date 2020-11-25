@@ -90,88 +90,6 @@ class CantFindEnvFile(EnvoError):
         super().__init__("Couldn't find any env!\n" 'Forgot to run envo --init" first?')
 
 
-class Mode:
-    @dataclass
-    class Links:
-        shell: Shell
-        envo: "EnvoBase"
-
-    @dataclass
-    class Sets:
-        stage: str
-        restart_nr: int
-        msg: str = ""
-
-    @dataclass
-    class Callbacks:
-        restart: Callback
-        on_error: Callback
-
-    prompt: PromptBase = NotImplemented
-    reloader_enabled: bool = NotImplemented
-
-    def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
-        self.se = se
-        self.li = li
-        self.calls = calls
-
-        self.env_dirs = self._get_env_dirs()
-
-        if not self.env_dirs:
-            raise CantFindEnvFile
-
-        self.status = Status(calls=Status.Callbacks(on_ready=Callback(self._on_ready)))
-
-        self.li.shell.calls.reset()
-
-        self.status.shell_ready = True
-
-        try:
-            sys.path.remove(str(self.env_dirs[0]))
-        except ValueError:
-            pass
-        sys.path.insert(0, str(self.env_dirs[0]))
-
-    def __del__(self) -> None:
-        env_dir = str(self.env_dirs[0])
-        sys.path.remove(env_dir) if env_dir in sys.path else None
-
-    def _on_ready(self) -> None:
-        self.prompt.state = PromptState.NORMAL
-        self.li.shell.set_prompt(self.prompt.as_str())
-
-    def _get_env_dirs(self) -> List[Path]:
-        ret = []
-        path = Path(".").absolute()
-        while True:
-            if path == Path("/"):
-                break
-
-            for p in path.glob("env_*.py"):
-                if p.parent not in ret:
-                    ret.append(p.parent)
-
-            path = path.parent
-
-        return ret
-
-    def _create_env_object(self, file: Path) -> Env:
-        def on_reloader_ready():
-            self.status.reloader_ready=True
-
-        def on_context_ready():
-            self.status.context_ready=True
-
-        env_class = Env._build_env_from_file(file)
-        env = env_class(self.li.shell,
-                        calls=Env.Callbacks(restart=self.calls.restart,
-                                            reloader_ready=Callback(on_reloader_ready),
-                                            context_ready=Callback(on_context_ready),
-                                            on_error=self.calls.on_error),
-                        reloader_enabled=self.reloader_enabled)
-        return env
-
-
 class NormalPrompt(PromptBase):
     msg: str = ""
 
@@ -192,27 +110,46 @@ class NormalPrompt(PromptBase):
         }
 
 
-class HeadlessMode(Mode):
+class HeadlessMode:
     @dataclass
-    class Links(Mode.Links):
-        pass
+    class Links:
+        shell: Shell
+        envo: "EnvoBase"
 
     @dataclass
-    class Sets(Mode.Sets):
-        pass
+    class Sets:
+        stage: str
+        restart_nr: int
+        msg: str = ""
 
     @dataclass
-    class Callbacks(Mode.Callbacks):
-        pass
+    class Callbacks:
+        restart: Callback
+        on_error: Callback
 
     env: Env
     reloader_enabled: bool = False
+    blocking: bool = True
 
     def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
-        super(HeadlessMode, self).__init__(se=se, li=li, calls=calls)
         self.se = se
         self.li = li
         self.calls = calls
+
+        self.env_dirs = self._get_env_dirs()
+
+        if not self.env_dirs:
+            raise CantFindEnvFile
+
+        self.status = Status(calls=Status.Callbacks(on_ready=Callback(self._on_ready)))
+
+        self.li.shell.calls.reset()
+
+        try:
+            sys.path.remove(str(self.env_dirs[0]))
+        except ValueError:
+            pass
+        sys.path.insert(0, str(self.env_dirs[0]))
 
         self.env = None
 
@@ -220,13 +157,32 @@ class HeadlessMode(Mode):
 
         logger.debug("Creating Headless Mode")
 
+    def _on_ready(self) -> None:
+        self.prompt.state = PromptState.NORMAL
+        self.li.shell.set_prompt(self.prompt.as_str())
+
+    def _get_env_dirs(self) -> List[Path]:
+        ret = []
+        path = Path(".").absolute()
+        while True:
+            if path == Path("/"):
+                break
+
+            for p in path.glob("env_*.py"):
+                if p.parent not in ret:
+                    ret.append(p.parent)
+
+            path = path.parent
+
+        return ret
+
     def unload(self) -> None:
         if self.env:
             self.env._unload()
 
         self.li.shell.calls.reset()
 
-    def load(self) -> None:
+    def init(self) -> None:
         self.li.shell.set_context({"logger": logger})
 
         self._create_env()
@@ -242,7 +198,8 @@ class HeadlessMode(Mode):
         self.li.shell.set_variable("env", self.env)
         self.li.shell.set_variable("environ", os.environ)
 
-        self.env._load()
+    def load(self):
+        self.env.load()
 
     def _find_env(self) -> Path:
         # TODO: Test this
@@ -274,6 +231,24 @@ class HeadlessMode(Mode):
     def _get_env_file(self) -> Path:
         return self._find_env()
 
+    def _create_env_object(self, file: Path) -> Env:
+        def on_reloader_ready():
+            self.status.reloader_ready=True
+
+        def on_context_ready():
+            self.status.context_ready=True
+
+        env_class = Env._build_env_from_file(file)
+        env = env_class(self.li.shell,
+                        calls=Env.Callbacks(restart=self.calls.restart,
+                                            reloader_ready=Callback(on_reloader_ready),
+                                            context_ready=Callback(on_context_ready),
+                                            on_error=self.calls.on_error),
+                        reloader_enabled=self.reloader_enabled,
+                        blocking=self.blocking)
+        return env
+
+
     def _create_env(self) -> None:
         env_file = self._get_env_file()
         logger.debug(f'Creating Env from file "{env_file}"')
@@ -303,6 +278,7 @@ class NormalMode(HeadlessMode):
 
     env: Env
     reloader_enabled: bool = True
+    blocking: bool = False
 
     def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
         super(NormalMode, self).__init__(se=se, li=li, calls=calls)
@@ -319,18 +295,19 @@ class NormalMode(HeadlessMode):
 
 class EmergencyMode(HeadlessMode):
     @dataclass
-    class Links(Mode.Links):
+    class Links(HeadlessMode.Links):
         pass
 
     @dataclass
-    class Sets(Mode.Sets):
+    class Sets(HeadlessMode.Sets):
         pass
 
     @dataclass
-    class Callbacks(Mode.Callbacks):
+    class Callbacks(HeadlessMode.Callbacks):
         pass
 
     reloader_enabled: bool = True
+    blocking: bool = False
 
     def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
         super().__init__(se=se, li=li, calls=calls)
@@ -362,7 +339,7 @@ class EnvoBase:
         stage: str
 
     shell: shell.Shell
-    mode: Optional[Mode]
+    mode: Optional[HeadlessMode]
 
     def __init__(self, se: Sets):
         self.se = se
@@ -375,17 +352,7 @@ class EnvoBase:
         raise NotImplementedError()
 
     def single_command(self, command: str) -> None:
-        self.shell = shell.shells["headless"].create()
-        self.restart()
-
-        try:
-            self.shell.default(command)
-        except SystemExit as e:
-            sys.exit(e.code)
-        else:
-            sys.exit(self.shell.history[-1].rtn)
-        finally:
-            self.mode.unload()
+        raise NotImplementedError()
 
     def dry_run(self) -> None:
         raise NotImplementedError()
@@ -409,16 +376,20 @@ class EnvoHeadless(EnvoBase):
 
         self.restart_count = -1
 
-    def restart(self, *args: Any, **kwargs: Any) -> None:
+    def on_error(self) -> None:
+        pass
+
+    def init(self, *args: Any, **kwargs: Any) -> None:
         self.restart_count += 1
         self.shell.reset()
 
         self.mode = HeadlessMode(
             se=HeadlessMode.Sets(stage=self.se.stage, restart_nr=self.restart_count),
-            calls=HeadlessMode.Callbacks(restart=Callback(self.restart)),
+            calls=HeadlessMode.Callbacks(restart=Callback(self.restart),
+                                         on_error=Callback(self.on_error)),
             li=HeadlessMode.Links(shell=self.shell, envo=self),
         )
-        self.mode.load()
+        self.mode.init()
 
     def single_command(self, command: str) -> None:
         self.shell = shell.shells["headless"].create()
@@ -456,7 +427,7 @@ class Envo(EnvoBase):
     env_dirs: List[Path]
     quit: bool
     env: Env
-    mode: Mode
+    mode: HeadlessMode
 
     def __init__(self, se: Sets) -> None:
         super().__init__(se)
@@ -465,7 +436,7 @@ class Envo(EnvoBase):
         self.environ_before = os.environ.copy()  # type: ignore
         logger.set_level(logging.Level.ERROR)
 
-    def restart(self, *args: Any, **kwargs: Any) -> None:
+    def init(self, *args: Any, **kwargs: Any) -> None:
         self.restart_count += 1
         try:
             self.shell.reset()
@@ -504,7 +475,6 @@ class Envo(EnvoBase):
         :param type: shell type
         """
         self.shell = shell.shells[type].create()
-
         self.restart()
         self.shell.start()
         self.mode.unload()
@@ -602,7 +572,7 @@ def _main() -> None:
             envo.e2e.envo = e = Envo(Envo.Sets(stage=args.stage))
             e.handle_command(args)
     except EnvoError as e:
-        logger.error(str(e))
+        logger.error(str(e), print_msg=True)
         sys.exit(1)
 
 

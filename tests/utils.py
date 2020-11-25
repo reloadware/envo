@@ -91,14 +91,16 @@ def add_hook(code: str, file=Path("env_test.py")) -> None:
 
 
 def add_namespace(name: str, file=Path("env_test.py")) -> None:
-    replace_in_code("# Declare your command namespaces here", f'{name} = command(namespace="{name}")',
+    replace_in_code("# Declare your command namespaces here", f'{name} = Namespace("{name}")',
                                                                 file=file)
 
 
-def add_flake_cmd(file=Path("env_test.py"), namespace="command", message="Flake all good") -> None:
+def add_flake_cmd(file=Path("env_test.py"), namespace=None, message="Flake all good") -> None:
+    namespaced_command = f"{namespace}.command" if namespace else "command"
+
     add_command(
         f"""
-        @{namespace}
+        @{namespaced_command}
         def __flake(self, test_arg: str = "") -> str:
             print("{message}" + test_arg)
             return "Flake return value"
@@ -107,10 +109,12 @@ def add_flake_cmd(file=Path("env_test.py"), namespace="command", message="Flake 
     )
 
 
-def add_mypy_cmd(file=Path("env_test.py"), namespace="command", message="Mypy all good") -> None:
+def add_mypy_cmd(file=Path("env_test.py"), namespace=None, message="Mypy all good") -> None:
+    namespaced_command = f"{namespace}.command" if namespace else "command"
+
     add_command(
         f"""
-        @{namespace}
+        @{namespaced_command}
         def __mypy(self, test_arg: str = "") -> None:
             print("{message}" + test_arg)
         """,
@@ -118,11 +122,13 @@ def add_mypy_cmd(file=Path("env_test.py"), namespace="command", message="Mypy al
     )
 
 
-def add_context(context: Dict[str, Any], name: str = "some_context", file=Path("env_test.py")) -> None:
+def add_context(context: Dict[str, Any], name: str = "some_context", namespace=None, file=Path("env_test.py")) -> None:
+    namespaced_context = f"{namespace}.context" if namespace else "context"
+
     context_str = json.dumps(context)
     add_command(
         f"""
-        @context
+        @{namespaced_context}
         def {name}(self) -> Dict[str, Any]:
             return {context_str}
         """,
@@ -143,7 +149,7 @@ def add_boot(boot_codes: List[str], name: str = "some_boot", file=Path("env_test
     )
 
 
-def add_plugins(name: str) -> None:
+def add_plugins(name: str, file=Path("env_test.py")) -> None:
     replace_in_code(
-        "plugins: List[Plugin] = []", f"plugins: List[Plugin] = [{name}]",
+        "plugins: List[Plugin] = []", f"plugins: List[Plugin] = [{name}]", file=file
     )

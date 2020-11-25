@@ -44,7 +44,8 @@ __all__ = [
     "onload",
     "onunload",
     "ondestroy",
-    "boot_code"
+    "boot_code",
+    "Namespace",
 ]
 
 
@@ -74,6 +75,7 @@ class MagicFunction:
     func: Callable
     kwargs: Dict[str, Any]
     expected_fun_args: List[str]
+    namespace: str = ""
     env: Optional["Env"] = field(init=False, default=None)
 
     def __post_init__(self) -> None:
@@ -122,11 +124,17 @@ class MagicFunction:
         if missing_args:
             raise EnvoError(f"Missing magic function args {list(missing_args)}:\n" f"{func_info}")
 
+    @property
+    def namespaced_name(self):
+        name = self.name
+        name = name.lstrip("_")
+
+        namespace = f"{self.namespace}." if self.namespace else ""
+        return namespace + name
+
 
 @dataclass
 class Command(MagicFunction):
-    namespace: str = field(init=False, default=None)
-
     def call(self) -> str:
         assert self.env is not None
         cwd = Path(".").absolute()
@@ -152,6 +160,8 @@ class magic_function:  # noqa: N801
     kwargs: Dict[str, Any]
     default_kwargs: Dict[str, Any] = {}
     expected_fun_args: List[str] = []
+    type: str
+    namespace: str = ""
 
     def __call__(self, func: Callable) -> Callable:
         kwargs = self.default_kwargs.copy()
@@ -161,8 +171,9 @@ class magic_function:  # noqa: N801
             name=func.__name__,
             kwargs=kwargs,
             func=func,
-            type=self.__class__.__name__,
+            type=self.type,
             expected_fun_args=self.expected_fun_args,
+            namespace=self.namespace
         )
 
     def __new__(cls, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
@@ -174,8 +185,9 @@ class magic_function:  # noqa: N801
                 name=func.__name__,
                 kwargs=kwargs,
                 func=func,
-                type=cls.__name__,
+                type=cls.type,
                 expected_fun_args=cls.expected_fun_args,
+                namespace=cls.namespace
             )
         else:
             obj = super().__new__(cls)
@@ -191,16 +203,17 @@ class command(magic_function):  # noqa: N801
     """
     @command decorator class.
     """
-
     klass = Command
-    default_kwargs = {"namespace": ""}
+    type: str = "command"
 
-    def __init__(self, namespace: str = "") -> None:
-        super().__init__(namespace=namespace)  # type: ignore
+    def __init__(self) -> None:
+        super().__init__()  # type: ignore
 
 
 # decorators
 class boot_code(magic_function):  # noqa: N801
+    type: str = "boot_code"
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
@@ -211,19 +224,19 @@ class event(magic_function):  # noqa: N801
 
 
 class onload(event):  # noqa: N801
-    pass
+    type: str = "onload"
 
 
 class oncreate(event):  # noqa: N801
-    pass
+    type: str = "oncreate"
 
 
 class ondestroy(event):  # noqa: N801
-    pass
+    type: str = "ondestroy"
 
 
 class onunload(event):  # noqa: N801
-    pass
+    type: str = "onunload"
 
 
 @dataclass
@@ -241,24 +254,47 @@ class cmd_hook(magic_function):  # noqa: N801
 
 
 class precmd(cmd_hook):  # noqa: N801
+    type: str = "precmd"
     expected_fun_args = ["command"]
 
 
 class onstdout(cmd_hook):  # noqa: N801
+    type: str = "onstdout"
     expected_fun_args = ["command", "out"]
 
 
 class onstderr(cmd_hook):  # noqa: N801
+    type: str = "onstderr"
     expected_fun_args = ["command", "out"]
 
 
 class postcmd(cmd_hook):  # noqa: N801
+    type: str = "postcmd"
     expected_fun_args = ["command", "stdout", "stderr"]
 
 
 class context(magic_function):  # noqa: N801
+    type: str = "context"
+
     def __init__(self) -> None:
         super().__init__()
+
+
+class Namespace:
+    command: Type[command]
+    context: Type[context]
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+        class namespaced_command(command):
+            namespace = self.name
+
+        class namespaced_context(context):
+            namespace = self.name
+
+        self.context = namespaced_context
+        self.command = namespaced_command
 
 
 @dataclass
@@ -317,9 +353,12 @@ class Env(BaseFields):
     ]
 
     def __init__(self, shell: Optional["Shell"], calls: Callbacks,
-                 reloader_enabled: bool=True) -> None:
+                 reloader_enabled: bool=True,
+                 blocking: bool=False) -> None:
         super().__init__()
         self._calls = calls
+
+        self._blocking = blocking
 
         self._reloader_enabled = reloader_enabled
         self._shell = shell
@@ -369,6 +408,13 @@ class Env(BaseFields):
         self._magic_functions["command"]: Dict[str, Command] = {}
 
         self._collect_magic_functions()
+
+        self._shell.calls.pre_cmd = Callback(self._on_precmd)
+        self._shell.calls.on_stdout = Callback(self._on_stdout)
+        self._shell.calls.on_stderr = Callback(self._on_stderr)
+        self._shell.calls.post_cmd = Callback(self._on_postcmd)
+        self._shell.calls.post_cmd = Callback(self._on_postcmd)
+        self._shell.calls.on_exit = Callback(self._on_destroy)
 
         for p in self.__class__.__mro__:
             if "InheritedEnv" in str(p):
@@ -504,24 +550,13 @@ class Env(BaseFields):
 
         return "\n".join(ret) + "\n"
 
-    def _add_namespace_if_not_exists(self, name: str) -> None:
-        self._shell.run_code(f'class Namespace: pass\n{name} = Namespace() if "{name}" not in globals() else {name}')
-
-    def _load(self) -> None:
+    def load(self) -> None:
         """
         Called after creation and reload.
         :return:
         """
         def thread(self: Env) -> None:
             logger.debug("Starting onload thread")
-
-            self._shell.calls.on_enter = Callback(self._on_create)
-            self._shell.calls.pre_cmd = Callback(self._on_precmd)
-            self._shell.calls.on_stdout = Callback(self._on_stdout)
-            self._shell.calls.on_stderr = Callback(self._on_stderr)
-            self._shell.calls.post_cmd = Callback(self._on_postcmd)
-            self._shell.calls.post_cmd = Callback(self._on_postcmd)
-            self._shell.calls.on_exit = Callback(self._on_destroy)
 
             if self._reloader_enabled:
                 self._start_watchers()
@@ -543,21 +578,31 @@ class Env(BaseFields):
 
             # declare commands
             for name, c in self._magic_functions["command"].items():
-                if c.namespace:
-                    self._add_namespace_if_not_exists(c.namespace)
                 self._shell.set_variable(name, c)
 
+            # set context
             self._shell.set_context(self._get_context())
-
             while sw.value <= 0.5:
                 sleep(0.1)
 
             logger.debug("Finished load context thread")
             self._calls.context_ready()
 
-        Thread(target=thread, args=(self,)).start()
+        if not self._blocking:
+            Thread(target=thread, args=(self,)).start()
+        else:
+            thread(self)
 
-    def _on_create(self) -> None:
+    def _get_context(self) -> Dict[str, Any]:
+        context = {}
+        for c in self._magic_functions["context"].values():
+            for k, v in c().items():
+                namespaced_name = f"{c.namespace}.{k}" if c.namespace else k
+                context[namespaced_name] = v
+
+        return context
+
+    def on_shell_create(self) -> None:
         """
         Called only after creation.
         :return:
@@ -650,7 +695,10 @@ class Env(BaseFields):
                 tmp_environ = copy(self._shell.environ)
                 for i, v in tmp_environ.items():
                     self._shell.environ.pop(i)
-                self._shell.environ.update(**self._shell_environ_before)
+                for k, v in self._shell_environ_before.items():
+                    if v is None:
+                        continue
+                    self._shell.environ[k] = v
 
     def dump_dot_env(self) -> Path:
         """
@@ -689,15 +737,6 @@ class Env(BaseFields):
             parents.extend(cls._get_parents_env(parent))
         return parents
 
-    def _get_context(self) -> Dict[str, Any]:
-        context = {}
-        functions = self._magic_functions["context"]
-
-        for c in functions.values():
-            context.update(c())
-
-        return context
-
     def _collect_magic_functions(self) -> None:
         """
         Go through fields and transform decorated functions to commands.
@@ -708,18 +747,9 @@ class Env(BaseFields):
 
             attr = getattr(self, f)
 
-            if isinstance(attr, Command):
-                name = attr.name
-                name = name.lstrip("_")
-
+            if isinstance(attr, MagicFunction):
                 attr.env = self
-                namespace = f"{attr.namespace}." if attr.namespace else ""
-                self._magic_functions[attr.type][f"{namespace}{name}"] = attr
-            elif isinstance(attr, MagicFunction):
-                name = f
-
-                attr.env = self
-                self._magic_functions[attr.type][name] = attr
+                self._magic_functions[attr.type][attr.namespaced_name] = attr
 
     def get_repr(self) -> str:
         ret = []
@@ -751,8 +781,8 @@ class Env(BaseFields):
         self._executing_cmd = True
 
         if self._is_python_fire_cmd(command):
-            cmd_name = command.split()[0]
-            return f'__envo__execute_with_fire__({cmd_name}, "{command}")'
+            fun = command.split()[0]
+            return f'__envo__execute_with_fire__({fun}, "{command}")'
 
         return command
 

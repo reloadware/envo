@@ -53,3 +53,12 @@ def default_shell() -> utils.Spawn:
     yield s
     s.on_exit()
 
+
+@fixture
+def env_test_file() -> Path:
+    return Path("env_test.py")
+
+
+@fixture
+def env_comm_file() -> Path:
+    return Path("env_comm.py")
