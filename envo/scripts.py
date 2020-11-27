@@ -37,13 +37,11 @@ class Status:
 
     _context_ready: bool
     _reloader_ready: bool
-    _shell_ready: bool
 
     def __init__(self, calls: Callbacks) -> None:
         self.calls = calls
         self._context_ready = False
         self._reloader_ready = False
-        self._shell_ready = False
 
     @property
     def context_ready(self) -> bool:
@@ -66,18 +64,8 @@ class Status:
         self._on_status_change()
 
     @property
-    def shell_ready(self) -> bool:
-        return self._shell_ready
-
-    @shell_ready.setter
-    def shell_ready(self, value: bool) -> None:
-        self._shell_ready = value
-        logger.debug(f"Shell ready", {"ready": value})
-        self._on_status_change()
-
-    @property
     def ready(self) -> bool:
-        return self.context_ready and self.reloader_ready and self.shell_ready
+        return self.context_ready and self.reloader_ready
 
     def _on_status_change(self) -> None:
         if self.ready:
@@ -143,8 +131,6 @@ class HeadlessMode:
 
         self.status = Status(calls=Status.Callbacks(on_ready=Callback(self._on_ready)))
 
-        self.li.shell.calls.reset()
-
         try:
             sys.path.remove(str(self.env_dirs[0]))
         except ValueError:
@@ -198,9 +184,6 @@ class HeadlessMode:
         self.li.shell.set_variable("env", self.env)
         self.li.shell.set_variable("environ", os.environ)
 
-    def load(self):
-        self.env.load()
-
     def _find_env(self) -> Path:
         # TODO: Test this
         if self.se.stage:
@@ -247,7 +230,6 @@ class HeadlessMode:
                         reloader_enabled=self.reloader_enabled,
                         blocking=self.blocking)
         return env
-
 
     def _create_env(self) -> None:
         env_file = self._get_env_file()
@@ -348,8 +330,12 @@ class EnvoBase:
 
         self.restart_count = -1
 
-    def restart(self, *args: Any, **kwargs: Any) -> None:
+    def init(self, *args: Any, **kwargs: Any) -> None:
         raise NotImplementedError()
+
+    def restart(self) -> None:
+        self.init()
+        self.mode.env.load()
 
     def single_command(self, command: str) -> None:
         raise NotImplementedError()
@@ -390,10 +376,11 @@ class EnvoHeadless(EnvoBase):
             li=HeadlessMode.Links(shell=self.shell, envo=self),
         )
         self.mode.init()
+        self.mode.env.load()
 
     def single_command(self, command: str) -> None:
-        self.shell = shell.shells["headless"].create()
-        self.restart()
+        self.shell = shell.shells["headless"].create(Shell.Callbacs())
+        self.init()
 
         try:
             self.shell.default(command)
@@ -405,14 +392,14 @@ class EnvoHeadless(EnvoBase):
             self.mode.unload()
 
     def dry_run(self) -> None:
-        self.shell = shell.shells["headless"].create()
-        self.restart()
+        self.shell = shell.shells["headless"].create(Shell.Callbacs())
+        self.init()
         content = "\n".join([f'export {k}="{v}"' for k, v in self.mode.env.get_env_vars().items()])
         print(content)
 
     def save(self) -> None:
-        self.shell = shell.shells["headless"].create()
-        self.restart()
+        self.shell = shell.shells["headless"].create(Shell.Callbacs())
+        self.init()
         path = self.mode.env.dump_dot_env()
         logger.info(f"Saved envs to {str(path)} 💾", print_msg=True)
 
@@ -450,7 +437,7 @@ class Envo(EnvoBase):
                 calls=NormalMode.Callbacks(restart=Callback(self.restart),
                                            on_error=Callback(self.on_error)),
             )
-            self.mode.load()
+            self.mode.init()
 
         except BaseException as exc:
             self.on_error(exc)
@@ -462,20 +449,31 @@ class Envo(EnvoBase):
 
         logger.error(msg)
 
+        if self.mode:
+            self.mode.unload()
+
         self.mode = EmergencyMode(
             se=EmergencyMode.Sets(stage=self.se.stage, restart_nr=self.restart_count, msg=msg),
             li=EmergencyMode.Links(shell=self.shell, envo=self),
             calls=EmergencyMode.Callbacks(restart=Callback(self.restart),
                                           on_error=Callback(None)),
         )
-        self.mode.load()
+        self.mode.init()
+        self.mode.env.load()
 
     def spawn_shell(self, type: Literal["fancy", "simple"]) -> None:
         """
         :param type: shell type
         """
-        self.shell = shell.shells[type].create()
-        self.restart()
+        def on_ready():
+            pass
+
+        self.shell = shell.shells[type].create(calls=Shell.Callbacs(on_ready=Callback(on_ready)))
+        self.init()
+
+        self.mode.env.on_shell_create()
+        self.mode.env.load()
+
         self.shell.start()
         self.mode.unload()
 

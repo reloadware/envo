@@ -37,12 +37,8 @@ class EnvoCommEnv(envo.BaseEnv):  # type: ignore
         watch_files: List[str] = []
         ignore_files: List[str] = []
 
-    poetry_ver: str
-    some_var: str
-
     def __init__(self) -> None:
-        self.poetry_ver = "1.0.5"
-        self.some_var = "test"
+        pass
 
 
 Env = EnvoCommEnv

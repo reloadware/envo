@@ -12,7 +12,7 @@ from pathlib import Path
 from subprocess import Popen
 from threading import Thread
 from time import sleep
-from typing import TYPE_CHECKING, List, Optional, Type
+from typing import TYPE_CHECKING, List, Optional, Type, Any
 
 import pexpect
 import pyte
@@ -22,7 +22,7 @@ import requests
 from rhei import Stopwatch
 from stickybeak import Injector
 
-from envo import const
+from envo import const, Env
 from envo.e2e import STICKYBEAK_PORT
 from envo.logging import Logger
 from envo.shell import PromptBase
@@ -172,6 +172,16 @@ class Spawn:
             return logger
 
         @classmethod
+        def get_env_field(cls, field: str) -> Any:
+            import envo.e2e
+            return getattr(envo.e2e.envo.mode.env, field)
+
+        @classmethod
+        def get_sys_path(cls) -> List[str]:
+            import sys
+            return sys.path
+
+        @classmethod
         def wait_until_ready(cls, timeout=1) -> None:
             from time import sleep
 
@@ -197,7 +207,7 @@ class Spawn:
             sleep(0.2)
 
         @classmethod
-        def assert_reloaded(cls, number: int = 1, path="env_test.py", timeout=1) -> None:
+        def assert_reloaded(cls, number: int = 1, path="env_test.py", timeout=2) -> None:
             from time import sleep
 
             from envo import logger, logging

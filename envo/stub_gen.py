@@ -46,6 +46,7 @@ class Field:
     def __eq__(self, other) -> bool:
         return self.name == other.name
 
+
 @dataclass
 class Method:
     name: str
@@ -79,7 +80,7 @@ class StubGen:
 
     def generate(self) -> None:
         self._generate_env()
-        for p in self.env._parents:
+        for p in self.env.get_user_envs():
             self._generate_parent(p)
 
     def _get_fields_for_obj(self, obj: Type["Env"]) -> List[Field]:
@@ -181,9 +182,8 @@ class StubGen:
         file = Path(f"{str(self.env.root.absolute())}/env_{self.env.stage}.pyi")
         misc.render(template, file, {"ctx": ctx})
 
-    def _generate_parent(self, parent: Type["Env"]) -> None:
+    def _generate_parent(self, parent: Type["BaseEnv"]) -> None:
         ctx = self._ctx_from_env(parent)
 
         file = Path(f"{str(parent.Meta.root.absolute())}/env_{parent.Meta.stage}.pyi")
         misc.render(template, file, {"ctx": ctx})
-

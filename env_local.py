@@ -49,9 +49,6 @@ class EnvoLocalEnv(BaseEnv):  # type: ignore
 
         # Define your variables here
 
-    def init(self) -> None:
-        VirtualEnv.init(self, venv_dir=".venv")
-
     @onload
     def _dump_env(self) -> None:
         self.dump_dot_env()

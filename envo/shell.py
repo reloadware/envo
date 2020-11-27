@@ -64,6 +64,7 @@ class Shell(BaseShell):  # type: ignore
         post_cmd: Callback = Callback(None)
         on_enter: Callback = Callback(None)
         on_exit: Callback = Callback(None)
+        on_ready: Callback = Callback(None)
 
         def reset(self) -> None:
             self.pre_cmd = Callback(None)
@@ -73,13 +74,14 @@ class Shell(BaseShell):  # type: ignore
             self.post_cmd = Callback(None)
             self.on_enter = Callback(None)
             self.on_exit = Callback(None)
+            self.on_ready = Callback(None)
 
-    def __init__(self, execer: Execer) -> None:
+    def __init__(self, calls: Callbacs, execer: Execer) -> None:
         super().__init__(execer=execer, ctx={})
 
         logger.debug(f"Shell __init__")
 
-        self.calls = self.Callbacs()
+        self.calls = calls
 
         self.environ = builtins.__xonsh__.env  # type: ignore
         self.history = builtins.__xonsh__.history  # type: ignore
@@ -167,7 +169,7 @@ class Shell(BaseShell):  # type: ignore
         return str(ansi_partial_color_format(super().prompt))
 
     @classmethod
-    def create(cls) -> "Shell":
+    def create(cls, calls: Callbacs) -> "Shell":
         import signal
 
         import xonsh.history.main as xhm
@@ -203,7 +205,7 @@ class Shell(BaseShell):  # type: ignore
         signal.signal(signal.SIGTTIN, func_sig_ttin_ttou)
         signal.signal(signal.SIGTTOU, func_sig_ttin_ttou)
 
-        shell = cls(execer)
+        shell = cls(calls, execer)
         builtins.__xonsh__.shell = shell  # type: ignore
         builtins.__xonsh__.shell.shell = shell  # type: ignore
 
@@ -275,11 +277,11 @@ class Shell(BaseShell):  # type: ignore
 
 class FancyShell(Shell, PromptToolkitShell):  # type: ignore
     @classmethod
-    def create(cls) -> "Shell":
+    def create(cls, calls: Callback) -> "Shell":
         logger.debug(f"Creating FancyShell")
         from xonsh.main import _pprint_displayhook
 
-        shell = super().create()
+        shell = super().create(calls)
 
         setattr(sys, "displayhook", _pprint_displayhook)
         return shell
@@ -291,6 +293,8 @@ class FancyShell(Shell, PromptToolkitShell):  # type: ignore
             self.prompter.output.get_size = lambda: Size(50, 200)
 
         self.calls.on_enter()
+
+        self.calls.on_ready()
 
         self.cmdloop()
 

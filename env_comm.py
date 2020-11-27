@@ -67,8 +67,12 @@ class EnvoCommEnv(envo.BaseEnv):  # type: ignore
 
     @onload
     def __on_load(self) -> None:
-        import time
+        print("LOAD")
         return
+
+    @oncreate
+    def __on_create(self) -> None:
+        print("MOTD")
 
     @boot_code
     def __boot(self) -> List[str]:

@@ -280,21 +280,39 @@ class context(magic_function):  # noqa: N801
         super().__init__()
 
 
+magic_functions = {
+"command": command,
+"context": context,
+"boot_code": boot_code,
+"onload": onload,
+"onunload": onunload,
+"oncreate": oncreate,
+"ondestroy": ondestroy,
+"precmd": precmd,
+"onstdout": onstdout,
+"onstderr": onstderr,
+}
+
+
 class Namespace:
     command: Type[command]
     context: Type[context]
+    boot_code: Type[boot_code]
+    onload: Type[onload]
+    onunload: Type[onunload]
+    oncreate: Type[oncreate]
+    ondestroy: Type[ondestroy]
+    precmd: Type[precmd]
+    onstdout: Type[onstdout]
+    onstderr: Type[onstderr]
 
     def __init__(self, name: str) -> None:
-        self.name = name
+        self._name = name
 
-        class namespaced_command(command):
-            namespace = self.name
-
-        class namespaced_context(context):
-            namespace = self.name
-
-        self.context = namespaced_context
-        self.command = namespaced_command
+        for n, f in magic_functions.items():
+            namespaced_fun = type(f"namespaced_{n}", (f,), {})
+            namespaced_fun.namespace = self._name
+            setattr(self, n, namespaced_fun)
 
 
 @dataclass
@@ -305,15 +323,7 @@ class Field:
     raw: bool
 
 
-class BaseFields:
-    root: Path
-    path: Raw[str]
-    stage: str
-    envo_stage: Raw[str]
-    pythonpath: Raw[str]
-
-
-class BaseEnv(BaseFields):
+class BaseEnv:
     class Meta:
         """
         Environment metadata.
@@ -328,8 +338,27 @@ class BaseEnv(BaseFields):
         emoji: str = ""
         stage: str = "comm"
 
+    root: Path
+    path: Raw[str]
+    stage: str
+    envo_stage: Raw[str]
+    pythonpath: Raw[str]
 
-class Env(BaseFields):
+    __initialised__ = False
+
+    def init_plugins(self) -> None:
+        pass
+
+    @classmethod
+    def is_user_env(cls) -> bool:
+        return "envo." not in cls.__module__
+
+    @classmethod
+    def is_plugin_env(cls) -> bool:
+        return "envo.plugins" in cls.__module__
+
+
+class Env(BaseEnv):
     """
     Defines environment.
     """
@@ -352,10 +381,16 @@ class Env(BaseFields):
         r"**/__envo_lock__"
     ]
 
+    def __new__(cls, shell: Optional["Shell"], calls: Callbacks,
+                 reloader_enabled: bool=True,
+                 blocking: bool=False) -> "Env":
+        obj = super().__new__(cls)
+
+        return obj
+
     def __init__(self, shell: Optional["Shell"], calls: Callbacks,
                  reloader_enabled: bool=True,
                  blocking: bool=False) -> None:
-        super().__init__()
         self._calls = calls
 
         self._blocking = blocking
@@ -363,7 +398,7 @@ class Env(BaseFields):
         self._reloader_enabled = reloader_enabled
         self._shell = shell
 
-        self.meta = self.Meta()
+        self.meta = super().Meta()
 
         self._name = self.meta.name
 
@@ -416,14 +451,46 @@ class Env(BaseFields):
         self._shell.calls.post_cmd = Callback(self._on_postcmd)
         self._shell.calls.on_exit = Callback(self._on_destroy)
 
-        for p in self.__class__.__mro__:
-            if "InheritedEnv" in str(p):
-                continue
+        self.init_parts()
+        self.validate()
 
-            if issubclass(p, BaseEnv):
+    def init_parts(self) -> None:
+        def decorated_init(klass, fun):
+            def init(*args, **kwargs):
+                if not klass.__initialised__:
+                    klass.__initialised__ = True
+                    fun(*args, **kwargs)
+
+            return init
+
+        for p in self.get_parts():
+            p.__initialised__ = False
+
+        for p in self.get_parts():
+            p.__undecorated_init__ = p.__init__
+            p.__init__ = decorated_init(p, p.__init__)
+
+        for p in self.get_parts():
+            if not p.__initialised__:
                 p.__init__(self)
 
-        self.validate()
+        for p in self.get_parts():
+            p.__init__ = p.__undecorated_init__
+
+    @classmethod
+    def get_user_envs(cls) -> List[Type[BaseEnv]]:
+        ret = [p for p in cls.__mro__ if issubclass(p, BaseEnv) and p.is_user_env()]
+        return ret
+
+    @classmethod
+    def get_parts(cls) -> List[Type[BaseEnv]]:
+        ret = cls.get_user_envs() + cls.get_plugin_envs()
+        return ret
+
+    @classmethod
+    def get_plugin_envs(cls) -> List[Type[BaseEnv]]:
+        ret = [p for p in cls.__mro__ if issubclass(p, BaseEnv) and p.is_plugin_env()]
+        return ret
 
     def validate(self) -> None:
         """
@@ -539,7 +606,7 @@ class Env(BaseFields):
 
         return envs
 
-    def _repr(self, level: int = 0) -> str:
+    def repr(self, level: int = 0) -> str:
         ret = []
         ret.append("# Variables")
 
@@ -714,8 +781,9 @@ class Env(BaseFields):
     @classmethod
     def _build_env(cls, env: Type[BaseEnv]) -> Type["Env"]:
         parents = cls._get_parents_env(env)
+        plugins = cls._get_plugin_envs(env)
 
-        class InheritedEnv(cls, env, *parents, *env.Meta.plugins):
+        class InheritedEnv(cls, env, *parents, *plugins):
             pass
 
         env = InheritedEnv
@@ -729,12 +797,20 @@ class Env(BaseFields):
         return cls._build_env(env)
 
     @classmethod
-    def _get_parents_env(cls, env: Type[BaseEnv]) -> List[BaseEnv]:
+    def _get_parents_env(cls, env: Type[BaseEnv]) -> List[Type[BaseEnv]]:
         parents = []
         for p in env.Meta.parents:
             parent = import_from_file(Path(str(env.Meta.root / p))).Env
             parents.append(parent)
             parents.extend(cls._get_parents_env(parent))
+        return parents
+
+    @classmethod
+    def _get_plugin_envs(cls, env: Type[BaseEnv]) -> List[BaseEnv]:
+        parents = []
+        parents.extend(env.Meta.plugins)
+        for p in cls._get_parents_env(env):
+            parents.extend(cls._get_plugin_envs(p))
         return parents
 
     def _collect_magic_functions(self) -> None:

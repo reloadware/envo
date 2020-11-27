@@ -32,9 +32,9 @@ class TestMisc(utils.TestBase):
             (
                 r'export ENVO_STAGE="test"\r\n'
                 r'export PATH=".*"\r\n'
-                r'export PYTHONPATH=".*"'
-                r'export SANDBOX_STAGE="test"\r\n'
+                r'export PYTHONPATH=".*"\r\n'
                 r'export SANDBOX_ROOT=".*sandbox"\r\n'
+                r'export SANDBOX_STAGE="test"\r\n'
             ),
             ret,
         )

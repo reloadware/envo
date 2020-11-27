@@ -234,11 +234,8 @@ class TestHotReload(utils.TestBase):
     def test_if_reproductible(self, shell):
         os.environ["PATH"] = "/already_existing_path:" + os.environ["PATH"]
 
-        utils.add_declaration("path: Raw[str]")
         utils.add_definition(
             """
-            import os
-            self.path = os.environ["PATH"]
             self.path = "/some_path:" + self.path
             """
         )

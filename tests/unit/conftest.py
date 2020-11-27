@@ -27,13 +27,6 @@ def shell_unit() -> None:
 
 
 @fixture
-def env() -> Env:
-    from tests.unit.utils import env
-
-    return env()
-
-
-@fixture
 def env_comm() -> Type[Env]:
     env_dir = Path(".").absolute()
     sys.path.insert(0, str(env_dir))
