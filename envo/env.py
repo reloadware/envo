@@ -31,6 +31,7 @@ from envo.logging import Logger
 from envo.misc import Callback, EnvoError, Inotify, import_from_file
 
 __all__ = [
+    "UserEnv",
     "BaseEnv",
     "Env",
     "Raw",
@@ -206,9 +207,6 @@ class command(magic_function):  # noqa: N801
     klass = Command
     type: str = "command"
 
-    def __init__(self) -> None:
-        super().__init__()  # type: ignore
-
 
 # decorators
 class boot_code(magic_function):  # noqa: N801
@@ -318,9 +316,28 @@ class Namespace:
 @dataclass
 class Field:
     name: str
+    namespace: str
     type: Any
     value: Any
     raw: bool
+
+    @property
+    def cleaned_name(self) -> str:
+        if self.raw:
+            return self.name
+        else:
+            return self.name.replace("_", "")
+
+    @property
+    def namespaced_name(self) -> str:
+        if self.raw:
+            return self.cleaned_name
+        else:
+            return f"{self.namespace}_{self.cleaned_name}" if self.namespace else self.cleaned_name
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.namespace}.{self.cleaned_name}" if self.namespace else self.cleaned_name
 
 
 class BaseEnv:
@@ -346,19 +363,29 @@ class BaseEnv:
 
     __initialised__ = False
 
-    def init_plugins(self) -> None:
-        pass
-
     @classmethod
     def is_user_env(cls) -> bool:
-        return "envo." not in cls.__module__
+        return issubclass(cls, UserEnv) and cls is not UserEnv and "InheritedEnv" not in str(cls)
+
+    @classmethod
+    def is_envo_env(cls) -> bool:
+        return issubclass(cls, EnvoEnv) and cls is not EnvoEnv and "InheritedEnv" not in str(cls)
 
     @classmethod
     def is_plugin_env(cls) -> bool:
-        return "envo.plugins" in cls.__module__
+        from envo import Plugin
+        return issubclass(cls, Plugin) and cls is not Plugin and "InheritedEnv" not in str(cls)
 
 
-class Env(BaseEnv):
+class EnvoEnv(BaseEnv):
+    pass
+
+
+class UserEnv(BaseEnv):
+    pass
+
+
+class Env(EnvoEnv):
     """
     Defines environment.
     """
@@ -547,13 +574,6 @@ class Env(BaseEnv):
         if undeclr:
             error_msgs += [f'Variable "{v}" is undeclared!' for v in undeclr]
 
-        fields_to_check = field_names - unset - undeclr
-
-        for f in fields_to_check:
-            attr2check: Any = getattr(self, f)
-            if issubclass(type(attr2check), BaseEnv):
-                error_msgs += attr2check._get_errors()
-
         return error_msgs
 
     def get_name(self) -> str:
@@ -562,29 +582,34 @@ class Env(BaseEnv):
         """
         return self._name
 
-    @property
-    def fields(self) -> Dict[str, Field]:
+    @classmethod
+    def fields(cls, obj: Any, namespace: Optional[str] = None) -> Dict[str, Field]:
         """
         Return fields.
         """
         ret = OrderedDict()
 
-        for c in self.__class__.mro():
+        for c in obj.__class__.__mro__:
             if not hasattr(c, "__annotations__"):
                 continue
             for f, a in c.__annotations__.items():
                 if f.startswith("_"):
                     continue
-                attr = getattr(self, f)
+                attr = getattr(obj, f)
                 t = type(attr)
-                raw = "Raw" in str(a)
-                ret[f] = Field(name=f, type=t, value=attr, raw=raw)
+
+                raw = "envo.env.Raw" in str(a)
+                if is_dataclass(t):
+                    ret.update(cls.fields(attr, namespace=f"{namespace}_{f}" if namespace and not raw else f))
+                else:
+                    field = Field(name=f, namespace=namespace, type=t, value=attr, raw=raw)
+                    ret[field.full_name] = field
 
         ret = OrderedDict(sorted(ret.items(), key=lambda x: x[0]))
 
         return ret
 
-    def get_env_vars(self, owner_name: str = "") -> Dict[str, str]:
+    def get_env_vars(self) -> Dict[str, str]:
         """
         Return environmental variables in following format:
         {NAMESPACE_ENVNAME}
@@ -592,17 +617,13 @@ class Env(BaseEnv):
         :param owner_name:
         """
         envs = {}
-        for f in self.fields.values():
-            namespace = f'{owner_name}{self._name.replace("_", "").upper()}_'
-            if isinstance(f.value, BaseEnv):
-                envs.update(f.value.get_env_vars(owner_name=namespace))
-            else:
-                if f.raw:
-                    var_name = f.name.upper()
-                else:
-                    var_name = namespace + f.name.replace("_", "").upper()
+        for name, field in self.fields(self, self._name).items():
+            if field.namespaced_name in envs:
+                raise EnvoError(f'Variable "{field.namespaced_name}" is redefined')
 
-                envs[var_name] = str(f.value)
+            envs[field.namespaced_name] = str(field.value)
+
+        envs = {k.upper(): v for k, v in envs.items()}
 
         return envs
 
@@ -610,7 +631,7 @@ class Env(BaseEnv):
         ret = []
         ret.append("# Variables")
 
-        for n, v in self.fields.items():
+        for n, v in self.fields(self).items():
             intend = "    "
             r = v._repr(level + 1) if isinstance(v, BaseEnv) else repr(v.value)
             ret.append(f"{intend * level}{n}: {type(v).__name__} = {r}")
@@ -640,8 +661,6 @@ class Env(BaseEnv):
                     self._calls.on_error(e)
                     self._exit()
                     return
-
-            self._activate()
 
             # declare commands
             for name, c in self._magic_functions["command"].items():
@@ -734,7 +753,7 @@ class Env(BaseEnv):
         if self._reloader_enabled:
             self._stop_watchers()
 
-    def _activate(self) -> None:
+    def activate(self) -> None:
         """
         Validate env and send vars to os.environ
 

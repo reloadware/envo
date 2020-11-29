@@ -16,8 +16,8 @@ class TestStubs:
         self.shell.on_exit()
 
     def init(self) -> None:
-        result = run("envo --init")
-        assert b"Created comm environment" in result
+        result = run("envo test --init")
+        assert b"Created test environment" in result
 
     def assert_stub_equal(self, stub_file: str, content: str, stage: str = "comm") -> None:
         self.shell = utils.Spawn(f"envo {stage}")

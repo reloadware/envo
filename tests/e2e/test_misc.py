@@ -11,9 +11,7 @@ from tests.e2e import utils
 
 class TestMisc(utils.TestBase):
     def test_shell(self, shell):
-        shell.start()
-
-        e = shell.expecter
+        e = shell.start()
         e.prompt().eval()
 
         shell.sendline("print('test')")
@@ -75,8 +73,7 @@ class TestMisc(utils.TestBase):
         assert Path("env_comm.py").exists()
         assert Path("env_test.py").exists()
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt(name=dir_name).eval()
 
@@ -87,8 +84,7 @@ class TestMisc(utils.TestBase):
         Path("./test_dir").mkdir()
         os.chdir("./test_dir")
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -117,8 +113,7 @@ class TestMisc(utils.TestBase):
             s.expecter.exit().eval()
 
     def test_env_persists_in_bash_scripts(self, shell):
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt().eval()
 
         file = Path("script.sh")

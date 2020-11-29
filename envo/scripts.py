@@ -184,6 +184,8 @@ class HeadlessMode:
         self.li.shell.set_variable("env", self.env)
         self.li.shell.set_variable("environ", os.environ)
 
+        self.env.activate()
+
     def _find_env(self) -> Path:
         # TODO: Test this
         if self.se.stage:

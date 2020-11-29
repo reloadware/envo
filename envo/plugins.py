@@ -5,6 +5,7 @@ from typing import Any, Optional, List
 
 from dataclasses import dataclass
 
+import envo
 from envo import Env, logger, onload, onunload, BaseEnv, Namespace
 
 __all__ = [
@@ -15,7 +16,7 @@ __all__ = [
 from envo.logging import Logger
 
 
-class Plugin(BaseEnv):
+class Plugin(envo.env.EnvoEnv):
     @classmethod
     def init(cls, *args, **kwargs):
         cls.__init__(*args, **kwargs)

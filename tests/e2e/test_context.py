@@ -12,8 +12,7 @@ class TestContext(utils.TestBase):
             "dict_var": {"nested_var": "some nested value"},
         }
         utils.add_context(context)
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -42,9 +41,7 @@ class TestContext(utils.TestBase):
         }
         utils.add_context(context2, name="context2")
 
-        shell.start()
-
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -77,8 +74,7 @@ class TestContext(utils.TestBase):
             "int_var2": 28,
         }
         utils.add_context(context2, name="context2", file=Path("env_test.py"))
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 

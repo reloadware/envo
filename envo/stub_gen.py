@@ -5,7 +5,7 @@ from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, GenericMeta, List, Optional, Type
 
-from envo.env import MagicFunction, magic_function
+from envo.env import MagicFunction, magic_function, BaseEnv
 
 from envo import misc
 
@@ -16,10 +16,11 @@ template = """
 import typing
 
 from envo.env import (
-MagicFunction
+MagicFunction,
+Env
 )
 {{ ctx.prologue }}
-class {{ ctx.env_name }}:
+class {{ ctx.env_name }}(Env):
     class Meta:
         {% for f in ctx.meta -%}
             {{ f.name }}: {{ f.type }}
@@ -57,10 +58,10 @@ class Method:
         self.header = re.findall(r"(?:@.+?)?def .*?\).*?:", self.source, re.DOTALL)[0]
 
     def __hash__(self) -> int:
-        return hash(self.name)
+        return hash(self.header)
 
     def __eq__(self, other) -> bool:
-        return self.name == other.name
+        return self.header == other.header
 
 
 @dataclass
@@ -105,7 +106,11 @@ class StubGen:
                     annotations[k] = v
 
         for n, a in annotations.items():
-            type_ = a if isinstance(a, GenericMeta) else a.__name__
+            # Handle Raw and other types
+            if isinstance(a, GenericMeta) or not hasattr(a, "__name__"):
+                type_ = str(a)
+            else:
+                type_ = a.__name__
 
             f = Field(n, type_)
             fields.append(f)
@@ -116,22 +121,23 @@ class StubGen:
         ret = "envo." in obj.__module__
         return ret
 
-    def _ctx_from_env(self, env: Type["Env"]) -> Ctx:
-        from envo import misc
-
-        # env.__mro__[1] because first one is always InheritedEnv and second is Env (joined)
-        env_class = next(c for c in env.__mro__ if not self._is_envo_code(c))
+    def _ctx_from_env(self, env: Type["Env"]) -> Optional[Ctx]:
+        user_env_class = next((c for c in env.__mro__ if issubclass(c, BaseEnv) and c.is_user_env()), None)
+        if not user_env_class:
+            return None
 
         fields = self._get_fields_for_obj(env)
         meta = self._get_fields_for_obj(env.Meta)
         methods: List[Method] = []
 
-        env_module = misc.import_from_file(Path(env_class.__module__))
-        imports_src = inspect.getsource(env_module)
-        prologue = re.search(r"(.*?)(?:class)", imports_src, re.DOTALL)[1]
+        imports_src = Path(user_env_class.__module__).read_text()
+        prologue = re.search(r"(.*?)(?:\nclass)", imports_src, re.DOTALL)[1]
 
         for p in env.__mro__:
-            if self._is_envo_code(p):
+            if not issubclass(p, BaseEnv):
+                continue
+
+            if not p.is_user_env():
                 continue
 
             # collect methods
@@ -139,7 +145,7 @@ class StubGen:
                 if not inspect.isfunction(o):
                     continue
 
-                if (o.__module__ != env_class.__module__ or self._is_envo_code(o)) and n.startswith("_"):
+                if (o.__module__ != env.__module__ or self._is_envo_code(o)) and n.startswith("_"):
                     continue
 
                 if isinstance(o, magic_function):
@@ -154,7 +160,7 @@ class StubGen:
 
                 func = o.func
 
-                if (func.__module__ != env_class.__module__ or self._is_envo_code(func)) and n.startswith("_"):
+                if (func.__module__ != env.__module__ or self._is_envo_code(func)) and n.startswith("_"):
                     continue
 
                 methods.append(Method(name=n, source=inspect.getsource(o.func)))
@@ -178,6 +184,9 @@ class StubGen:
 
     def _generate_env(self) -> None:
         ctx = self._ctx_from_env(self.env.__class__)
+
+        if not ctx:
+            return
 
         file = Path(f"{str(self.env.root.absolute())}/env_{self.env.stage}.pyi")
         misc.render(template, file, {"ctx": ctx})

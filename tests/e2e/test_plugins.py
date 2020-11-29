@@ -24,8 +24,7 @@ class TestVenv(utils.TestBase):
         utils.run("./.venv/bin/pip install url-regex")
         utils.add_plugins("VirtualEnv", file=Path(file))
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt().eval()
 
         self.assert_activated(shell)
@@ -44,8 +43,7 @@ class TestVenv(utils.TestBase):
         utils.add_plugins("VirtualEnv")
         utils.replace_in_code("pass", "VirtualEnv.init(self, venv_path=self.root)")
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt().eval()
 
         path = shell.envo.get_env_field("path")
@@ -66,8 +64,7 @@ class TestVenv(utils.TestBase):
 
         utils.add_plugins("VirtualEnv")
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt(name="child").eval()
 
         self.assert_activated(shell, prompt_name="child")
@@ -84,8 +81,7 @@ class TestVenv(utils.TestBase):
         utils.add_plugins("VirtualEnv")
         utils.replace_in_code("pass", "VirtualEnv.init(self, venv_dir_name='.custom_venv')")
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt(name="child").eval()
 
         self.assert_activated(shell, prompt_name="child")

@@ -9,8 +9,7 @@ from tests.e2e import utils
 class TestParentChild(utils.TestBase):
     def test_init(self, shell, init_child_env):
         os.chdir("child")
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt(name=r"child").eval()
 
         shell.exit()
@@ -19,8 +18,7 @@ class TestParentChild(utils.TestBase):
     def test_hot_reload(self, shell, init_child_env):
         os.chdir("child")
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt(name=r"child").eval()
 
         utils.replace_in_code("child", "ch")
@@ -38,9 +36,7 @@ class TestParentChild(utils.TestBase):
         root_dir = Path(".").absolute()
         os.chdir(root_dir / "sandbox/sandbox")
 
-        shell.start()
-
-        e = shell.expecter
+        e = shell.start()
         e.prompt(name="sandbox")
 
         shell.exit()

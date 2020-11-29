@@ -6,9 +6,7 @@ from tests.e2e import utils
 
 class TestLogger(utils.TestBase):
     def test_retrieving(self, shell):
-        shell.start()
-
-        e = shell.expecter
+        e = shell.start()
         e.prompt().eval()
 
         shell.sendline("pass")
@@ -22,9 +20,7 @@ class TestLogger(utils.TestBase):
         e.exit().eval()
 
     def test_filtering(self, shell):
-        shell.start()
-
-        e = shell.expecter
+        e = shell.start()
         e.prompt(utils.PromptState.MAYBE_LOADING)
 
         logger = lambda: shell.envo.get_logger()

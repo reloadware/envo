@@ -12,7 +12,7 @@ from pathlib import Path
 from subprocess import Popen
 from threading import Thread
 from time import sleep
-from typing import TYPE_CHECKING, List, Optional, Type, Any
+from typing import TYPE_CHECKING, List, Optional, Type, Any, Dict
 
 import pexpect
 import pyte
@@ -182,6 +182,11 @@ class Spawn:
             return sys.path
 
         @classmethod
+        def get_os_environ(cls) -> Dict[str, str]:
+            import os
+            return dict(os.environ)
+
+        @classmethod
         def wait_until_ready(cls, timeout=1) -> None:
             from time import sleep
 
@@ -243,7 +248,7 @@ class Spawn:
         self._printed_info = False
         self.debug = debug
 
-    def start(self, wait_until_ready=True) -> None:
+    def start(self, wait_until_ready=True) -> Expecter:
         environ = os.environ.copy()
         if self.debug:
             environ["ENVO_E2E_TEST"] = "True"
@@ -267,6 +272,8 @@ class Spawn:
 
         if wait_until_ready and self.debug:
             self.envo.wait_until_ready()
+
+        return self.expecter
 
     def exit(self) -> None:
         if self.process.poll() is not None:

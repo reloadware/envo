@@ -7,31 +7,11 @@ from tests.e2e import utils
 
 
 class TestCommands(utils.TestBase):
-    def test_decorator_kwargs_validation(self, shell):
-        utils.add_command(
-            """
-            @command(unexistent_arg1=False, unexistent_arg2=False)
-            def flake(self) -> None:
-                print("Flake all good")
-                return "Flake return value"
-            """
-        )
-
-        shell.start()
-        e = shell.expecter
-
-        e.output("Traceback.*got an unexpected keyword argument.*\n")
-        e.prompt(utils.PromptState.EMERGENCY).eval(4)
-
-        shell.exit()
-        e.exit().eval()
-
     def test_command_simple_case(self, shell):
         utils.add_flake_cmd()
         utils.add_mypy_cmd()
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -64,8 +44,7 @@ class TestCommands(utils.TestBase):
 
         os.chdir(str(child_dir))
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -77,9 +56,7 @@ class TestCommands(utils.TestBase):
 
     def test_cmd_execution_with_args(self, shell):
         utils.add_flake_cmd()
-        shell.start()
-
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -163,9 +140,7 @@ class TestCommands(utils.TestBase):
                 run("echo $TEST_VAR")
             """
         )
-        shell.start()
-
-        e = shell.expecter
+        e = shell.start()
         e.prompt().eval()
 
         shell.sendline("print_path")
@@ -182,8 +157,7 @@ class TestCommands(utils.TestBase):
         utils.add_flake_cmd(file=Path("env_comm.py"))
         utils.add_mypy_cmd(namespace=namespace_name, file=Path("env_test.py"))
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -235,8 +209,7 @@ class TestCommands(utils.TestBase):
             file=env_comm_file
         )
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 

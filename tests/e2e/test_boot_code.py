@@ -10,8 +10,7 @@ class TestBootCode(utils.TestBase):
     def test_imports(self, shell):
         boot = ["import math"]
         utils.add_boot(boot)
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -27,10 +26,9 @@ class TestBootCode(utils.TestBase):
 
         boot = ["1/0"]
         utils.add_boot(boot)
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
-        e.output(r' *File.*ZeroDivisionError: division by zero\n')
+        e.output(r'.*File.*ZeroDivisionError: division by zero\n')
         e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         env_test.write_text(file_before)

@@ -12,8 +12,7 @@ from tests.e2e.utils import PromptState
 
 class TestHotReload(utils.TestBase):
     def test_hot_reload(self, shell):
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt(PromptState.MAYBE_LOADING, name=r"(new|sandbox)").eval()
 
         new_content = Path("env_test.py").read_text().replace("sandbox", "new")
@@ -26,8 +25,7 @@ class TestHotReload(utils.TestBase):
 
     @pytest.mark.timeout(6)
     def test_old_envs_gone(self, shell):
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt().eval()
 
         shell.sendline("$SANDBOX_STAGE")
@@ -52,8 +50,7 @@ class TestHotReload(utils.TestBase):
         e.exit().eval()
 
     def test_from_child_dir(self, shell):
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt(PromptState.MAYBE_LOADING).eval()
 
         Path("./test_dir").mkdir()
@@ -69,8 +66,7 @@ class TestHotReload(utils.TestBase):
         e.exit().eval()
 
     def test_new_python_files(self, shell):
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt(PromptState.MAYBE_LOADING).eval()
         Path("./test_dir").mkdir()
 
@@ -92,8 +88,7 @@ class TestHotReload(utils.TestBase):
         e.exit().eval()
 
     def test_delete_watched_file(self, shell):
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt(PromptState.MAYBE_LOADING).eval()
 
         utils.replace_in_code(
@@ -112,8 +107,7 @@ class TestHotReload(utils.TestBase):
         e.exit().eval()
 
     def test_delete_watched_directory(self, shell):
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt(PromptState.MAYBE_LOADING).eval()
 
         directory = Path("./test_dir")
@@ -140,8 +134,7 @@ class TestHotReload(utils.TestBase):
         e.exit().eval()
 
     def test_ignored_files(self, shell):
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt(PromptState.MAYBE_LOADING).eval()
 
         Path("./test_dir").mkdir()
@@ -177,8 +170,7 @@ class TestHotReload(utils.TestBase):
     def test_syntax_error(self, shell):
         utils.replace_in_code("# Declare your variables here", "1/0")
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.output(r'.*ZeroDivisionError: division by zero\n')
         e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
@@ -194,8 +186,7 @@ class TestHotReload(utils.TestBase):
         e.exit().eval()
 
     def test_error(self, shell):
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt(PromptState.MAYBE_LOADING).eval()
 
         utils.replace_in_code("# Declare your variables here", "test_var: int")
@@ -218,8 +209,7 @@ class TestHotReload(utils.TestBase):
         e.exit().eval()
 
     def test_few_times_in_a_row_quick(self, shell):
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt().eval()
 
         for i in range(5):
@@ -240,9 +230,7 @@ class TestHotReload(utils.TestBase):
             """
         )
 
-        shell.start()
-
-        e = shell.expecter
+        e = shell.start()
         e.prompt(PromptState.MAYBE_LOADING).eval()
 
         shell.trigger_reload()
@@ -259,8 +247,7 @@ class TestHotReload(utils.TestBase):
         e.exit().eval()
 
     def test_shouldnt_reload_on_new_shell(self, shell):
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
         e.prompt().eval()
 
         shell2 = utils.Spawn("envo test", debug=False)
@@ -274,9 +261,7 @@ class TestHotReload(utils.TestBase):
         e.exit().eval()
 
     def test_not_reloading_during_command(self, shell):
-        shell.start()
-
-        e = shell.expecter
+        e = shell.start()
         e.prompt().eval()
         sleep(0.5)
         shell.sendline('sleep 3 && print("command_test")')
@@ -285,9 +270,13 @@ class TestHotReload(utils.TestBase):
         with pytest.raises(ReloadTimeout):
             shell.envo.assert_reloaded(1, timeout=0.2)
 
+        sleep(0.1)
+
         shell.trigger_reload()
         with pytest.raises(ReloadTimeout):
             shell.envo.assert_reloaded(1, timeout=0.2)
+
+        sleep(0.1)
 
         shell.trigger_reload()
         with pytest.raises(ReloadTimeout):

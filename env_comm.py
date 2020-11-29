@@ -50,6 +50,12 @@ class EnvoCommEnv(envo.BaseEnv):  # type: ignore
         self.poetry_ver = "1.0.5"
         self.some_var = "test"
 
+    def fun(self) -> None:
+        print("test")
+
+    def fun2(self) -> None:
+        print("test")
+
     @trop.command
     def __bootstrap(self):
         run(f"pip install poetry=={self.poetry_ver}")

@@ -25,7 +25,7 @@ from envo import (  # noqa: F401
 )
 
 
-class EnvoCommEnv(envo.BaseEnv):  # type: ignore
+class EnvoCommEnv(envo.env.EnvoEnv):  # type: ignore
     class Meta(envo.BaseEnv.Meta):  # type: ignore
         root = Path(__file__).parent.absolute()
         stage: str = "emergency"

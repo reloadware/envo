@@ -14,8 +14,7 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -38,8 +37,7 @@ class TestHooks(utils.TestBase):
                 return command * 2
             """
         )
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.output(
             (
@@ -63,8 +61,7 @@ class TestHooks(utils.TestBase):
                 return "cmd"
             """
         )
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.output(
             (
@@ -90,8 +87,7 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -111,8 +107,7 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -132,8 +127,7 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -160,8 +154,7 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -183,8 +176,7 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt().eval()
 
@@ -212,8 +204,7 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.output(r"on create\n")
 
@@ -245,8 +236,7 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        shell.start()
-        e = shell.expecter
+        e = shell.start()
 
         e.prompt(PromptState.MAYBE_LOADING)
         e.expected[-1] = rf"({e.expected[-1]}\n)?"
