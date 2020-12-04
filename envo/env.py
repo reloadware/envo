@@ -376,6 +376,43 @@ class BaseEnv:
         from envo import Plugin
         return issubclass(cls, Plugin) and cls is not Plugin and "InheritedEnv" not in str(cls)
 
+    @classmethod
+    def get_user_envs(cls) -> List[Type["BaseEnv"]]:
+        ret = [p for p in cls.__mro__ if issubclass(p, BaseEnv) and p.is_user_env()]
+        return ret
+
+    @classmethod
+    def get_parts(cls) -> List[Type["BaseEnv"]]:
+        ret = cls.get_user_envs() + cls.get_plugin_envs()
+        return ret
+
+    @classmethod
+    def get_plugin_envs(cls) -> List[Type["BaseEnv"]]:
+        ret = [p for p in cls.__mro__ if issubclass(p, BaseEnv) and p.is_plugin_env()]
+        return ret
+
+    @classmethod
+    def _get_parents_env(cls, env: Type["BaseEnv"]) -> List[Type["BaseEnv"]]:
+        parents = []
+        for p in env.Meta.parents:
+            parent = import_from_file(Path(str(env.Meta.root / p))).Env
+            parents.append(parent)
+            parents.extend(cls._get_parents_env(parent))
+        return parents
+
+    @classmethod
+    def _get_plugin_envs(cls, env: Type["BaseEnv"]) -> List["BaseEnv"]:
+        plugins = env.Meta.plugins[:]
+        for p in cls._get_parents_env(env):
+            plugins.extend(cls._get_plugin_envs(p))
+
+        plugins = list(set(plugins))
+        return plugins
+
+    @classmethod
+    def get_env_path(cls) -> Path:
+        return Path(cls.get_user_envs()[0].__module__)
+
 
 class EnvoEnv(BaseEnv):
     pass
@@ -397,6 +434,16 @@ class Env(EnvoEnv):
         context_ready: Callback
         on_error: Callable
 
+    @dataclass
+    class Links:
+        shell: Optional["Shell"]
+
+    @dataclass
+    class Sets:
+        extra_watchers: List[Inotify]
+        reloader_enabled: bool = True
+        blocking: bool = False
+
 
     _parents: List[Type["Env"]]
     _files_watchers: List[Inotify]
@@ -408,22 +455,10 @@ class Env(EnvoEnv):
         r"**/__envo_lock__"
     ]
 
-    def __new__(cls, shell: Optional["Shell"], calls: Callbacks,
-                 reloader_enabled: bool=True,
-                 blocking: bool=False) -> "Env":
-        obj = super().__new__(cls)
-
-        return obj
-
-    def __init__(self, shell: Optional["Shell"], calls: Callbacks,
-                 reloader_enabled: bool=True,
-                 blocking: bool=False) -> None:
+    def __init__(self, calls: Callbacks, se: Sets, li: Links) -> None:
         self._calls = calls
-
-        self._blocking = blocking
-
-        self._reloader_enabled = reloader_enabled
-        self._shell = shell
+        self._se = se
+        self._li = li
 
         self.meta = super().Meta()
 
@@ -434,7 +469,7 @@ class Env(EnvoEnv):
         self._exiting = False
         self._executing_cmd = False
 
-        self._files_watchers = []
+        self._files_watchers = self._se.extra_watchers
         self._reload_lock = Lock()
 
         self.logger: Logger = logger.create_child("envo", descriptor=self.meta.name)
@@ -471,15 +506,16 @@ class Env(EnvoEnv):
 
         self._collect_magic_functions()
 
-        self._shell.calls.pre_cmd = Callback(self._on_precmd)
-        self._shell.calls.on_stdout = Callback(self._on_stdout)
-        self._shell.calls.on_stderr = Callback(self._on_stderr)
-        self._shell.calls.post_cmd = Callback(self._on_postcmd)
-        self._shell.calls.post_cmd = Callback(self._on_postcmd)
-        self._shell.calls.on_exit = Callback(self._on_destroy)
+        self._li.shell.calls.pre_cmd = Callback(self._on_precmd)
+        self._li.shell.calls.on_stdout = Callback(self._on_stdout)
+        self._li.shell.calls.on_stderr = Callback(self._on_stderr)
+        self._li.shell.calls.post_cmd = Callback(self._on_postcmd)
+        self._li.shell.calls.post_cmd = Callback(self._on_postcmd)
+        self._li.shell.calls.on_exit = Callback(self._on_destroy)
 
         self.init_parts()
-        self.validate()
+        if self._se.reloader_enabled:
+            self._collect_watchers()
 
     def init_parts(self) -> None:
         def decorated_init(klass, fun):
@@ -490,34 +526,22 @@ class Env(EnvoEnv):
 
             return init
 
-        for p in self.get_parts():
+        parts = list(reversed(self.get_user_envs()))
+        parts.extend(self.get_plugin_envs())
+
+        for p in parts:
             p.__initialised__ = False
 
-        for p in self.get_parts():
+        for p in parts:
             p.__undecorated_init__ = p.__init__
             p.__init__ = decorated_init(p, p.__init__)
 
-        for p in self.get_parts():
+        for p in parts:
             if not p.__initialised__:
                 p.__init__(self)
 
-        for p in self.get_parts():
+        for p in parts:
             p.__init__ = p.__undecorated_init__
-
-    @classmethod
-    def get_user_envs(cls) -> List[Type[BaseEnv]]:
-        ret = [p for p in cls.__mro__ if issubclass(p, BaseEnv) and p.is_user_env()]
-        return ret
-
-    @classmethod
-    def get_parts(cls) -> List[Type[BaseEnv]]:
-        ret = cls.get_user_envs() + cls.get_plugin_envs()
-        return ret
-
-    @classmethod
-    def get_plugin_envs(cls) -> List[Type[BaseEnv]]:
-        ret = [p for p in cls.__mro__ if issubclass(p, BaseEnv) and p.is_plugin_env()]
-        return ret
 
     def validate(self) -> None:
         """
@@ -646,35 +670,36 @@ class Env(EnvoEnv):
         def thread(self: Env) -> None:
             logger.debug("Starting onload thread")
 
-            if self._reloader_enabled:
-                self._start_watchers()
-
             sw = Stopwatch()
             sw.start()
             functions = self._magic_functions["onload"].values()
+
+            if self._se.reloader_enabled:
+                self._start_watchers()
 
             for h in functions:
                 try:
                     h()
                 except BaseException as e:
                     # TODO: pass env code to exception to get relevant traceback?
+                    self._calls.context_ready()
                     self._calls.on_error(e)
                     self._exit()
                     return
 
             # declare commands
             for name, c in self._magic_functions["command"].items():
-                self._shell.set_variable(name, c)
+                self._li.shell.set_variable(name, c)
 
             # set context
-            self._shell.set_context(self._get_context())
+            self._li.shell.set_context(self._get_context())
             while sw.value <= 0.5:
                 sleep(0.1)
 
             logger.debug("Finished load context thread")
             self._calls.context_ready()
 
-        if not self._blocking:
+        if not self._se.blocking:
             Thread(target=thread, args=(self,)).start()
         else:
             thread(self)
@@ -704,8 +729,13 @@ class Env(EnvoEnv):
 
         self._exit()
 
-    def _start_watchers(self) -> None:
-        constituents = self._parents + [self.__class__]
+    def _collect_watchers(self) -> None:
+        constituents = self.get_user_envs()
+
+        # inject callback int existing
+        for w in self._files_watchers:
+            w.calls = Inotify.Callbacks(on_event=Callback(self._on_env_edit))
+
         for p in constituents:
             watcher = Inotify(
                 Inotify.Sets(
@@ -715,9 +745,11 @@ class Env(EnvoEnv):
                 ),
                 calls=Inotify.Callbacks(on_event=Callback(self._on_env_edit)),
             )
-            watcher.start()
-
             self._files_watchers.append(watcher)
+
+    def _start_watchers(self) -> None:
+        for w in self._files_watchers:
+            w.start()
 
         self._calls.reloader_ready()
 
@@ -737,7 +769,7 @@ class Env(EnvoEnv):
         subscribe_events = ["IN_CLOSE_WRITE", "IN_CREATE", "IN_DELETE", "IN_DELETE_SELF"]
 
         if any([s in event.type_names for s in subscribe_events]):
-            if self._reloader_enabled:
+            if self._se.reloader_enabled:
                 self._stop_watchers()
 
             self.logger.info('Reloading',
@@ -750,7 +782,7 @@ class Env(EnvoEnv):
 
     def _exit(self) -> None:
         self.logger.info("Exiting env")
-        if self._reloader_enabled:
+        if self._se.reloader_enabled:
             self._stop_watchers()
 
     def activate(self) -> None:
@@ -763,8 +795,8 @@ class Env(EnvoEnv):
             self._environ_before = os.environ.copy()
 
         if not self._shell_environ_before:
-            self._shell_environ_before = dict(self._shell.environ.items())
-        self._shell.environ.update(**self.get_env_vars())
+            self._shell_environ_before = dict(self._li.shell.environ.items())
+        self._li.shell.environ.update(**self.get_env_vars())
 
         os.environ.update(**self.get_env_vars())
 
@@ -777,14 +809,14 @@ class Env(EnvoEnv):
         if self._environ_before:
             os.environ = self._environ_before.copy()
 
-            if self._shell:
-                tmp_environ = copy(self._shell.environ)
+            if self._li.shell:
+                tmp_environ = copy(self._li.shell.environ)
                 for i, v in tmp_environ.items():
-                    self._shell.environ.pop(i)
+                    self._li.shell.environ.pop(i)
                 for k, v in self._shell_environ_before.items():
                     if v is None:
                         continue
-                    self._shell.environ[k] = v
+                    self._li.shell.environ[k] = v
 
     def dump_dot_env(self) -> Path:
         """
@@ -796,41 +828,6 @@ class Env(EnvoEnv):
         content = "\n".join([f'{key}="{value}"' for key, value in self.get_env_vars().items()])
         path.write_text(content)
         return path
-
-    @classmethod
-    def _build_env(cls, env: Type[BaseEnv]) -> Type["Env"]:
-        parents = cls._get_parents_env(env)
-        plugins = cls._get_plugin_envs(env)
-
-        class InheritedEnv(cls, env, *parents, *plugins):
-            pass
-
-        env = InheritedEnv
-        env.__name__ = cls.__name__
-        env._parents = parents
-        return env
-
-    @classmethod
-    def _build_env_from_file(cls, file: Path) -> Type["Env"]:
-        env = import_from_file(file).Env  # type: ignore
-        return cls._build_env(env)
-
-    @classmethod
-    def _get_parents_env(cls, env: Type[BaseEnv]) -> List[Type[BaseEnv]]:
-        parents = []
-        for p in env.Meta.parents:
-            parent = import_from_file(Path(str(env.Meta.root / p))).Env
-            parents.append(parent)
-            parents.extend(cls._get_parents_env(parent))
-        return parents
-
-    @classmethod
-    def _get_plugin_envs(cls, env: Type[BaseEnv]) -> List[BaseEnv]:
-        parents = []
-        parents.extend(env.Meta.plugins)
-        for p in cls._get_parents_env(env):
-            parents.extend(cls._get_plugin_envs(p))
-        return parents
 
     def _collect_magic_functions(self) -> None:
         """
@@ -901,7 +898,7 @@ class Env(EnvoEnv):
 
         for c in codes:
             try:
-                self._shell.run_code(c)
+                self._li.shell.run_code(c)
             except Exception as e:
                 # TODO: make nice traceback?
                 raise e from None
@@ -945,4 +942,24 @@ class Env(EnvoEnv):
         functions = self._magic_functions["onunload"]
         for f in functions.values():
             f()
-        self._shell.calls.reset()
+        self._li.shell.calls.reset()
+
+
+class EnvBuilder:
+    @classmethod
+    def build_env(cls, env: Type[BaseEnv]) -> Type["Env"]:
+        parents = env._get_parents_env(env)
+        plugins = env._get_plugin_envs(env)
+
+        class InheritedEnv(Env, env, *parents, *plugins):
+            pass
+
+        env = InheritedEnv
+        env.__name__ = cls.__name__
+        env._parents = parents
+        return env
+
+    @classmethod
+    def build_env_from_file(cls, file: Path) -> Type["Env"]:
+        env = import_from_file(file).Env  # type: ignore
+        return cls.build_env(env)

@@ -12,12 +12,12 @@ envo_root = test_root.parent / "envo"
 
 @fixture
 def init() -> None:
-    result = run("envo test --init")
+    result = run("envo init test")
     assert b"Created test environment" in result
 
 @fixture
 def init_bare() -> None:
-    result = run("envo --init")
+    result = run("envo init")
     assert b"Created test environment" in result
 
 
@@ -37,7 +37,7 @@ def init_2_same_childs() -> None:
 
 
 @fixture
-def shell() -> utils.Spawn:
+def shell() -> utils.SpawnEnvo:
     from tests.e2e.utils import shell
 
     s = shell()
@@ -46,7 +46,16 @@ def shell() -> utils.Spawn:
 
 
 @fixture
-def default_shell() -> utils.Spawn:
+def comm_shell() -> utils.SpawnEnvo:
+    from tests.e2e.utils import comm_shell
+
+    s = comm_shell()
+    yield s
+    s.on_exit()
+
+
+@fixture
+def default_shell() -> utils.SpawnEnvo:
     from tests.e2e.utils import default_shell
 
     s = default_shell()

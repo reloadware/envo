@@ -21,7 +21,8 @@ from envo import (  # noqa: F401
     boot_code,
     Plugin,
     VirtualEnv,
-BaseEnv
+    BaseEnv,
+    UserEnv
 )
 
 # Declare your command namespaces here
@@ -29,14 +30,14 @@ BaseEnv
 # my_namespace = command(namespace="my_namespace")
 
 
-class EnvoLocalEnv(BaseEnv):  # type: ignore
-    class Meta(envo.BaseEnv.Meta):  # type: ignore
+class EnvoLocalEnv(UserEnv):  # type: ignore
+    class Meta(UserEnv.Meta):  # type: ignore
         root = Path(__file__).parent.absolute()
         stage: str = "local"
         emoji: str = "🐣"
         parents: List[str] = ["env_comm.py"]
         plugins: List[Plugin] = [VirtualEnv]
-        name: str = "envo"
+        name: str = "env"
         version: str = "0.1.0"
         watch_files: List[str] = []
         ignore_files: List[str] = []

@@ -19,7 +19,7 @@ def sandbox() -> Generator:
     sandbox_dir.mkdir()
     os.chdir(str(sandbox_dir))
 
-    yield
+    yield sandbox_dir
     if sandbox_dir.exists():
         shutil.rmtree(str(sandbox_dir), ignore_errors=True)
 

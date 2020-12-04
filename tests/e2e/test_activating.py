@@ -16,7 +16,7 @@ class TestActivating:
 
     def init(self) -> None:
         self.shell = utils.default_shell()
-        result = run("envo --init")
+        result = run("envo init")
         assert b"Created comm environment" in result
 
     def assert_healthy_and_correct_files_in_dir(self, dir: Path, files_n: int = 2, stage:str = "comm") -> None:
@@ -49,14 +49,14 @@ class TestActivating:
         self.assert_healthy_and_correct_files_in_dir(Path(".."), 2)
 
     def test_comm_other_envs_priority(self, default_shell):
-        result = run("envo test --init")
+        result = run("envo init test")
         assert b"Created test environment" in result
 
         self.shell = default_shell
         self.assert_healthy_and_correct_files_in_dir(Path("."), 4)
 
     def test_comm_other_envs_priority_local(self, default_shell):
-        result = run("envo local --init")
+        result = run("envo init local")
         assert b"Created local environment" in result
 
         self.shell = default_shell

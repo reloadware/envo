@@ -21,7 +21,7 @@ class TestMisc(utils.TestBase):
         env_dir = Path(dir_name)
         env_dir.mkdir()
         os.chdir(str(env_dir))
-        utils.command("test --init")
+        utils.command("init test")
 
         assert Path("env_comm.py").exists()
         assert Path("env_test.py").exists()

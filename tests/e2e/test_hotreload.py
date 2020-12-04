@@ -208,6 +208,26 @@ class TestHotReload(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    def test_parents_are_watched_in_emergency_mode(self, shell, init_child_env):
+        os.chdir("child")
+
+        utils.replace_in_code("# Declare your variables here", "test_var: int", file=Path("../env_comm.py"))
+
+        e = shell.start()
+        e.output(r'Variable "test_var" is unset!\n')
+        e.prompt(name=r"child", state=PromptState.EMERGENCY_MAYBE_LOADING).eval()
+
+        e.expected.pop()
+        e.expected.pop()
+
+        utils.replace_in_code("test_var: int", "# Declare your variables here", file=Path("../env_comm.py"))
+        e.prompt(name=r"child", state=PromptState.MAYBE_LOADING).eval()
+
+        shell.envo.assert_reloaded(1, path="sandbox/env_comm.py")
+
+        shell.exit()
+        e.exit().eval()
+
     def test_few_times_in_a_row_quick(self, shell):
         e = shell.start()
         e.prompt().eval()
@@ -250,7 +270,7 @@ class TestHotReload(utils.TestBase):
         e = shell.start()
         e.prompt().eval()
 
-        shell2 = utils.Spawn("envo test", debug=False)
+        shell2 = utils.SpawnEnvo("test", debug=False)
         shell2.start()
         shell2.expecter.prompt().eval()
         shell2.exit()

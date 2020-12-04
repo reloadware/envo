@@ -11,6 +11,8 @@ from pathlib import Path
 from threading import Thread
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from textwrap import dedent
+
 import inotify.adapters
 import inotify.constants
 from globmatch_temp import glob_match
@@ -199,6 +201,10 @@ class Inotify:
         else:
             self.add_watch(path.absolute)
 
+    def clone(self) -> "Inotify":
+        return Inotify(se=self.se,
+                       calls=self.calls)
+
     def stop(self) -> None:
         self._stop = True
         self.flush()
@@ -271,7 +277,7 @@ def get_envo_relevant_traceback(exc: BaseException) -> List[str]:
         return msg
 
     msg = []
-    msg.extend(traceback.format_stack()[:-2])
+    msg.extend(traceback.format_stack())
     msg.extend(traceback.format_exception(*sys.exc_info())[1:])
     msg_relevant = ["Traceback (Envo relevant):\n"]
     relevant = False
@@ -285,3 +291,62 @@ def get_envo_relevant_traceback(exc: BaseException) -> List[str]:
         msg = msg_relevant
 
     return msg
+
+
+
+@dataclass
+class EnvParser:
+    path: Path
+
+    def __post_init__(self):
+        self.parents = self._get_parents()
+
+    @property
+    def source(self) -> str:
+        return self.path.read_text()
+
+    @property
+    def class_name(self) -> str:
+        return re.search(r"\nclass (.*)\(UserEnv\):", self.source)[1]
+
+    @property
+    def plugins(self) -> List[str]:
+        raw_search = re.search(r"plugins.*=.*\[(.*)]", self.source)[1]
+        if not raw_search:
+            return []
+
+        ret = raw_search.split(",")
+        return ret
+
+    def _get_parents(self) -> List["EnvParser"]:
+        parents_str = re.search(r"parents.*=.*\[(.*)]", self.source)[1]
+        if not parents_str:
+            return []
+        parents_paths_relative = parents_str.replace("'", "").replace('"', "").split(",")
+        parents_paths_relative = [p.strip() for p in parents_paths_relative]
+
+        parents_paths = [Path(self.path.parent / p).resolve() for p in parents_paths_relative]
+        ret = [EnvParser(p) for p in parents_paths]
+        return ret
+
+    def get_processed(self) -> str:
+        # remove duplicates
+        parents_src = ""
+        for p in self.parents:
+            parents_src += p.get_processed() + "\n"
+
+        parents = [p.class_name for p in self.parents]
+
+        class_name = f"__{self.class_name}"
+        src = self.source.replace(self.class_name, class_name)
+
+        melted = dedent(f"""\n
+        class {self.class_name}(envo.env.Env, {class_name}, {",".join(parents)} {"," if parents else ""} {",".join(self.plugins)}):
+            def __init__(self):
+                pass
+        """)
+
+        ret = parents_src + src + melted
+
+        return ret
+

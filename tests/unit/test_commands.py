@@ -67,27 +67,3 @@ class TestCommands(utils.TestBase):
 
         utils.init()
         utils.add_mypy_cmd(prop=True, glob=False)
-
-    def test_property_cmd(self, capsys):
-        utils.init()
-        utils.add_flake_cmd(prop=True, glob=False)
-
-        e = utils.env()
-        assert repr(e.flake) == "Flake return value"
-        assert "Flake all good" in capsys.readouterr().out
-
-    def test_call_cmd(self, capsys):
-        utils.init()
-        utils.add_flake_cmd(prop=False, glob=False)
-
-        e = utils.env()
-        assert e.flake() == "Flake return value"
-        assert "Flake all good" in capsys.readouterr().out
-
-    def test_property_cmd_no_ret(self, capsys):
-        utils.init()
-        utils.add_mypy_cmd(prop=True, glob=False)
-
-        e = utils.env()
-        assert repr(e.mypy) == ""
-        assert "Mypy all good" in capsys.readouterr().out

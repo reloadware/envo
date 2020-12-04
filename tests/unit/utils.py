@@ -68,7 +68,7 @@ def init() -> None:
     if env_local_file.exists():
         env_local_file.unlink()
 
-    command("test --init")
+    command("init test")
 
 
 def env(env_dir: Path = Path(".")) -> Env:
@@ -92,7 +92,7 @@ def init_child_env(child_dir: Path) -> None:
     child_dir.mkdir()
 
     os.chdir(str(child_dir))
-    command("test --init")
+    command("init test")
 
     replace_in_code("parent: Optional[str] = None", 'parent: Optional[str] = ".."')
 

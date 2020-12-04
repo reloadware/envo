@@ -68,7 +68,7 @@ class TestMisc(utils.TestBase):
         env_dir.mkdir()
         os.chdir(str(env_dir))
 
-        utils.run("envo test --init")
+        utils.run("envo init test")
 
         assert Path("env_comm.py").exists()
         assert Path("env_test.py").exists()
@@ -100,7 +100,7 @@ class TestMisc(utils.TestBase):
     def test_multiple_instances(self):
         shells = []
         for i in range(6):
-            s = utils.Spawn("envo test", debug=False)
+            s = utils.SpawnEnvo("test", debug=False)
             s.start()
             shells.append(s)
 

@@ -144,22 +144,21 @@ class TestHooks(utils.TestBase):
             def on_stderr(self, command: str, out: str) -> str:
                 print("not good :/")
                 return ""
-
             @postcmd(cmd_regex=r"print\(.*\)")
             def post_print(self, command: str, stdout: List[str], stderr: List[str]) -> None:
                 assert "ZeroDivisionError: division by zero\n" in stderr
-                assert "ZeroDivisionError: division by zero\n" not in stdout
-                assert 'not good :/' in stdout
+                assert stdout == ['not good :/', '\n']
                 print("post command test")
             """
         )
 
-        e = shell.start()
+        shell.start()
+        e = shell.expecter
 
         e.prompt().eval()
 
         shell.sendline("print(1/0)")
-        e.output(r"not good :/.*\nxonsh:.*ZeroDivisionError: division by zero\n.*post command test\n").prompt().eval()
+        e.output(r"not good :/\nZeroDivisionError: division by zero\npost command test\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()

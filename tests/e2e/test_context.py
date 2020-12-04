@@ -102,20 +102,20 @@ class TestContext(utils.TestBase):
             @context
             def some_context(self) -> Dict[str, Any]:
                 from time import sleep
-                sleep(2)
+                sleep(4.0)
                 return {"slow_var": "slow var value"}
             """
         )
         shell.start(False)
         e = shell.expecter
 
-        e.prompt(utils.PromptState.MAYBE_LOADING).eval()
+        e.prompt(utils.PromptState.LOADING)
 
         shell.sendline("print(slow_var)")
-        e.output(r"xonsh:.*is not defined\n")
-        e.prompt(utils.PromptState.LOADING).eval()
+        e.output(r"NameError: name 'slow_var' is not defined\n")
+        e.prompt(utils.PromptState.MAYBE_LOADING).eval()
 
-        sleep(1.5)
+        sleep(.0)
 
         e.expected.pop()
         e.prompt().eval()

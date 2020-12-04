@@ -108,8 +108,9 @@ class AssertInTime:
 
 
 class Expecter:
-    def __init__(self, spawn: "Spawn") -> None:
+    def __init__(self, spawn: "SpawnEnvo", stage: str) -> None:
         self._spawn = spawn
+        self.stage = stage
         self.expected: List[str] = []
         self._return_code = 0
         self._expect_exit = False
@@ -126,7 +127,9 @@ class Expecter:
         self.expected.append(re.escape(raw))
         return self
 
-    def prompt(self, state=PromptState.NORMAL, name="sandbox", emoji=const.STAGES.get_stage_name_to_emoji()["test"]) -> "Expecter":
+    def prompt(self, state=PromptState.NORMAL, name="sandbox", emoji: Optional[str]=None) -> "Expecter":
+        if not emoji:
+            emoji=const.STAGES.get_stage_name_to_emoji()[self.stage]
         self.expected.append(str(PromptRe(state=state, name=name, emoji=emoji)))
         return self
 
@@ -161,7 +164,7 @@ class Expecter:
                 raise AssertInTime.TIMEOUT(f"Process has not exit on time with proper exit code (last exit code = {self._spawn.process.poll()})")
 
 
-class Spawn:
+class SpawnEnvo:
     process: Optional[Popen] = None
 
     @injector.klass
@@ -187,7 +190,7 @@ class Spawn:
             return dict(os.environ)
 
         @classmethod
-        def wait_until_ready(cls, timeout=1) -> None:
+        def wait_until_ready(cls, timeout=2) -> None:
             from time import sleep
 
             import envo.e2e
@@ -236,10 +239,12 @@ class Spawn:
 
             cls.wait_until_ready()
 
-    def __init__(self, command: str, debug=True):
+    def __init__(self, stage: str = "", debug=True):
         self.screen = pyte.Screen(200, 50)
         self.stream = pyte.ByteStream(self.screen)
-        self.command = command
+        self.stage = stage
+
+        self.command = f"envo {stage}"
 
         self.expecter = None
         self._buffer = []
@@ -265,7 +270,7 @@ class Spawn:
             self.process.stdout, fcntl.F_SETFL, fcntl.fcntl(self.process.stdout, fcntl.F_GETFL) | os.O_NONBLOCK,
         )
 
-        self.expecter = Expecter(self)
+        self.expecter = Expecter(self, stage=self.stage)
 
         if self.debug:
             injector.connect()
@@ -292,8 +297,8 @@ class Spawn:
         self.process.send_signal(signal.SIGKILL)
 
     @property
-    def envo(self) -> Type["Spawn.RemoteEnvo"]:
-        return Spawn.RemoteEnvo
+    def envo(self) -> Type["SpawnEnvo.RemoteEnvo"]:
+        return SpawnEnvo.RemoteEnvo
 
     def send(self, text: str, expect=True) -> None:
         if expect:
@@ -364,18 +369,23 @@ class Spawn:
             print("COuldn't retrieve log")
 
 
-def shell() -> Spawn:
-    s = Spawn("envo test")
+def shell() -> SpawnEnvo:
+    s = SpawnEnvo("test")
     return s
 
 
-def default_shell() -> Spawn:
-    s = Spawn("envo")
+def comm_shell() -> SpawnEnvo:
+    s = SpawnEnvo("comm")
     return s
 
 
-def bash() -> Spawn:
-    s = Spawn("bash")
+def default_shell() -> SpawnEnvo:
+    s = SpawnEnvo()
+    return s
+
+
+def bash() -> SpawnEnvo:
+    s = SpawnEnvo("bash")
     return s
 
 
@@ -387,6 +397,10 @@ def single_command(command: str) -> str:
     return run(f'envo test -c "{command}"')
 
 
+def envo_run(command: str) -> str:
+    return run(f'envo run {command}')
+
+
 def init_child_env(child_dir: Path) -> None:
     cwd = Path(".").absolute()
     if child_dir.exists():
@@ -394,7 +408,7 @@ def init_child_env(child_dir: Path) -> None:
 
     child_dir.mkdir()
     os.chdir(str(child_dir))
-    result = run("envo test --init")
+    result = run("envo init test")
     assert "Created test environment" in result
 
     comm_file = Path("env_comm.py")

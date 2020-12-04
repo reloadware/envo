@@ -111,7 +111,7 @@ class ExistingVenv(BaseVenv):
     def _get_venv_dir(self) -> Optional[Path]:
         path = self.root
 
-        while path.parent:
+        while path.parent != Path("/"):
             if (path / self.venv_dir_name).exists():
                 return path
             path = path.parent
@@ -157,19 +157,16 @@ class VirtualEnv(Plugin):
         try:
             self._venv = ExistingVenv(root=self.venv_path,
                                 venv_dir_name=venv_dir_name, discover=venv_path is None)
+            self._venv.activate(self)
+
         except CantFindEnv:
             self.__logger.info("Couldn't find venv. Falling back to predicting")
             self._venv = PredictedVenv(root=self.venv_path, venv_dir_name=venv_dir_name)
+            self._venv.activate(self)
 
     @classmethod
-    def init(cls, self: BaseEnv, venv_path: Optional[Path] = None, venv_dir_name: str = ".venv"):
-        super().init(self, venv_path, venv_dir_name)
-
-    @venv.onload
-    def __activate(self) -> None:
-        self.__logger.info("Activating VirtualEnv")
-        self._venv.activate(self)
-        self.__logger.info(f"Activated {self._venv.venv_path.path}")
+    def init(cls, self: "VirtualEnv", venv_path: Optional[Path] = None, venv_dir_name: str = ".venv"):
+        VirtualEnv.__init__(self, venv_path, venv_dir_name)
 
     @venv.onunload
     def __deactivate(self) -> None:

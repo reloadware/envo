@@ -186,8 +186,7 @@ class Shell(BaseShell):  # type: ignore
         load_builtins(ctx=ctx, execer=execer)
         env = builtins.__xonsh__.env  # type: ignore
         env.update({"XONSH_INTERACTIVE": True, "SHELL_TYPE": "prompt_toolkit",
-                    "COMPLETIONS_BRACKETS": False,
-                    "XONSH_SHOW_TRACEBACK": True})
+                    "COMPLETIONS_BRACKETS": False})
 
         if "ENVO_SHELL_NOHISTORY" not in os.environ:
             builtins.__xonsh__.history = xhm.construct_history(  # type: ignore
@@ -210,6 +209,9 @@ class Shell(BaseShell):  # type: ignore
         builtins.__xonsh__.shell.shell = shell  # type: ignore
 
         return shell
+
+    def set_fulll_traceback_enabled(self, enabled: bool = True):
+        self.environ["XONSH_SHOW_TRACEBACK"] = enabled
 
     def execute(self, line: str) -> Any:
         return BaseShell.default(self, line)

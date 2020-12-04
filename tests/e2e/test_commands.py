@@ -130,6 +130,12 @@ class TestCommands(utils.TestBase):
 
         assert res == "Flake all good\r\nFlake return value\r\n"
 
+    def test_envo_run(self):
+        utils.add_flake_cmd(file=Path("env_comm.py"))
+        res = utils.envo_run("flake")
+
+        assert res == "Flake all good\r\nFlake return value\r\n"
+
     def test_env_variables_available_in_run(self, shell):
         utils.add_declaration("test_var: Raw[str]")
         utils.add_definition('self.test_var = "test_value"')
