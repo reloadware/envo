@@ -258,11 +258,6 @@ def render_py_file(template_path: Path, output: Path, context: Dict[str, Any]) -
 
 
 def import_from_file(path: Path) -> Any:
-    if not path.is_absolute():
-        frame = inspect.stack()[1]
-        caller_path_dir = Path(frame[1]).parent
-        path = caller_path_dir / path
-
     loader = importlib.machinery.SourceFileLoader(str(path), str(path))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     module = importlib.util.module_from_spec(spec)
@@ -329,13 +324,13 @@ class EnvParser:
         ret = [EnvParser(p) for p in parents_paths]
         return ret
 
-    def get_processed(self) -> str:
+    def get_stub(self) -> str:
         # remove duplicates
         parents_src = ""
         for p in self.parents:
-            parents_src += p.get_processed() + "\n"
+            parents_src += p.get_stub() + "\n"
 
-        parents = [p.class_name for p in self.parents]
+        parents = [f"__{p.class_name}" for p in self.parents]
 
         class_name = f"__{self.class_name}"
         src = self.source.replace(self.class_name, class_name)
