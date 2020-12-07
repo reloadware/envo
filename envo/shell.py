@@ -2,13 +2,12 @@ import builtins
 import os
 import sys
 import time
-
-import fire
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, TextIO, Union
 
+import fire
 from prompt_toolkit.data_structures import Size
 from xonsh.base_shell import BaseShell
 from xonsh.execer import Execer
@@ -57,24 +56,24 @@ class Shell(BaseShell):  # type: ignore
 
     @dataclass
     class Callbacs:
-        pre_cmd: Callback = Callback(None)
-        on_stdout: Callback = Callback(None)
-        on_stderr: Callback = Callback(None)
-        on_cmd: Callback = Callback(None)
-        post_cmd: Callback = Callback(None)
-        on_enter: Callback = Callback(None)
-        on_exit: Callback = Callback(None)
-        on_ready: Callback = Callback(None)
+        pre_cmd: Callback = Callback()
+        on_stdout: Callback = Callback()
+        on_stderr: Callback = Callback()
+        on_cmd: Callback = Callback()
+        post_cmd: Callback = Callback()
+        on_enter: Callback = Callback()
+        on_exit: Callback = Callback()
+        on_ready: Callback = Callback()
 
         def reset(self) -> None:
-            self.pre_cmd = Callback(None)
-            self.on_stdout = Callback(None)
-            self.on_stderr = Callback(None)
-            self.on_cmd: Callback = Callback(None)
-            self.post_cmd = Callback(None)
-            self.on_enter = Callback(None)
-            self.on_exit = Callback(None)
-            self.on_ready = Callback(None)
+            self.pre_cmd = Callback()
+            self.on_stdout = Callback()
+            self.on_stderr = Callback()
+            self.on_cmd: Callback = Callback()
+            self.post_cmd = Callback()
+            self.on_enter = Callback()
+            self.on_exit = Callback()
+            self.on_ready = Callback()
 
     def __init__(self, calls: Callbacs, execer: Execer) -> None:
         super().__init__(execer=execer, ctx={})
@@ -115,7 +114,11 @@ class Shell(BaseShell):  # type: ignore
             self.add_namespace_if_not_exists(namespace)
 
         max_lenght = 50
-        log_value = str(value) if len(str(value)) < max_lenght else f"{str(value)[0:max_lenght]}(...)"
+        log_value = (
+            str(value)
+            if len(str(value)) < max_lenght
+            else f"{str(value)[0:max_lenght]}(...)"
+        )
         log_value = log_value.replace("{", "{{")
         log_value = log_value.replace("}", "}}")
         logger.debug(f'Setting "{name} = {log_value}" variable')
@@ -138,7 +141,9 @@ class Shell(BaseShell):  # type: ignore
             sys.argv = argv_before
 
     def add_namespace_if_not_exists(self, name: str) -> None:
-        self.run_code(f'class Namespace: pass\n{name} = Namespace() if "{name}" not in globals() else {name}')
+        self.run_code(
+            f'class Namespace: pass\n{name} = Namespace() if "{name}" not in globals() else {name}'
+        )
 
     def set_context(self, context: Dict[str, Any]) -> None:
         for k, v in context.items():
@@ -185,8 +190,13 @@ class Shell(BaseShell):  # type: ignore
 
         load_builtins(ctx=ctx, execer=execer)
         env = builtins.__xonsh__.env  # type: ignore
-        env.update({"XONSH_INTERACTIVE": True, "SHELL_TYPE": "prompt_toolkit",
-                    "COMPLETIONS_BRACKETS": False})
+        env.update(
+            {
+                "XONSH_INTERACTIVE": True,
+                "SHELL_TYPE": "prompt_toolkit",
+                "COMPLETIONS_BRACKETS": False,
+            }
+        )
 
         if "ENVO_SHELL_NOHISTORY" not in os.environ:
             builtins.__xonsh__.history = xhm.construct_history(  # type: ignore
@@ -232,7 +242,7 @@ class Shell(BaseShell):  # type: ignore
                 text = self.on_write(command=self.command, out=text)
                 self.output.append(text)
 
-                if isinstance(text,str):
+                if isinstance(text, str):
                     self.device.write(text)
                 else:
                     self.device.buffer.write(text)

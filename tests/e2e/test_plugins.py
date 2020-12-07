@@ -7,7 +7,13 @@ from tests.e2e import utils
 
 
 class TestVenv(utils.TestBase):
-    def assert_activated(self, shell, dir_where_is_venv="sandbox", activated_from="sandbox", venv_name=".venv") -> None:
+    def assert_activated(
+        self,
+        shell,
+        dir_where_is_venv="sandbox",
+        activated_from="sandbox",
+        venv_name=".venv",
+    ) -> None:
         e = shell.expecter
         shell.sendline("import url_regex")
 
@@ -24,7 +30,16 @@ class TestVenv(utils.TestBase):
         assert path.count(f"{venv_path}/bin") == 1
 
         sys_path = shell.envo.get_sys_path()
-        assert len([p for p in sys_path if f'sandbox/{venv_name}/lib/python3.6/site-packages' in p]) == 1
+        assert (
+            len(
+                [
+                    p
+                    for p in sys_path
+                    if f"sandbox/{venv_name}/lib/python3.6/site-packages" in p
+                ]
+            )
+            == 1
+        )
 
     def assert_predicted(self, shell, venv_name=".venv") -> None:
         path = shell.envo.get_env_field("path")
@@ -32,7 +47,7 @@ class TestVenv(utils.TestBase):
         assert path.count(f"sandbox/{venv_name}/bin") == 1
 
         sys_path = shell.envo.get_sys_path()
-        assert len([p for p in sys_path if f'sandbox/{venv_name}/lib/python' in p]) > 10
+        assert len([p for p in sys_path if f"sandbox/{venv_name}/lib/python" in p]) > 10
 
     @pytest.mark.parametrize(
         "file",
@@ -81,7 +96,9 @@ class TestVenv(utils.TestBase):
 
     def test_autodiscovery_cant_find(self, shell):
         utils.add_plugins("VirtualEnv")
-        utils.replace_in_code("pass", "VirtualEnv.init(self, venv_dir_name='.some_venv')")
+        utils.replace_in_code(
+            "pass", "VirtualEnv.init(self, venv_dir_name='.some_venv')"
+        )
 
         e = shell.start()
         e.prompt().eval()
@@ -98,13 +115,14 @@ class TestVenv(utils.TestBase):
         os.chdir("child")
 
         utils.add_plugins("VirtualEnv")
-        utils.replace_in_code("pass", "VirtualEnv.init(self, venv_dir_name='.custom_venv')")
+        utils.replace_in_code(
+            "pass", "VirtualEnv.init(self, venv_dir_name='.custom_venv')"
+        )
 
         e = shell.start()
         e.prompt(name="child").eval()
 
-        self.assert_activated(shell, venv_name='.custom_venv', activated_from="child")
+        self.assert_activated(shell, venv_name=".custom_venv", activated_from="child")
 
         shell.exit()
         e.exit().eval()
-

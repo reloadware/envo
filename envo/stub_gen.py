@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import TYPE_CHECKING, Type
 
-
 from envo import misc
 
 if TYPE_CHECKING:

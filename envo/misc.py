@@ -5,16 +5,16 @@ import re
 import sys
 import time
 import traceback
-
 from dataclasses import dataclass
 from pathlib import Path
+from textwrap import dedent
 from threading import Thread
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from textwrap import dedent
+from watchdog.observers import Observer
 
-import inotify.adapters
-import inotify.constants
+from watchdog.events import PatternMatchingEventHandler, FileModifiedEvent, FileSystemEventHandler
+
 from globmatch_temp import glob_match
 
 __all__ = [
@@ -24,7 +24,7 @@ __all__ = [
     "import_from_file",
     "EnvoError",
     "Callback",
-    "Inotify"
+    "Inotify",
 ]
 
 from envo import logger
@@ -35,7 +35,7 @@ class EnvoError(Exception):
 
 
 class Callback:
-    def __init__(self, func: Optional[Callable[..., Any]]) -> None:
+    def __init__(self, func: Optional[Callable[..., Any]] = None) -> None:
         self.func = func
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
@@ -57,160 +57,74 @@ class InotifyPath:
             self.relative_str += "/"
 
     def match(self, include: List[str], exclude: List[str]) -> bool:
-        return not glob_match(self.relative_str, exclude) and glob_match(self.relative_str, include)
+        return not glob_match(self.relative_str, exclude) and glob_match(
+            self.relative_str, include
+        )
 
     def is_dir(self) -> bool:
         return self.absolute.is_dir()
 
 
-class Inotify:
-    @dataclass
-    class Event:
-        path: InotifyPath
-        type_names: Tuple[str]
-        during_pause: bool
-        during_commands: bool
-
+class Inotify(FileSystemEventHandler):
     @dataclass
     class Sets:
         include: List[str]
         exclude: List[str]
         root: Path
+        name: str = "Anonymous"
 
     @dataclass
     class Callbacks:
         on_event: Callback
 
-    device: inotify.adapters.Inotify
-    stop: bool
-    events: List[Event]
-    ready: bool
-
-    _pause: bool
-    _collector_thread: Thread
-    _producer_thread: Thread
-    _on_event: Callback
-
     def __init__(self, se: Sets, calls: Callbacks):
+        self.include = [p.lstrip("./") for p in se.include]
+        self.exclude = [p.lstrip("./") for p in se.exclude]
+        self.root = se.root
+
+        super().__init__()
         self.se = se
         self.calls = calls
 
-        self.device = inotify.adapters.Inotify()
-        self.remove_watches()
+        self.observer = Observer()
+        self.observer.schedule(self, str(self.se.root), recursive=True)
 
-        self.ready = False
+    def on_any_event(self, event: FileModifiedEvent):
+        self.calls.on_event(event)
 
-        self._pause = False
-        self._stop = False
-        self._collector_thread = Thread(target=self._collector_thread_fun)
-        self._producer_thread = Thread(target=self._producer_thread_fun)
-        self.events = []
-
-        self.remove_watches()
-        self.add_watch_recursive(self.se.root)
-
-    def _collector_thread_fun(self) -> None:
-        logger.debug("Starting collector thread")
-        for raw_event in self.device.event_gen(yield_nones=False):
-            if self._stop:
-                return
-            (_, type_names, path, filename) = raw_event
-            raw_path = Path(path) / Path(filename)
-
-            event = Inotify.Event(
-                path=InotifyPath(raw_path=raw_path, root=self.se.root),
-                type_names=type_names,
-                during_pause=self._pause,
-                during_commands=self._pause,
-            )
-
-            if event.path.match(self.se.include, self.se.exclude) or "IN_ISDIR" in event.type_names:
-                if self._pause:
-                    continue
-
-                if "IN_CREATE" in event.type_names:
-                    self.add_watch_recursive(event.path.absolute)
-
-                if any([s in event.type_names for s in ["IN_DELETE", "IN_DELETE_SELF"]]):
-                    self.remove_watch(event.path.absolute, recursive=True)
-
-                self.events.append(event)
-
-    def _producer_thread_fun(self) -> None:
-        logger.debug("Starting producer thread")
-        self.ready = True
-
-        while not self._stop:
-            while self.events:
-                if self._pause:
-                    break
-                e = self.events.pop(0)
-                self.calls.on_event(e)
-
-            time.sleep(0.1)
-
-    def flush(self) -> None:
-        self.events = []
+    def match(self, path: str, include: List[str], exclude: List[str]) -> bool:
+        return not glob_match(path, exclude) and glob_match(path, include)
 
     def start(self) -> None:
         logger.debug("Starting Inotify")
-        self._collector_thread.start()
-        self._producer_thread.start()
-
-    def remove_watches(self) -> None:
-        self.device._Inotify__watches = {}
-        self.device._Inotify__watches_r = {}
-
-    def remove_watch(self, path: Path, recursive=False) -> None:
-        if str(path) not in self.device._Inotify__watches:
-            return
-
-        self.device._Inotify__watches.pop(str(path))
-        if recursive:
-            watches = self.device._Inotify__watches.copy()
-            for f in watches:
-                if str(f).startswith(str(path)):
-                    self.device._Inotify__watches.remove(f)
-
-    def pause(self) -> None:
-        self._pause = True
-
-    def resume(self) -> None:
-        self._pause = False
-
-    def add_watch(self, raw_path: Path) -> None:
-        path = InotifyPath(raw_path=raw_path, root=self.se.root)
-        if str(path.absolute) not in self.device._Inotify__watches:
-            self.device.add_watch(str(path.absolute))
-
-    def add_watch_recursive(self, raw_path: Path) -> None:
-        if self._stop:
-            return
-
-        path = InotifyPath(raw_path=raw_path, root=self.se.root)
-        if path.relative == Path("."):
-            self.device.add_watch(str(path.absolute))
-        else:
-            if not path.match(self.se.include, self.se.exclude):
-                return
-
-        if path.relative.is_dir():
-            self.add_watch(path.absolute)
-            for p in path.absolute.iterdir():
-                self.add_watch_recursive(p)
-        else:
-            self.add_watch(path.absolute)
+        self.observer.start()
 
     def clone(self) -> "Inotify":
-        return Inotify(se=self.se,
-                       calls=self.calls)
+        return Inotify(se=self.se, calls=self.calls)
 
     def stop(self) -> None:
-        self._stop = True
-        self.flush()
-        env_comm = self.se.root / "env_comm.py"
-        # Save the same content to trigger inotify event
-        env_comm.read_text()
+        self.observer.stop()
+
+    def dispatch(self, event: FileModifiedEvent):
+        """Dispatches events to the appropriate methods.
+
+        :param event:
+            The event object representing the file system event.
+        :type event:
+            :class:`FileSystemEvent`
+        """
+        from watchdog.utils import has_attribute
+        from watchdog.utils import unicode_paths
+
+        paths = []
+        if has_attribute(event, 'dest_path'):
+            paths.append(unicode_paths.decode(event.dest_path))
+        if event.src_path:
+            paths.append(unicode_paths.decode(event.src_path))
+
+        if any(self.match(str(Path(p).relative_to(self.root)), include=self.include,
+                      exclude=self.exclude) for p in paths):
+            super().dispatch(event)
 
 
 def dir_name_to_class_name(dir_name: str) -> str:
@@ -288,7 +202,6 @@ def get_envo_relevant_traceback(exc: BaseException) -> List[str]:
     return msg
 
 
-
 @dataclass
 class EnvParser:
     path: Path
@@ -317,10 +230,14 @@ class EnvParser:
         parents_str = re.search(r"parents.*=.*\[(.*)]", self.source)[1]
         if not parents_str:
             return []
-        parents_paths_relative = parents_str.replace("'", "").replace('"', "").split(",")
+        parents_paths_relative = (
+            parents_str.replace("'", "").replace('"', "").split(",")
+        )
         parents_paths_relative = [p.strip() for p in parents_paths_relative]
 
-        parents_paths = [Path(self.path.parent / p).resolve() for p in parents_paths_relative]
+        parents_paths = [
+            Path(self.path.parent / p).resolve() for p in parents_paths_relative
+        ]
         ret = [EnvParser(p) for p in parents_paths]
         return ret
 
@@ -335,13 +252,14 @@ class EnvParser:
         class_name = f"__{self.class_name}"
         src = self.source.replace(self.class_name, class_name)
 
-        melted = dedent(f"""\n
+        melted = dedent(
+            f"""\n
         class {self.class_name}(envo.env.Env, {class_name}, {",".join(parents)} {"," if parents else ""} {",".join(self.plugins)}):
             def __init__(self):
                 pass
-        """)
+        """
+        )
 
         ret = parents_src + src + melted
 
         return ret
-

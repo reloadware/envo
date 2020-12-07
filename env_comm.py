@@ -1,28 +1,26 @@
-from typing import List, Dict, Any, Optional, Tuple  # noqa: F401
-
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
 
 import envo  # noqa: F401
-
 from envo import (  # noqa: F401
-    logger,
+    Namespace,
+    Plugin,
+    Raw,
+    UserEnv,
+    VirtualEnv,
+    boot_code,
     command,
     context,
-    Raw,
-    run,
-    precmd,
-    onstdout,
-    onstderr,
-    postcmd,
-    onload,
+    logger,
     oncreate,
-    onunload,
     ondestroy,
-    boot_code,
-    Plugin,
-    VirtualEnv,
-    Namespace,
-    UserEnv
+    onload,
+    onstderr,
+    onstdout,
+    onunload,
+    postcmd,
+    precmd,
+    run,
 )
 
 # Declare your command namespaces here
@@ -68,9 +66,7 @@ class EnvoCommEnv(UserEnv):  # type: ignore
 
     @trop.context
     def __some_context(self):
-        return {
-            "df": 123
-        }
+        return {"df": 123}
 
     @onload
     def __on_load(self) -> None:

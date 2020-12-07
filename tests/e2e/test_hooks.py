@@ -158,7 +158,9 @@ class TestHooks(utils.TestBase):
         e.prompt().eval()
 
         shell.sendline("print(1/0)")
-        e.output(r"not good :/\nZeroDivisionError: division by zero\npost command test\n").prompt().eval()
+        e.output(
+            r"not good :/\nZeroDivisionError: division by zero\npost command test\n"
+        ).prompt().eval()
 
         shell.exit()
         e.exit().eval()

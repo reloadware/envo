@@ -12,7 +12,7 @@ from pathlib import Path
 from subprocess import Popen
 from threading import Thread
 from time import sleep
-from typing import TYPE_CHECKING, List, Optional, Type, Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Set
 
 import pexpect
 import pyte
@@ -22,11 +22,11 @@ import requests
 from rhei import Stopwatch
 from stickybeak import Injector
 
-from envo import const, Env
+from envo import Env, const
 from envo.e2e import STICKYBEAK_PORT
 from envo.logging import Logger
+from envo.misc import Inotify
 from envo.shell import PromptBase
-from tests.utils import add_namespace  # noqa F401
 from tests.utils import add_boot  # noqa F401
 from tests.utils import add_command  # noqa F401
 from tests.utils import add_context  # noqa F401
@@ -35,6 +35,7 @@ from tests.utils import add_definition  # noqa F401
 from tests.utils import add_flake_cmd  # noqa F401
 from tests.utils import add_hook  # noqa F401
 from tests.utils import add_mypy_cmd  # noqa F401
+from tests.utils import add_namespace  # noqa F401
 from tests.utils import add_plugins  # noqa F401
 from tests.utils import change_file  # noqa F401
 from tests.utils import replace_in_code  # noqa F401
@@ -61,7 +62,12 @@ class PromptState(Enum):
 class PromptRe(PromptBase):
     default = r"[\(.*\)]*.*?\$ ?"
 
-    def __init__(self, state: PromptState, name: str, emoji=const.STAGES.get_stage_name_to_emoji()["test"]) -> None:
+    def __init__(
+        self,
+        state: PromptState,
+        name: str,
+        emoji=const.STAGES.get_stage_name_to_emoji()["test"],
+    ) -> None:
         super().__init__()
 
         self.state = state
@@ -127,9 +133,11 @@ class Expecter:
         self.expected.append(re.escape(raw))
         return self
 
-    def prompt(self, state=PromptState.NORMAL, name="sandbox", emoji: Optional[str]=None) -> "Expecter":
+    def prompt(
+        self, state=PromptState.NORMAL, name="sandbox", emoji: Optional[str] = None
+    ) -> "Expecter":
         if not emoji:
-            emoji=const.STAGES.get_stage_name_to_emoji()[self.stage]
+            emoji = const.STAGES.get_stage_name_to_emoji()[self.stage]
         self.expected.append(str(PromptRe(state=state, name=name, emoji=emoji)))
         return self
 
@@ -147,7 +155,9 @@ class Expecter:
 
     def eval(self, timeout: int = 4) -> None:
         def condition():
-            return re.fullmatch(self.expected_regex, self._spawn.get_cleaned_display(), re.DOTALL)
+            return re.fullmatch(
+                self.expected_regex, self._spawn.get_cleaned_display(), re.DOTALL
+            )
 
         AssertInTime(condition, timeout)
 
@@ -161,7 +171,9 @@ class Expecter:
             try:
                 AssertInTime(condition, timeout)
             except AssertInTime.TIMEOUT:
-                raise AssertInTime.TIMEOUT(f"Process has not exit on time with proper exit code (last exit code = {self._spawn.process.poll()})")
+                raise AssertInTime.TIMEOUT(
+                    f"Process has not exit on time with proper exit code (last exit code = {self._spawn.process.poll()})"
+                )
 
 
 class SpawnEnvo:
@@ -172,21 +184,25 @@ class SpawnEnvo:
         @classmethod
         def get_logger(cls) -> "Logger":
             from envo.logging import logger
+
             return logger
 
         @classmethod
         def get_env_field(cls, field: str) -> Any:
             import envo.e2e
+
             return getattr(envo.e2e.envo.mode.env, field)
 
         @classmethod
         def get_sys_path(cls) -> List[str]:
             import sys
+
             return sys.path
 
         @classmethod
         def get_os_environ(cls) -> Dict[str, str]:
             import os
+
             return dict(os.environ)
 
         @classmethod
@@ -215,7 +231,9 @@ class SpawnEnvo:
             sleep(0.2)
 
         @classmethod
-        def assert_reloaded(cls, number: int = 1, path="env_test.py", timeout=2) -> None:
+        def assert_reloaded(
+            cls, number: int = 1, path="env_test.py", timeout=2
+        ) -> None:
             from time import sleep
 
             from envo import logger, logging
@@ -227,11 +245,15 @@ class SpawnEnvo:
                 sleep(sleep_time)
                 passed_time += sleep_time
 
-                msgs = logger.get_msgs(filter=logging.MsgFilter(metadata_re={"type": r"reload"}))
+                msgs = logger.get_msgs(
+                    filter=logging.MsgFilter(metadata_re={"type": r"reload"})
+                )
                 if number == 0 and len(msgs) == 0:
                     break
 
-                if len(msgs) == number and str(msgs[-1].metadata["path"]).endswith(path):
+                if len(msgs) == number and str(msgs[-1].metadata["path"]).endswith(
+                    path
+                ):
                     break
 
                 if passed_time >= timeout:
@@ -264,10 +286,16 @@ class SpawnEnvo:
             self.on_exit()
 
         self.process = Popen(
-            self.command.split(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE, env=environ,
+            self.command.split(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE,
+            env=environ,
         )
         fcntl.fcntl(
-            self.process.stdout, fcntl.F_SETFL, fcntl.fcntl(self.process.stdout, fcntl.F_GETFL) | os.O_NONBLOCK,
+            self.process.stdout,
+            fcntl.F_SETFL,
+            fcntl.fcntl(self.process.stdout, fcntl.F_GETFL) | os.O_NONBLOCK,
         )
 
         self.expecter = Expecter(self, stage=self.stage)
@@ -398,7 +426,7 @@ def single_command(command: str) -> str:
 
 
 def envo_run(command: str) -> str:
-    return run(f'envo run {command}')
+    return run(f"envo run {command}")
 
 
 def init_child_env(child_dir: Path) -> None:
@@ -418,7 +446,10 @@ def init_child_env(child_dir: Path) -> None:
 
     test_file = Path("env_test.py")
     content = test_file.read_text()
-    content = content.replace('parents: List[str] = ["env_comm.py"]', 'parents = ["env_comm.py", "../env_test.py"]')
+    content = content.replace(
+        'parents: List[str] = ["env_comm.py"]',
+        'parents = ["env_comm.py", "../env_test.py"]',
+    )
     test_file.write_text(content)
 
     os.chdir(str(cwd))

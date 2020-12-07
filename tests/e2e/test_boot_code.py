@@ -2,7 +2,6 @@ from pathlib import Path
 from time import sleep
 
 from tests.e2e import utils
-
 from tests.e2e.utils import PromptState
 
 
@@ -28,7 +27,7 @@ class TestBootCode(utils.TestBase):
         utils.add_boot(boot)
         e = shell.start()
 
-        e.output(r'.*File.*ZeroDivisionError: division by zero\n')
+        e.output(r".*File.*ZeroDivisionError: division by zero\n")
         e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         env_test.write_text(file_before)

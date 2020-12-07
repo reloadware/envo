@@ -19,7 +19,9 @@ class TestActivating:
         result = run("envo init")
         assert b"Created comm environment" in result
 
-    def assert_healthy_and_correct_files_in_dir(self, dir: Path, files_n: int = 2, stage:str = "comm") -> None:
+    def assert_healthy_and_correct_files_in_dir(
+        self, dir: Path, files_n: int = 2, stage: str = "comm"
+    ) -> None:
         self.shell.start()
 
         e = self.shell.expecter
@@ -62,3 +64,11 @@ class TestActivating:
         self.shell = default_shell
         self.assert_healthy_and_correct_files_in_dir(Path("."), 4, stage="local")
 
+    def test_custom_env(self):
+        result = run("envo init damian")
+        assert b"Created damian environment" in result
+
+        shell = utils.SpawnEnvo("damian")
+
+        self.shell = shell
+        self.assert_healthy_and_correct_files_in_dir(Path("."), 4, stage="damian")

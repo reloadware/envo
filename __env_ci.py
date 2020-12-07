@@ -23,7 +23,9 @@ class EnvoEnv(EnvoEnvComm):  # type: ignore
 
     @command(glob=True)
     def test(self) -> None:
-        run("pytest --reruns 10 -v tests --cov-report xml:workspace/cov.xml --cov=envo ./workspace")
+        run(
+            "pytest --reruns 10 -v tests --cov-report xml:workspace/cov.xml --cov=envo ./workspace"
+        )
 
     @command
     def build(self) -> None:
@@ -73,4 +75,6 @@ class EnvoEnv(EnvoEnvComm):  # type: ignore
             """
         )
 
+
 Env = EnvoEnv
+

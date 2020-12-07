@@ -16,7 +16,8 @@ class TestEnvVariables(utils.TestBase):
             """
         )
         utils.add_definition(
-            'self.python = self.Python(version="3.8.2", name="python")', file=Path("env_test.py"),
+            'self.python = self.Python(version="3.8.2", name="python")',
+            file=Path("env_test.py"),
         )
 
         e = shell.start()
@@ -43,7 +44,8 @@ class TestEnvVariables(utils.TestBase):
             """
         )
         utils.add_definition(
-            'self.python = self.Python(version="3.8.2", name="python")', file=Path("env_test.py"),
+            'self.python = self.Python(version="3.8.2", name="python")',
+            file=Path("env_test.py"),
         )
 
         e = shell.start()
@@ -75,7 +77,8 @@ class TestEnvVariables(utils.TestBase):
             """
         )
         utils.add_definition(
-            'self.python = self.Python(version=self.Python.Version("3", "6"), name="python")', file=Path("env_test.py"),
+            'self.python = self.Python(version=self.Python.Version("3", "6"), name="python")',
+            file=Path("env_test.py"),
         )
 
         e = shell.start()
@@ -122,7 +125,8 @@ class TestEnvVariables(utils.TestBase):
             """
         )
         utils.add_definition(
-            'self.python = self.Python(version="3.8.2")', file=Path("env_test.py"),
+            'self.python = self.Python(version="3.8.2")',
+            file=Path("env_test.py"),
         )
 
         utils.add_definition(
@@ -159,7 +163,8 @@ class TestEnvVariables(utils.TestBase):
             """
         )
         utils.add_definition(
-            'self.python = self.Python(version=self.Python.Version("3", "6", "raw_value"), name="python")', file=Path("env_test.py"),
+            'self.python = self.Python(version=self.Python.Version("3", "6", "raw_value"), name="python")',
+            file=Path("env_test.py"),
         )
 
         e = shell.start()
@@ -191,7 +196,7 @@ class TestEnvVariables(utils.TestBase):
             self.python = self.Python(version="3.8.2")
             self.javascript = self.Javascript(version="3.8.2")
             """,
-            file=Path("env_test.py")
+            file=Path("env_test.py"),
         )
 
         e = shell.start()
@@ -200,4 +205,3 @@ class TestEnvVariables(utils.TestBase):
 
         shell.exit()
         e.exit().eval()
-

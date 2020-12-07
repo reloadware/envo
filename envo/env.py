@@ -25,6 +25,8 @@ from typing import (
 
 import fire
 from rhei import Stopwatch
+from watchdog import events
+from watchdog.events import FileModifiedEvent
 
 from envo import logger
 from envo.logging import Logger
@@ -123,7 +125,9 @@ class MagicFunction:
             )
 
         if missing_args:
-            raise EnvoError(f"Missing magic function args {list(missing_args)}:\n" f"{func_info}")
+            raise EnvoError(
+                f"Missing magic function args {list(missing_args)}:\n" f"{func_info}"
+            )
 
     @property
     def namespaced_name(self):
@@ -174,7 +178,7 @@ class magic_function:  # noqa: N801
             func=func,
             type=self.type,
             expected_fun_args=self.expected_fun_args,
-            namespace=self.namespace
+            namespace=self.namespace,
         )
 
     def __new__(cls, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
@@ -188,7 +192,7 @@ class magic_function:  # noqa: N801
                 func=func,
                 type=cls.type,
                 expected_fun_args=cls.expected_fun_args,
-                namespace=cls.namespace
+                namespace=cls.namespace,
             )
         else:
             obj = super().__new__(cls)
@@ -204,6 +208,7 @@ class command(magic_function):  # noqa: N801
     """
     @command decorator class.
     """
+
     klass = Command
     type: str = "command"
 
@@ -279,16 +284,16 @@ class context(magic_function):  # noqa: N801
 
 
 magic_functions = {
-"command": command,
-"context": context,
-"boot_code": boot_code,
-"onload": onload,
-"onunload": onunload,
-"oncreate": oncreate,
-"ondestroy": ondestroy,
-"precmd": precmd,
-"onstdout": onstdout,
-"onstderr": onstderr,
+    "command": command,
+    "context": context,
+    "boot_code": boot_code,
+    "onload": onload,
+    "onunload": onunload,
+    "oncreate": oncreate,
+    "ondestroy": ondestroy,
+    "precmd": precmd,
+    "onstdout": onstdout,
+    "onstderr": onstderr,
 }
 
 
@@ -333,11 +338,19 @@ class Field:
         if self.raw:
             return self.cleaned_name
         else:
-            return f"{self.namespace}_{self.cleaned_name}" if self.namespace else self.cleaned_name
+            return (
+                f"{self.namespace}_{self.cleaned_name}"
+                if self.namespace
+                else self.cleaned_name
+            )
 
     @property
     def full_name(self) -> str:
-        return f"{self.namespace}.{self.cleaned_name}" if self.namespace else self.cleaned_name
+        return (
+            f"{self.namespace}.{self.cleaned_name}"
+            if self.namespace
+            else self.cleaned_name
+        )
 
 
 class BaseEnv:
@@ -345,6 +358,7 @@ class BaseEnv:
         """
         Environment metadata.
         """
+
         root: Path
         name: Optional[str] = None
         version: str = "0.1.0"
@@ -365,16 +379,29 @@ class BaseEnv:
 
     @classmethod
     def is_user_env(cls) -> bool:
-        return issubclass(cls, UserEnv) and cls is not UserEnv and "InheritedEnv" not in str(cls)
+        return (
+            issubclass(cls, UserEnv)
+            and cls is not UserEnv
+            and "InheritedEnv" not in str(cls)
+        )
 
     @classmethod
     def is_envo_env(cls) -> bool:
-        return issubclass(cls, EnvoEnv) and cls is not EnvoEnv and "InheritedEnv" not in str(cls)
+        return (
+            issubclass(cls, EnvoEnv)
+            and cls is not EnvoEnv
+            and "InheritedEnv" not in str(cls)
+        )
 
     @classmethod
     def is_plugin_env(cls) -> bool:
         from envo import Plugin
-        return issubclass(cls, Plugin) and cls is not Plugin and "InheritedEnv" not in str(cls)
+
+        return (
+            issubclass(cls, Plugin)
+            and cls is not Plugin
+            and "InheritedEnv" not in str(cls)
+        )
 
     @classmethod
     def get_user_envs(cls) -> List[Type["BaseEnv"]]:
@@ -444,16 +471,10 @@ class Env(EnvoEnv):
         reloader_enabled: bool = True
         blocking: bool = False
 
-
     _parents: List[Type["Env"]]
     _files_watchers: List[Inotify]
-    _default_watch_files = ["**/", "env_*.py"]
-    _default_ignore_files = [
-        r"**/.*",
-        r"**/*~",
-        r"**/__pycache__",
-        r"**/__envo_lock__"
-    ]
+    _default_watch_files = ["env_*.py"]
+    _default_ignore_files = [r"**/.*", r"**/*~", r"**/__pycache__"]
 
     def __init__(self, calls: Callbacks, se: Sets, li: Links) -> None:
         self._calls = calls
@@ -480,7 +501,9 @@ class Env(EnvoEnv):
         self.root = self.meta.root
         self.stage = self.meta.stage
         self.envo_stage = self.stage
-        self.logger.info("Starting env", metadata={"root": self.root, "stage": self.stage})
+        self.logger.info(
+            "Starting env", metadata={"root": self.root, "stage": self.stage}
+        )
 
         self.path = os.environ["PATH"]
 
@@ -565,13 +588,17 @@ class Env(EnvoEnv):
         for c in self.__class__.mro():
             if not hasattr(c, "__annotations__"):
                 continue
-            field_names |= set([f for f in c.__annotations__.keys() if not f.startswith("_")])
+            field_names |= set(
+                [f for f in c.__annotations__.keys() if not f.startswith("_")]
+            )
 
         var_names = set()
         f: str
         for f in dir(self):
             # skip properties
-            if hasattr(self.__class__, f) and inspect.isdatadescriptor(getattr(self.__class__, f)):
+            if hasattr(self.__class__, f) and inspect.isdatadescriptor(
+                getattr(self.__class__, f)
+            ):
                 continue
 
             attr: Any = getattr(self, f)
@@ -624,9 +651,18 @@ class Env(EnvoEnv):
 
                 raw = "envo.env.Raw" in str(a)
                 if is_dataclass(t):
-                    ret.update(cls.fields(attr, namespace=f"{namespace}_{f}" if namespace and not raw else f))
+                    ret.update(
+                        cls.fields(
+                            attr,
+                            namespace=f"{namespace}_{f}"
+                            if namespace and not raw
+                            else f,
+                        )
+                    )
                 else:
-                    field = Field(name=f, namespace=namespace, type=t, value=attr, raw=raw)
+                    field = Field(
+                        name=f, namespace=namespace, type=t, value=attr, raw=raw
+                    )
                     ret[field.full_name] = field
 
         ret = OrderedDict(sorted(ret.items(), key=lambda x: x[0]))
@@ -667,6 +703,7 @@ class Env(EnvoEnv):
         Called after creation and reload.
         :return:
         """
+
         def thread(self: Env) -> None:
             logger.debug("Starting onload thread")
 
@@ -741,7 +778,8 @@ class Env(EnvoEnv):
                 Inotify.Sets(
                     root=p.Meta.root,
                     include=p.Meta.watch_files + self._default_watch_files,
-                    exclude=p.Meta.ignore_files + self._default_ignore_files
+                    exclude=p.Meta.ignore_files + self._default_ignore_files,
+                    name=p.__name__
                 ),
                 calls=Inotify.Callbacks(on_event=Callback(self._on_env_edit)),
             )
@@ -754,10 +792,13 @@ class Env(EnvoEnv):
         self._calls.reloader_ready()
 
     def _stop_watchers(self):
-        for w in self._files_watchers:
-            w.stop()
+        def fun():
+            for w in self._files_watchers:
+                w.stop()
 
-    def _on_env_edit(self, event: Inotify.Event) -> None:
+        Thread(target=fun).start()
+
+    def _on_env_edit(self, event: FileModifiedEvent) -> None:
         while self._executing_cmd:
             sleep(0.2)
         self._reload_lock.acquire()
@@ -766,14 +807,25 @@ class Env(EnvoEnv):
             self._reload_lock.release()
             return
 
-        subscribe_events = ["IN_CLOSE_WRITE", "IN_CREATE", "IN_DELETE", "IN_DELETE_SELF"]
+        subscribe_events = [
+            events.EVENT_TYPE_MOVED,
+            events.EVENT_TYPE_MODIFIED,
+            events.EVENT_TYPE_CREATED,
+            events.EVENT_TYPE_DELETED,
+        ]
 
-        if any([s in event.type_names for s in subscribe_events]):
+        if any([s in event.event_type for s in subscribe_events]):
             if self._se.reloader_enabled:
                 self._stop_watchers()
 
-            self.logger.info('Reloading',
-                        metadata={"type": "reload", "event": event.type_names, "path": event.path.absolute.resolve()})
+            self.logger.info(
+                "Reloading",
+                metadata={
+                    "type": "reload",
+                    "event": event.event_type,
+                    "path": event.src_path,
+                },
+            )
 
             self._calls.restart()
             self._exiting = True
@@ -825,7 +877,9 @@ class Env(EnvoEnv):
         File name follows env_{env_name} format.
         """
         path = Path(f".env_{self.meta.stage}")
-        content = "\n".join([f'{key}="{value}"' for key, value in self.get_env_vars().items()])
+        content = "\n".join(
+            [f'{key}="{value}"' for key, value in self.get_env_vars().items()]
+        )
         path.write_text(content)
         return path
 
@@ -834,7 +888,9 @@ class Env(EnvoEnv):
         Go through fields and transform decorated functions to commands.
         """
         for f in dir(self):
-            if hasattr(self.__class__, f) and inspect.isdatadescriptor(getattr(self.__class__, f)):
+            if hasattr(self.__class__, f) and inspect.isdatadescriptor(
+                getattr(self.__class__, f)
+            ):
                 continue
 
             attr = getattr(self, f)
@@ -885,6 +941,7 @@ class Env(EnvoEnv):
     @command
     def genstub(self) -> None:
         from envo.stub_gen import StubGen
+
         StubGen(self).generate()
 
     @onload
@@ -931,7 +988,9 @@ class Env(EnvoEnv):
                     out = ret
         return out
 
-    def _on_postcmd(self, command: str, stdout: List[bytes], stderr: List[bytes]) -> None:
+    def _on_postcmd(
+        self, command: str, stdout: List[bytes], stderr: List[bytes]
+    ) -> None:
         functions = self._magic_functions["postcmd"]
         for f in functions.values():
             if re.match(f.kwargs["cmd_regex"], command):

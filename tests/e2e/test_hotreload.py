@@ -54,11 +54,10 @@ class TestHotReload(utils.TestBase):
         e.prompt(PromptState.MAYBE_LOADING).eval()
 
         Path("./test_dir").mkdir()
-        shell.envo.assert_reloaded(1, "test_dir")
         shell.sendline("cd ./test_dir")
 
         shell.trigger_reload(Path("env_test.py"))
-        shell.envo.assert_reloaded(2)
+        shell.envo.assert_reloaded(1)
 
         e.prompt().eval()
 
@@ -70,19 +69,18 @@ class TestHotReload(utils.TestBase):
         e.prompt(PromptState.MAYBE_LOADING).eval()
         Path("./test_dir").mkdir()
 
-        shell.envo.assert_reloaded(1, "test_dir")
-
         utils.replace_in_code(
-            "watch_files: List[str] = []", 'watch_files: List[str] = ["test_dir/**/*.py", "test_dir/*.py"]',
+            "watch_files: List[str] = []",
+            'watch_files: List[str] = ["test_dir/**/*.py", "test_dir/*.py"]',
         )
-        shell.envo.assert_reloaded(2)
+        shell.envo.assert_reloaded(1)
 
         file = Path("./test_dir/some_src_file.py")
         file.touch()
-        shell.envo.assert_reloaded(3, "test_dir/some_src_file.py")
+        shell.envo.assert_reloaded(2, "test_dir/some_src_file.py")
 
         file.write_text("test = 1")
-        shell.envo.assert_reloaded(4, "test_dir/some_src_file.py")
+        shell.envo.assert_reloaded(3, "test_dir/some_src_file.py")
 
         shell.exit()
         e.exit().eval()
@@ -92,7 +90,8 @@ class TestHotReload(utils.TestBase):
         e.prompt(PromptState.MAYBE_LOADING).eval()
 
         utils.replace_in_code(
-            "watch_files: List[str] = []", 'watch_files: List[str] = ["*.py"]',
+            "watch_files: List[str] = []",
+            'watch_files: List[str] = ["*.py"]',
         )
         shell.envo.assert_reloaded(1)
 
@@ -113,22 +112,49 @@ class TestHotReload(utils.TestBase):
         directory = Path("./test_dir")
         directory.mkdir()
 
-        shell.envo.assert_reloaded(1, "test_dir")
-
         some_file = Path("./test_dir/some_file.py")
         some_file.touch()
 
         utils.replace_in_code(
-            "watch_files: List[str] = []", 'watch_files: List[str] = ["test_dir/**/*.py", "test_dir/*.py"]',
+            "watch_files: List[str] = []",
+            'watch_files: List[str] = ["test_dir/**/*.py", "test_dir/*.py"]',
         )
 
-        shell.envo.assert_reloaded(2)
+        shell.envo.assert_reloaded(1)
 
         some_file.unlink()
-        shell.envo.assert_reloaded(3, "test_dir/some_file.py")
+        shell.envo.assert_reloaded(2, "test_dir/some_file.py")
 
         shutil.rmtree(directory, ignore_errors=True)
-        shell.envo.assert_reloaded(4, "test_dir")
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_delete_dir_with_file_inside(self, shell):
+        e = shell.start()
+        e.prompt(PromptState.MAYBE_LOADING).eval()
+
+        utils.replace_in_code(
+            "watch_files: List[str] = []",
+            'watch_files: List[str] = ["*.py", "./test_dir/*.py", "./test_dir"]',
+        )
+        shell.envo.assert_reloaded(1)
+
+        directory = Path("./test_dir")
+        directory.mkdir()
+
+        shell.envo.assert_reloaded(2, "test_dir")
+
+        file1 = Path("./test_dir/some_src_file.py")
+        file1.touch()
+        shell.envo.assert_reloaded(3, "test_dir/some_src_file.py")
+
+        file2 = Path("./test_dir/some_src_file_2.py")
+        file2.touch()
+        shell.envo.assert_reloaded(4, "test_dir/some_src_file_2.py")
+
+        shutil.rmtree(directory, ignore_errors=True)
+        shell.envo.assert_reloaded(5, "test_dir/some_src_file_2.py")
 
         shell.exit()
         e.exit().eval()
@@ -139,30 +165,31 @@ class TestHotReload(utils.TestBase):
 
         Path("./test_dir").mkdir()
 
-        shell.envo.assert_reloaded(1, "test_dir")
+        utils.replace_in_code(
+            "watch_files: List[str] = []",
+            'watch_files: List[str] = ["test_dir/**/*.py"]',
+        )
+        shell.envo.assert_reloaded(1)
 
         utils.replace_in_code(
-            "watch_files: List[str] = []", 'watch_files: List[str] = ["test_dir/**/*.py"]',
+            "ignore_files: List[str] = []",
+            'ignore_files: List[str] = ["test_dir/ignored_file.py"]',
         )
         shell.envo.assert_reloaded(2)
-
-        utils.replace_in_code(
-            "ignore_files: List[str] = []", 'ignore_files: List[str] = ["test_dir/ignored_file.py"]',
-        )
-        shell.envo.assert_reloaded(3)
 
         ignored_file = Path("./test_dir/ignored_file.py")
         watched_file = Path("./test_dir/watched_file.py")
         watched_file.touch()
 
-        shell.envo.assert_reloaded(4, "test_dir/watched_file.py")
+        shell.envo.assert_reloaded(3, "test_dir/watched_file.py")
 
         watched_file.write_text("test = 1")
-        shell.envo.assert_reloaded(5, "test_dir/watched_file.py")
+        shell.envo.assert_reloaded(4, "test_dir/watched_file.py")
 
         ignored_file.touch()
 
-        shell.envo.assert_reloaded(5, "test_dir/watched_file.py")
+        with pytest.raises(ReloadTimeout):
+            shell.envo.assert_reloaded(5, "test_dir/ignored_file.py")
 
         shell.exit()
         e.exit().eval()
@@ -171,7 +198,7 @@ class TestHotReload(utils.TestBase):
         utils.replace_in_code("# Declare your variables here", "1/0")
 
         e = shell.start()
-        e.output(r'.*ZeroDivisionError: division by zero\n')
+        e.output(r".*ZeroDivisionError: division by zero\n")
         e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         e.expected.pop()
@@ -211,7 +238,11 @@ class TestHotReload(utils.TestBase):
     def test_parents_are_watched_in_emergency_mode(self, shell, init_child_env):
         os.chdir("child")
 
-        utils.replace_in_code("# Declare your variables here", "test_var: int", file=Path("../env_comm.py"))
+        utils.replace_in_code(
+            "# Declare your variables here",
+            "test_var: int",
+            file=Path("../env_comm.py"),
+        )
 
         e = shell.start()
         e.output(r'Variable "test_var" is unset!\n')
@@ -220,7 +251,11 @@ class TestHotReload(utils.TestBase):
         e.expected.pop()
         e.expected.pop()
 
-        utils.replace_in_code("test_var: int", "# Declare your variables here", file=Path("../env_comm.py"))
+        utils.replace_in_code(
+            "test_var: int",
+            "# Declare your variables here",
+            file=Path("../env_comm.py"),
+        )
         e.prompt(name=r"child", state=PromptState.MAYBE_LOADING).eval()
 
         shell.envo.assert_reloaded(1, path="sandbox/env_comm.py")

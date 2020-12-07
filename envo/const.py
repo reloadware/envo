@@ -1,9 +1,13 @@
 import inspect
 import re
+from collections import defaultdict
+
 from dataclasses import dataclass
 from typing import Dict, Optional
 
 __all__ = ["STAGES", "emojis"]
+
+DEFAULT_EMOJI = "🙂"
 
 
 @dataclass
@@ -34,7 +38,7 @@ class STAGES:
     def get_stage_name_to_emoji(cls) -> Dict[str, str]:
         stages = cls.get_all_stages()
 
-        ret = {}
+        ret = defaultdict(lambda: DEFAULT_EMOJI)
         for s in stages.values():
             ret[s.name] = s.emoji
 
@@ -43,12 +47,19 @@ class STAGES:
     @classmethod
     def filename_to_stage(cls, filename: str) -> Optional[Stage]:
         stages = cls.get_all_stages()
-        matches = re.search(r"env_(.*)\.py", filename).groups()
-        if not matches:
-            return None
+        matches_groups = re.search(r"env_(.*)\.py", filename)
+        if not matches_groups:
+            raise RuntimeError(f"Not an envo file ({filename})")
+
+        matches = matches_groups.groups()
         stage_name = matches[0]
 
-        return stages.get(stage_name, None)
+        stage = stages.get(stage_name, None)
+
+        if not stage:
+            stage = Stage(stage_name, priority=10, emoji=DEFAULT_EMOJI)
+
+        return stage
 
 
 emojis: Dict[str, str] = {"loading": "⏳", "emergency": "❌"}

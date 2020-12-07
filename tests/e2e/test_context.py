@@ -115,7 +115,7 @@ class TestContext(utils.TestBase):
         e.output(r"NameError: name 'slow_var' is not defined\n")
         e.prompt(utils.PromptState.MAYBE_LOADING).eval()
 
-        sleep(.0)
+        sleep(0.0)
 
         e.expected.pop()
         e.prompt().eval()

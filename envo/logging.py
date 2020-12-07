@@ -34,7 +34,7 @@ class Msg:
         print(self.render_all(with_color=True))
 
     def _fix_formatting(self, text: str) -> str:
-        from loguru._colorizer import AnsiParser, TokenType
+        from loguru._colorizer import AnsiParser
 
         parser = AnsiParser()
 
@@ -44,12 +44,14 @@ class Msg:
             if tag not in {"lvl", "level"}:
                 ansi = parser._get_ansicode(tag)
                 if ansi is None:
-                    text = text.replace(markup, markup.replace("<", "< ").replace(">", " >"))
+                    text = text.replace(
+                        markup, markup.replace("<", "< ").replace(">", " >")
+                    )
 
         return text
 
     def render_message(self, with_color: bool = True) -> str:
-        def color(clr:str) -> str:
+        def color(clr: str) -> str:
             if with_color:
                 return clr
             else:
@@ -64,17 +66,23 @@ class Msg:
 
         descriptor = ""
         if self.descriptor:
-            descriptor = f"{color('<green>')}({str(self.descriptor)}) {color('</green>')}"
+            descriptor = (
+                f"{color('<green>')}({str(self.descriptor)}) {color('</green>')}"
+            )
         msg = f"@{self.time:.4f}]{descriptor}{self.body}; {metadata}"
 
         if with_color:
             # fix escaping colors
             msg = self._fix_formatting(msg)
-            msg = highlight(msg, XonshConsoleLexer(), TerminalFormatter(style=get_style_by_name('emacs')))
+            msg = highlight(
+                msg,
+                XonshConsoleLexer(),
+                TerminalFormatter(style=get_style_by_name("emacs")),
+            )
             msg = Colorizer.ansify(msg)
         return msg
 
-    def render_all(self, with_color = True) -> str:
+    def render_all(self, with_color: bool = True) -> str:
         return f"[{self.level.name:<5}{self.render_message(with_color=with_color)}"
 
     def __repr__(self) -> str:
@@ -117,7 +125,13 @@ class MsgFilter:
         return True
 
     def matches_all(self, msg: Msg) -> bool:
-        return self.matches_level(msg) and self.matches_body(msg) and self.matches_time_later(msg) and self.matches_time_before(msg) and self.matches_metadata(msg)
+        return (
+            self.matches_level(msg)
+            and self.matches_body(msg)
+            and self.matches_time_later(msg)
+            and self.matches_time_before(msg)
+            and self.matches_metadata(msg)
+        )
 
 
 class Messages(list):
@@ -141,7 +155,12 @@ class Logger:
     descriptor: Optional[str]
     name: str
 
-    def __init__(self, name: str, parent: Optional["Logger"]=None, descriptor: Optional[str]=None) -> None:
+    def __init__(
+        self,
+        name: str,
+        parent: Optional["Logger"] = None,
+        descriptor: Optional[str] = None,
+    ) -> None:
         self.name = name
         self.parent = parent
         self.descriptor = descriptor
@@ -156,10 +175,16 @@ class Logger:
 
         loguru.logger.remove()
         loguru.logger.add(
-            sys.stdout, format="<blue>{message}</blue>", level="DEBUG", filter=lambda x: x["level"].name == "DEBUG",
+            sys.stdout,
+            format="<blue>{message}</blue>",
+            level="DEBUG",
+            filter=lambda x: x["level"].name == "DEBUG",
         )
         loguru.logger.add(
-            sys.stdout, format="<bold>{message}</bold>", level="INFO", filter=lambda x: x["level"].name == "INFO",
+            sys.stdout,
+            format="<bold>{message}</bold>",
+            level="INFO",
+            filter=lambda x: x["level"].name == "INFO",
         )
         loguru.logger.add(
             sys.stderr,
@@ -188,8 +213,20 @@ class Logger:
     def _log(self, msg: Msg) -> None:
         self.messages.append(msg)
 
-    def log(self, message: str, level: Level, metadata: Optional[Dict[str, Any]] = None, print_msg=False) -> None:
-        msg = Msg(level, message, self.sw.value, metadata=metadata or {}, descriptor=self.descriptor)
+    def log(
+        self,
+        message: str,
+        level: Level,
+        metadata: Optional[Dict[str, Any]] = None,
+        print_msg=False,
+    ) -> None:
+        msg = Msg(
+            level,
+            message,
+            self.sw.value,
+            metadata=metadata or {},
+            descriptor=self.descriptor,
+        )
         if print_msg:
             loguru.logger.log(level.name, message)
 
@@ -198,16 +235,24 @@ class Logger:
         if self.parent:
             self.parent._log(msg)
 
-    def debug(self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False) -> None:
+    def debug(
+        self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False
+    ) -> None:
         self.log(message, Level.DEBUG, metadata, print_msg)
 
-    def info(self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False) -> None:
+    def info(
+        self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False
+    ) -> None:
         self.log(message, Level.INFO, metadata, print_msg)
 
-    def warning(self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False) -> None:
+    def warning(
+        self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False
+    ) -> None:
         self.log(message, Level.WARNING, metadata, print_msg)
 
-    def error(self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False) -> None:
+    def error(
+        self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False
+    ) -> None:
         self.log(message, Level.ERROR, metadata, print_msg)
 
     def get_msgs(self, filter: MsgFilter) -> List[Msg]:

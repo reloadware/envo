@@ -27,14 +27,22 @@ class CustomPrint:
             if len(text) == 0:
                 return
 
-            if not any((s in line) for s in [self.command.encode("utf-8"), self.prompt.encode("utf-8")]):
+            if not any(
+                (s in line)
+                for s in [self.command.encode("utf-8"), self.prompt.encode("utf-8")]
+            ):
                 self.old_stdout.buffer.write(line)
 
     def flush(self) -> None:
         self.old_stdout.flush()
 
 
-def run(command: str, ignore_errors: bool = False, print_output: bool = True, progress_bar: bool = False,) -> List[str]:
+def run(
+    command: str,
+    ignore_errors: bool = False,
+    print_output: bool = True,
+    progress_bar: bool = False,
+) -> List[str]:
     # preprocess
     # join multilines
     command = re.sub(r"\\(?:\t| )*\n(?:\t| )*", "", command)

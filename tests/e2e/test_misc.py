@@ -62,7 +62,9 @@ class TestMisc(utils.TestBase):
             content,
         )
 
-    @pytest.mark.parametrize("dir_name", ["my-sand-box", "my sandbox", ".sandbox", ".san.d- b  ox"])
+    @pytest.mark.parametrize(
+        "dir_name", ["my-sand-box", "my sandbox", ".sandbox", ".san.d- b  ox"]
+    )
     def test_init_weird_dir_name(self, shell, dir_name):
         env_dir = Path(dir_name)
         env_dir.mkdir()

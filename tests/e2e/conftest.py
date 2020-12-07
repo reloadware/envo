@@ -15,6 +15,7 @@ def init() -> None:
     result = run("envo init test")
     assert b"Created test environment" in result
 
+
 @fixture
 def init_bare() -> None:
     result = run("envo init")

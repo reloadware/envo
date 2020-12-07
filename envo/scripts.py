@@ -6,7 +6,6 @@ import sys
 import traceback
 from collections import OrderedDict
 from copy import copy
-
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock, Thread
@@ -217,7 +216,9 @@ class HeadlessMode:
                     if stage:
                         matches[p] = stage
 
-                results = sorted(matches.items(), key=lambda x: x[1].priority, reverse=True)
+                results = sorted(
+                    matches.items(), key=lambda x: x[1].priority, reverse=True
+                )
                 if results:
                     return results[0][0]
 
@@ -228,20 +229,26 @@ class HeadlessMode:
 
     def _create_env_object(self, file: Path) -> Env:
         def on_reloader_ready():
-            self.status.reloader_ready=True
+            self.status.reloader_ready = True
 
         def on_context_ready():
-            self.status.context_ready=True
+            self.status.context_ready = True
 
         env_class = EnvBuilder.build_env_from_file(file)
-        env = env_class(li=Env.Links(self.li.shell),
-                        calls=Env.Callbacks(restart=self.calls.restart,
-                                            reloader_ready=Callback(on_reloader_ready),
-                                            context_ready=Callback(on_context_ready),
-                                            on_error=self.calls.on_error),
-                        se=Env.Sets(reloader_enabled=self.reloader_enabled,
-                        blocking=self.blocking,
-                                    extra_watchers=self.extra_watchers))
+        env = env_class(
+            li=Env.Links(self.li.shell),
+            calls=Env.Callbacks(
+                restart=self.calls.restart,
+                reloader_ready=Callback(on_reloader_ready),
+                context_ready=Callback(on_context_ready),
+                on_error=self.calls.on_error,
+            ),
+            se=Env.Sets(
+                reloader_enabled=self.reloader_enabled,
+                blocking=self.blocking,
+                extra_watchers=self.extra_watchers,
+            ),
+        )
         return env
 
     def _create_env(self) -> None:
@@ -323,13 +330,16 @@ class EmergencyMode(HeadlessMode):
         return Path(__file__).parent / "emergency_env.py"
 
     def get_watchers_from_env(self, env: misc.EnvParser) -> List[Inotify]:
-        watchers = [Inotify(
-            Inotify.Sets(
-                root=env.path.parent,
-                include=Env._default_watch_files,
-                exclude=Env._default_ignore_files
-            ),
-            calls=Inotify.Callbacks(on_event=Callback(None)))]
+        watchers = [
+            Inotify(
+                Inotify.Sets(
+                    root=env.path.parent,
+                    include=Env._default_watch_files,
+                    exclude=Env._default_ignore_files,
+                ),
+                calls=Inotify.Callbacks(on_event=Callback(None)),
+            )
+        ]
 
         for p in env.parents:
             watchers.extend(self.get_watchers_from_env(p))
@@ -339,7 +349,9 @@ class EmergencyMode(HeadlessMode):
         return watchers
 
     def _create_env(self) -> None:
-        self.extra_watchers = self.get_watchers_from_env(misc.EnvParser(super().get_env_file()))
+        self.extra_watchers = self.get_watchers_from_env(
+            misc.EnvParser(super().get_env_file())
+        )
         super()._create_env()
 
         self.env.Meta.root = self.env_dirs[0]
@@ -402,9 +414,12 @@ class EnvoHeadless(EnvoBase):
         self.shell.reset()
 
         self.mode = HeadlessMode(
-            se=HeadlessMode.Sets(stage=self.se.stage, restart_nr=self.restart_count, msg=""),
-            calls=HeadlessMode.Callbacks(restart=Callback(self.restart),
-                                         on_error=Callback(self.on_error)),
+            se=HeadlessMode.Sets(
+                stage=self.se.stage, restart_nr=self.restart_count, msg=""
+            ),
+            calls=HeadlessMode.Callbacks(
+                restart=Callback(self.restart), on_error=Callback(self.on_error)
+            ),
             li=HeadlessMode.Links(shell=self.shell, envo=self),
         )
         self.mode.init()
@@ -425,7 +440,9 @@ class EnvoHeadless(EnvoBase):
     def dry_run(self) -> None:
         self.shell = shell.shells["headless"].create(Shell.Callbacs())
         self.init()
-        content = "\n".join([f'export {k}="{v}"' for k, v in self.mode.env.get_env_vars().items()])
+        content = "\n".join(
+            [f'export {k}="{v}"' for k, v in self.mode.env.get_env_vars().items()]
+        )
         print(content)
 
     def save(self) -> None:
@@ -463,10 +480,13 @@ class Envo(EnvoBase):
                 self.mode.unload()
 
             self.mode = NormalMode(
-                se=NormalMode.Sets(stage=self.se.stage, restart_nr=self.restart_count, msg=""),
+                se=NormalMode.Sets(
+                    stage=self.se.stage, restart_nr=self.restart_count, msg=""
+                ),
                 li=NormalMode.Links(shell=self.shell, envo=self),
-                calls=NormalMode.Callbacks(restart=Callback(self.restart),
-                                           on_error=Callback(self.on_error)),
+                calls=NormalMode.Callbacks(
+                    restart=Callback(self.restart), on_error=Callback(self.on_error)
+                ),
             )
             self.mode.init()
 
@@ -484,10 +504,13 @@ class Envo(EnvoBase):
             self.mode.unload()
 
         self.mode = EmergencyMode(
-            se=EmergencyMode.Sets(stage=self.se.stage, restart_nr=self.restart_count, msg=msg),
+            se=EmergencyMode.Sets(
+                stage=self.se.stage, restart_nr=self.restart_count, msg=msg
+            ),
             li=EmergencyMode.Links(shell=self.shell, envo=self),
-            calls=EmergencyMode.Callbacks(restart=Callback(self.restart),
-                                          on_error=Callback(None)),
+            calls=EmergencyMode.Callbacks(
+                restart=Callback(self.restart), on_error=Callback(None)
+            ),
         )
 
         self.mode.init()
@@ -496,10 +519,13 @@ class Envo(EnvoBase):
         """
         :param type: shell type
         """
+
         def on_ready():
             pass
 
-        self.shell = shell.shells[type].create(calls=Shell.Callbacs(on_ready=Callback(on_ready)))
+        self.shell = shell.shells[type].create(
+            calls=Shell.Callbacs(on_ready=Callback(on_ready))
+        )
         self.init()
 
         self.mode.env.on_shell_create()
@@ -540,20 +566,30 @@ class EnvoCreator:
 
         env_dir = Path(".").absolute()
         package_name = misc.dir_name_to_pkg_name(env_dir.name)
-        class_name = f"{misc.dir_name_to_class_name(package_name)}{stage.capitalize()}Env"
+        class_name = (
+            f"{misc.dir_name_to_class_name(package_name)}{stage.capitalize()}Env"
+        )
 
-        context = {"class_name": class_name, "name": env_dir.name, "stage": stage,
-                   "emoji": const.STAGES.get_stage_name_to_emoji().get(stage, "🙂"),
-                   "parents": f'"{parent}"'if parent else ""}
+        context = {
+            "class_name": class_name,
+            "name": env_dir.name,
+            "stage": stage,
+            "emoji": const.STAGES.get_stage_name_to_emoji().get(stage, "🙂"),
+            "parents": f'"{parent}"' if parent else "",
+        }
 
         templ_file = Path("env.py.templ")
-        misc.render_py_file(templates_dir / templ_file, output=output_file, context=context)
+        misc.render_py_file(
+            templates_dir / templ_file, output=output_file, context=context
+        )
 
     def create(self) -> None:
         if not self.se.stage:
             self.se.stage = "comm"
 
-        self._create_from_templ(self.se.stage, parent="env_comm.py" if self.se.stage != "comm" else "")
+        self._create_from_templ(
+            self.se.stage, parent="env_comm.py" if self.se.stage != "comm" else ""
+        )
 
         if self.se.stage != "comm" and not Path("env_comm.py").exists():
             self._create_from_templ("comm")
@@ -566,7 +602,9 @@ def _main() -> None:
 
     sys.argv[0] = "/home/kwazar/Code/opensource/envo/.venv/bin/xonsh"
     parser = argparse.ArgumentParser()
-    parser.add_argument("stage", type=str, default="Default", help="Stage to activate.", nargs="?")
+    parser.add_argument(
+        "stage", type=str, default="Default", help="Stage to activate.", nargs="?"
+    )
     parser.add_argument("--init", type=str, default=None, nargs="?")
     parser.add_argument("--dry-run", default=False, action="store_true")
     parser.add_argument("--version", default=False, action="store_true")
@@ -602,16 +640,22 @@ def _main() -> None:
         if args.command or args.run:
             command = args.command or args.run
 
-            envo.e2e.envo = env_headless = EnvoHeadless(EnvoHeadless.Sets(stage=args.stage))
+            envo.e2e.envo = env_headless = EnvoHeadless(
+                EnvoHeadless.Sets(stage=args.stage)
+            )
             env_headless.single_command(command)
         elif args.init:
             envo_creator = EnvoCreator(EnvoCreator.Sets(stage=args.init))
             envo_creator.create()
         elif args.dry_run:
-            envo.e2e.envo = env_headless = EnvoHeadless(EnvoHeadless.Sets(stage=args.stage))
+            envo.e2e.envo = env_headless = EnvoHeadless(
+                EnvoHeadless.Sets(stage=args.stage)
+            )
             env_headless.dry_run()
         elif args.save:
-            envo.e2e.envo = env_headless = EnvoHeadless(EnvoHeadless.Sets(stage=args.stage))
+            envo.e2e.envo = env_headless = EnvoHeadless(
+                EnvoHeadless.Sets(stage=args.stage)
+            )
             env_headless.save()
         else:
             envo.e2e.envo = e = Envo(Envo.Sets(stage=args.stage))

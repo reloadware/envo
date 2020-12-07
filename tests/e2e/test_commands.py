@@ -63,7 +63,7 @@ class TestCommands(utils.TestBase):
         shell.sendline('flake("dd")')
         e.output(r"Flake all gooddd\n'Flake return value'\n").prompt().eval()
 
-        shell.sendline('flake dd')
+        shell.sendline("flake dd")
         e.output(r"Flake all gooddd\nFlake return value\n").prompt().eval()
 
         shell.exit()
@@ -77,7 +77,9 @@ class TestCommands(utils.TestBase):
         assert s.exitstatus == 0
 
     def test_single_command_fail(self):
-        s = utils.pexpect_spaw("""envo test -c "import sys;print('some msg');sys.exit(2)" """)
+        s = utils.pexpect_spaw(
+            """envo test -c "import sys;print('some msg');sys.exit(2)" """
+        )
         s.expect("some msg")
         s.expect(pexpect.EOF)
         s.close()
@@ -159,7 +161,11 @@ class TestCommands(utils.TestBase):
     def test_namespaces(self, shell):
         namespace_name = "test_namespace"
         utils.add_namespace(namespace_name, file=Path("env_test.py"))
-        utils.add_flake_cmd(namespace=namespace_name, message="Namespaced flake", file=Path("env_test.py"))
+        utils.add_flake_cmd(
+            namespace=namespace_name,
+            message="Namespaced flake",
+            file=Path("env_test.py"),
+        )
         utils.add_flake_cmd(file=Path("env_comm.py"))
         utils.add_mypy_cmd(namespace=namespace_name, file=Path("env_test.py"))
 
@@ -180,7 +186,9 @@ class TestCommands(utils.TestBase):
         e.output(r"Namespaced flake\n'Flake return value'\n").prompt().eval()
 
         shell.sendline("mypy")
-        e.output(r".*mypy: error: Missing target module, package, files, or command.\n").prompt().eval()
+        e.output(
+            r".*mypy: error: Missing target module, package, files, or command.\n"
+        ).prompt().eval()
 
         shell.sendline("test_namespace.mypy")
         e.output(r"Mypy all good\n").prompt().eval()
@@ -196,14 +204,14 @@ class TestCommands(utils.TestBase):
 
         utils.add_namespace(namespace_name, file=env_test_file)
         utils.add_command(
-        f"""
+            f"""
         @test_namespace.command
         def __some_cmd(self, test_arg: str = "") -> str:
             print("from env_test!")
             return "from env_test!"
         """,
-        file=env_test_file
-    )
+            file=env_test_file,
+        )
 
         utils.add_command(
             f"""
@@ -212,7 +220,7 @@ class TestCommands(utils.TestBase):
                     print("from env_comm!")
                     return "from env_comm!"
                 """,
-            file=env_comm_file
+            file=env_comm_file,
         )
 
         e = shell.start()

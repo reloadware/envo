@@ -1,28 +1,26 @@
-from typing import List, Dict, Any, Optional, Tuple  # noqa: F401
-
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
 
 import envo  # noqa: F401
-
 from envo import (  # noqa: F401
-    logger,
+    BaseEnv,
+    Plugin,
+    Raw,
+    UserEnv,
+    VirtualEnv,
+    boot_code,
     command,
     context,
-    Raw,
-    run,
-    precmd,
-    onstdout,
-    onstderr,
-    postcmd,
-    onload,
+    logger,
     oncreate,
-    onunload,
     ondestroy,
-    boot_code,
-    Plugin,
-    VirtualEnv,
-    BaseEnv,
-    UserEnv
+    onload,
+    onstderr,
+    onstdout,
+    onunload,
+    postcmd,
+    precmd,
+    run,
 )
 
 # Declare your command namespaces here
@@ -64,11 +62,9 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
         print("comm lol")
 
     @command
-    def flake(self, arg) -> None:
-        print(f"Flake good + {arg}")
-
-        # self.black()
-        # run("flake8")
+    def flake(self) -> None:
+        self.black()
+        run("flake8")
 
     @command
     def mypy(self) -> None:
@@ -86,7 +82,24 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
         self.mypy()
         self.test()
 
+    @command
+    def sandbox(self) -> None:
+        import sys
+        import time
+        import logging
+        from watchdog.observers import Observer
+        from watchdog.events import PatternMatchingEventHandler
+
+        class MyEventHandler(PatternMatchingEventHandler):
+            def on_any_event(self, event):
+                pass
+
+        handler = MyEventHandler("*.py")
+
+        observer = Observer()
+        observer.schedule(handler, ".", recursive=True)
+        observer.start()
+
 
 Env = EnvoLocalEnv
-
 

@@ -9,17 +9,19 @@ from typing import Any, Dict, List
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
 
-__all__ = ["add_command",
-"add_declaration",
-"add_definition",
-"add_hook",
-"change_file",
-"add_flake_cmd",
-"add_mypy_cmd",
-"replace_in_code",
-"add_context",
-"add_plugins",
-"add_boot"]
+__all__ = [
+    "add_command",
+    "add_declaration",
+    "add_definition",
+    "add_hook",
+    "change_file",
+    "add_flake_cmd",
+    "add_mypy_cmd",
+    "replace_in_code",
+    "add_context",
+    "add_plugins",
+    "add_boot",
+]
 
 
 def change_file(file: Path, delay_s: float, new_content: str) -> None:
@@ -91,11 +93,16 @@ def add_hook(code: str, file=Path("env_test.py")) -> None:
 
 
 def add_namespace(name: str, file=Path("env_test.py")) -> None:
-    replace_in_code("# Declare your command namespaces here", f'{name} = Namespace("{name}")',
-                                                                file=file)
+    replace_in_code(
+        "# Declare your command namespaces here",
+        f'{name} = Namespace("{name}")',
+        file=file,
+    )
 
 
-def add_flake_cmd(file=Path("env_test.py"), namespace=None, message="Flake all good") -> None:
+def add_flake_cmd(
+    file=Path("env_test.py"), namespace=None, message="Flake all good"
+) -> None:
     namespaced_command = f"{namespace}.command" if namespace else "command"
 
     add_command(
@@ -105,11 +112,13 @@ def add_flake_cmd(file=Path("env_test.py"), namespace=None, message="Flake all g
             print("{message}" + test_arg)
             return "Flake return value"
         """,
-        file=file
+        file=file,
     )
 
 
-def add_mypy_cmd(file=Path("env_test.py"), namespace=None, message="Mypy all good") -> None:
+def add_mypy_cmd(
+    file=Path("env_test.py"), namespace=None, message="Mypy all good"
+) -> None:
     namespaced_command = f"{namespace}.command" if namespace else "command"
 
     add_command(
@@ -118,11 +127,16 @@ def add_mypy_cmd(file=Path("env_test.py"), namespace=None, message="Mypy all goo
         def __mypy(self, test_arg: str = "") -> None:
             print("{message}" + test_arg)
         """,
-        file=file
+        file=file,
     )
 
 
-def add_context(context: Dict[str, Any], name: str = "some_context", namespace=None, file=Path("env_test.py")) -> None:
+def add_context(
+    context: Dict[str, Any],
+    name: str = "some_context",
+    namespace=None,
+    file=Path("env_test.py"),
+) -> None:
     namespaced_context = f"{namespace}.context" if namespace else "context"
 
     context_str = json.dumps(context)
@@ -136,7 +150,9 @@ def add_context(context: Dict[str, Any], name: str = "some_context", namespace=N
     )
 
 
-def add_boot(boot_codes: List[str], name: str = "some_boot", file=Path("env_test.py")) -> None:
+def add_boot(
+    boot_codes: List[str], name: str = "some_boot", file=Path("env_test.py")
+) -> None:
     lines = ",".join([f'"{c}"' for c in boot_codes])
 
     add_command(

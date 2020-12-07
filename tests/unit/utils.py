@@ -34,7 +34,14 @@ environ_before = os.environ.copy()
 class TestBase:
     @pytest.fixture(autouse=True)
     def setup(
-        self, mock_logger_error, mock_threading, mock_shell, sandbox, init, version, capsys,
+        self,
+        mock_logger_error,
+        mock_threading,
+        mock_shell,
+        sandbox,
+        init,
+        version,
+        capsys,
     ):
         os.environ = environ_before.copy()
         # mocker.patch("envo.scripts.Envo._start_files_watchdog")

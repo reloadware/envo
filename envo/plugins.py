@@ -1,12 +1,11 @@
 import os
 import sys
-from pathlib import Path
-from typing import Any, Optional, List
-
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, List, Optional
 
 import envo
-from envo import Env, logger, onload, onunload, BaseEnv, Namespace
+from envo import BaseEnv, Env, Namespace, logger, onload, onunload
 
 __all__ = [
     "Plugin",
@@ -144,7 +143,9 @@ class VirtualEnv(Plugin):
 
     venv_path: Path
 
-    def __init__(self, venv_path: Optional[Path] = None, venv_dir_name: str = ".venv") -> None:
+    def __init__(
+        self, venv_path: Optional[Path] = None, venv_dir_name: str = ".venv"
+    ) -> None:
         self.venv_path = self.root if not venv_path else venv_path
 
         self._possible_site_packages = []
@@ -155,8 +156,11 @@ class VirtualEnv(Plugin):
         self.__logger.info("VirtualEnv plugin init")
 
         try:
-            self._venv = ExistingVenv(root=self.venv_path,
-                                venv_dir_name=venv_dir_name, discover=venv_path is None)
+            self._venv = ExistingVenv(
+                root=self.venv_path,
+                venv_dir_name=venv_dir_name,
+                discover=venv_path is None,
+            )
             self._venv.activate(self)
 
         except CantFindEnv:
@@ -165,7 +169,12 @@ class VirtualEnv(Plugin):
             self._venv.activate(self)
 
     @classmethod
-    def init(cls, self: "VirtualEnv", venv_path: Optional[Path] = None, venv_dir_name: str = ".venv"):
+    def init(
+        cls,
+        self: "VirtualEnv",
+        venv_path: Optional[Path] = None,
+        venv_dir_name: str = ".venv",
+    ):
         VirtualEnv.__init__(self, venv_path, venv_dir_name)
 
     @venv.onunload
