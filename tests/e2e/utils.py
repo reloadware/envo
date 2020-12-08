@@ -1,11 +1,8 @@
-import atexit
-import fcntl
 import os
 import re
 import shutil
 import signal
 import subprocess
-import sys
 from collections import Callable
 from enum import Enum
 from pathlib import Path
@@ -25,7 +22,6 @@ from stickybeak import Injector
 from envo import Env, const
 from envo.e2e import STICKYBEAK_PORT
 from envo.logging import Logger
-from envo.misc import Inotify
 from envo.shell import PromptBase
 from tests.utils import add_boot  # noqa F401
 from tests.utils import add_command  # noqa F401
@@ -88,11 +84,6 @@ class TestBase:
     def setup(self, sandbox, init):
         pass
 
-
-def pexpect_spaw(command: str) -> pexpect.spawn:
-    s = pexpect.spawn(command, echo=False, timeout=4)
-    s.logfile = sys.stdout.buffer
-    return s
 
 
 class AssertInTime:
@@ -274,6 +265,7 @@ class SpawnEnvo:
         self.stop_collecting = False
         self._printed_info = False
         self.debug = debug
+        self.output_collector = Thread(target=self._ouptut_collector)
 
     def start(self, wait_until_ready=True) -> Expecter:
         environ = os.environ.copy()
@@ -292,12 +284,8 @@ class SpawnEnvo:
             stdin=subprocess.PIPE,
             env=environ,
         )
-        fcntl.fcntl(
-            self.process.stdout,
-            fcntl.F_SETFL,
-            fcntl.fcntl(self.process.stdout, fcntl.F_GETFL) | os.O_NONBLOCK,
-        )
 
+        self.output_collector.start()
         self.expecter = Expecter(self, stage=self.stage)
 
         if self.debug:
@@ -344,7 +332,7 @@ class SpawnEnvo:
         file.write_text(file.read_text() + "\n")
         self.envo.wait_until_ready()
 
-    def _collect_output(self):
+    def _ouptut_collector(self):
         try:
             while not self.stop_collecting:
                 c: bytes = self.process.stdout.read(1)
@@ -367,7 +355,6 @@ class SpawnEnvo:
 
             return False
 
-        self._collect_output()
         display_raw = self.screen.display
         display = [s for s in display_raw if not ignore(s)]
         return display
@@ -427,6 +414,10 @@ def single_command(command: str) -> str:
 
 def envo_run(command: str) -> str:
     return run(f"envo run {command}")
+
+
+def run(command: str) -> str:
+    return subprocess.check_output(command, shell=True)
 
 
 def init_child_env(child_dir: Path) -> None:

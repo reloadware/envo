@@ -22,7 +22,6 @@ envo_root = test_root.parent
 
 __all__ = [
     "TestBase",
-    "spawn",
     "flake8",
     "mypy",
 ]
@@ -104,12 +103,6 @@ def init_child_env(child_dir: Path) -> None:
     replace_in_code("parent: Optional[str] = None", 'parent: Optional[str] = ".."')
 
     os.chdir(str(cwd))
-
-
-def spawn(command: str) -> pexpect.spawn:
-    s = pexpect.spawn(command, echo=False, timeout=4)
-    s.logfile = sys.stdout.buffer
-    return s
 
 
 def flake8() -> None:

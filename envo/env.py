@@ -880,7 +880,7 @@ class Env(EnvoEnv):
         content = "\n".join(
             [f'{key}="{value}"' for key, value in self.get_env_vars().items()]
         )
-        path.write_text(content)
+        path.write_text(content, "utf-8")
         return path
 
     def _collect_magic_functions(self) -> None:

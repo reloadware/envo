@@ -25,4 +25,4 @@ class StubGen:
         env_descr = misc.EnvParser(env.get_env_path())
 
         file = Path(f"{str(env.Meta.root.absolute())}/env_{env.Meta.stage}.pyi")
-        file.write_text(env_descr.get_stub())
+        file.write_text(env_descr.get_stub(), "utf-8")

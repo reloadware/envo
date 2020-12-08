@@ -79,6 +79,7 @@ class Shell(BaseShell):  # type: ignore
         super().__init__(execer=execer, ctx={})
 
         logger.debug(f"Shell __init__")
+        self.shell_type = "prompt_toolkit"
 
         self.calls = calls
 
@@ -211,8 +212,8 @@ class Shell(BaseShell):  # type: ignore
         def func_sig_ttin_ttou(n: Any, f: Any) -> None:
             pass
 
-        signal.signal(signal.SIGTTIN, func_sig_ttin_ttou)
-        signal.signal(signal.SIGTTOU, func_sig_ttin_ttou)
+        # signal.signal(signal.SIGTTIN, func_sig_ttin_ttou)
+        # signal.signal(signal.SIGTTOU, func_sig_ttin_ttou)
 
         shell = cls(calls, execer)
         builtins.__xonsh__.shell = shell  # type: ignore

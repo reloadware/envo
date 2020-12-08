@@ -11,7 +11,6 @@ from pathlib import Path
 from threading import Lock, Thread
 from typing import Any, Dict, List, Optional
 
-from ilock import ILock
 from rhei import Stopwatch
 
 import envo.e2e
@@ -157,7 +156,7 @@ class HeadlessMode:
         ret = []
         path = Path(".").absolute()
         while True:
-            if path == Path("/"):
+            if path.parent == path:
                 break
 
             for p in path.glob("env_*.py"):

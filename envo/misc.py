@@ -156,15 +156,15 @@ def is_valid_module_name(module: str) -> bool:
 def render_file(template_path: Path, output: Path, context: Dict[str, Any]) -> None:
     from jinja2 import StrictUndefined, Template
 
-    template = Template(template_path.read_text(), undefined=StrictUndefined)
-    output.write_text(template.render(**context))
+    template = Template(template_path.read_text("utf-8"), undefined=StrictUndefined)
+    output.write_text(template.render(**context), "utf-8")
 
 
 def render(template: str, output: Path, context: Dict[str, Any]) -> None:
     from jinja2 import StrictUndefined, Template
 
     template = Template(template, undefined=StrictUndefined)
-    output.write_text(template.render(**context))
+    output.write_text(template.render(**context), "utf-8")
 
 
 def render_py_file(template_path: Path, output: Path, context: Dict[str, Any]) -> None:
@@ -211,7 +211,7 @@ class EnvParser:
 
     @property
     def source(self) -> str:
-        return self.path.read_text()
+        return self.path.read_text("utf-8")
 
     @property
     def class_name(self) -> str:

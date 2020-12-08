@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from pexpect import run
+import subprocess
 from pytest import fixture
 
 from tests.e2e import utils
@@ -12,13 +12,13 @@ envo_root = test_root.parent / "envo"
 
 @fixture
 def init() -> None:
-    result = run("envo init test")
+    result = utils.run("envo init test")
     assert b"Created test environment" in result
 
 
 @fixture
 def init_bare() -> None:
-    result = run("envo init")
+    result = utils.run("envo init")
     assert b"Created test environment" in result
 
 

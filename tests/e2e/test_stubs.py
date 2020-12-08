@@ -1,11 +1,7 @@
 import os
 from pathlib import Path
-from textwrap import dedent
 from typing import Any, Dict
 
-from pexpect import run
-
-from envo import const
 from envo.misc import import_from_file
 from tests.e2e import utils
 

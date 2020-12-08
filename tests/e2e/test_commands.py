@@ -70,14 +70,14 @@ class TestCommands(utils.TestBase):
         e.exit().eval()
 
     def test_single_command(self):
-        s = utils.pexpect_spaw("""envo test -c "print('teest')" """)
+        s = utils.run("""envo test -c "print('teest')" """)
         s.expect("teest")
         s.expect(pexpect.EOF)
         s.close()
         assert s.exitstatus == 0
 
     def test_single_command_fail(self):
-        s = utils.pexpect_spaw(
+        s = utils.run(
             """envo test -c "import sys;print('some msg');sys.exit(2)" """
         )
         s.expect("some msg")
@@ -85,7 +85,7 @@ class TestCommands(utils.TestBase):
         s.close()
         assert s.exitstatus == 2
 
-        s = utils.pexpect_spaw("""envo test -c "cat /home/non_existend_file" """)
+        s = utils.run("""envo test -c "cat /home/non_existend_file" """)
         s.expect(pexpect.EOF)
         s.close()
         assert s.exitstatus == 1
@@ -99,7 +99,7 @@ class TestCommands(utils.TestBase):
             """
         )
 
-        s = utils.pexpect_spaw("""envo test -c "flake" """)
+        s = utils.run("""envo test -c "flake" """)
         s.expect(pexpect.EOF)
         s.close()
         assert s.exitstatus == 127
@@ -114,14 +114,14 @@ class TestCommands(utils.TestBase):
             """
         )
 
-        s = utils.pexpect_spaw("""envo test -c "some_cmd" """)
+        s = utils.run("""envo test -c "some_cmd" """)
         s.expect(r".*Traceback .*ZeroDivisionError: division by zero")
         s.expect(pexpect.EOF)
         s.close()
         assert s.exitstatus == 1
 
     def test_headless_error(self):
-        s = utils.pexpect_spaw("""envo some_env -c "print('test')" """)
+        s = utils.run("""envo some_env -c "print('test')" """)
         s.expect(pexpect.EOF)
         s.close()
         assert s.exitstatus == 1
