@@ -13,13 +13,13 @@ envo_root = test_root.parent / "envo"
 @fixture
 def init() -> None:
     result = utils.run("envo init test")
-    assert b"Created test environment" in result
+    assert "Created test environment" in result
 
 
 @fixture
 def init_bare() -> None:
     result = utils.run("envo init")
-    assert b"Created test environment" in result
+    assert "Created test environment" in result
 
 
 @fixture

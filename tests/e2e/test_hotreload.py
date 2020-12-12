@@ -295,7 +295,7 @@ class TestHotReload(utils.TestBase):
         shell.sendline("print($PATH)")
         sleep(0.5)
 
-        e.output(r"\['/some_path', '/already_existing_path'.*\]\n")
+        e.output(r"\['some_path', 'already_existing_path'.*\]\n")
         e.prompt()
 
         shell.exit()

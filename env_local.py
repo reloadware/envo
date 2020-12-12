@@ -58,10 +58,6 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
         run("pytest tests -v")
 
     @command
-    def __some_cmd(self):
-        print("comm lol")
-
-    @command
     def flake(self) -> None:
         self.black()
         run("flake8")

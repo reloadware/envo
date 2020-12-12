@@ -1,7 +1,9 @@
 import os
 from pathlib import Path
+from subprocess import CalledProcessError
 
 import pexpect
+from pytest import raises
 
 from tests.e2e import utils
 
@@ -71,24 +73,20 @@ class TestCommands(utils.TestBase):
 
     def test_single_command(self):
         s = utils.run("""envo test -c "print('teest')" """)
-        s.expect("teest")
-        s.expect(pexpect.EOF)
-        s.close()
-        assert s.exitstatus == 0
+        assert s == "teest\r\n\r\r\n\x1b[0m"
 
     def test_single_command_fail(self):
-        s = utils.run(
-            """envo test -c "import sys;print('some msg');sys.exit(2)" """
-        )
-        s.expect("some msg")
-        s.expect(pexpect.EOF)
-        s.close()
-        assert s.exitstatus == 2
+        with raises(CalledProcessError) as e:
+            s = utils.run("""envo test -c "import sys;print('some msg');sys.exit(2)" """)
+        assert e.value.returncode == 2
+        assert e.value.stdout == b"some msg\r\n\r\r\n\x1b[0m"
+        assert e.value.stderr == b""
 
-        s = utils.run("""envo test -c "cat /home/non_existend_file" """)
-        s.expect(pexpect.EOF)
-        s.close()
-        assert s.exitstatus == 1
+        with raises(CalledProcessError) as e:
+            s = utils.run("""envo test -c "cat /home/non_existend_file" """)
+        assert e.value.returncode == 1
+        assert e.value.stdout == b"some msg\r\n\r\r\n\x1b[0m"
+        assert e.value.stderr == b""
 
     def test_single_command_command_fail(self):
         utils.add_command(

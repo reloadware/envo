@@ -12,6 +12,8 @@ __all__ = [
     "VirtualEnv",
 ]
 
+from envo.e2e import is_windows
+
 from envo.logging import Logger
 
 
@@ -28,32 +30,44 @@ class CantFindEnv(Exception):
 @dataclass
 class VenvPath:
     root_path: Path
-    venv_dir_name: str
+    venv_name: str
 
     @property
     def path(self) -> Path:
-        return self.root_path / self.venv_dir_name
+        return self.root_path / self.venv_name
 
     @property
-    def venv_lib_path(self) -> Path:
+    def lib_path(self) -> Path:
         return self.path / "lib"
 
     @property
-    def venv_bin_path(self) -> Path:
-        return self.path / "bin"
+    def bin_path(self) -> Path:
+        if is_windows():
+            return self.path / "Scripts"
+        else:
+            return self.path / "bin"
 
     @property
     def site_packages_path(self) -> Path:
+        if is_windows():
+            ret = self.lib_path / "site-packages"
+            return ret
         try:
-            return next(self.venv_lib_path.glob("*")) / "site-packages"
+            ret = next(self.lib_path.glob("*"))
+            # on windows there is no python.* in site packages path
+            if ret.name != "site-packages":
+                ret /= "site-packages"
+            return ret
         except StopIteration:
             raise CantFindEnv()
 
     @property
     def possible_site_packages(self) -> List[Path]:
+        if is_windows():
+            return [self.site_packages_path]
         versions = [f"python3.{v}" for v in range(0, 20)]
         versions += [f"python2.{v}" for v in range(0, 10)]
-        ret = [self.venv_lib_path / v / "site-packages" for v in versions]
+        ret = [self.lib_path / v / "site-packages" for v in versions]
         return ret
 
 
@@ -63,24 +77,25 @@ class BaseVenv:
     def __init__(self, root: Path, venv_dir_name: str) -> None:
         self.root = root
         self.venv_dir_name = venv_dir_name
+        self._path_delimiter = ";" if is_windows() else ":"
 
     def _get_path(self):
-        path = f"""{str(self.venv_path.venv_bin_path)}:"""
+        path = f"""{str(self.venv_path.bin_path)}"""
         return path
 
     def activate(self, env: BaseEnv) -> None:
-        env.path = f"""{self._get_path()}{env.path}"""
+        env.path = f"""{self._get_path()}{self._path_delimiter}{env.path}"""
 
     def deactivate(self, env: BaseEnv) -> None:
         if self._get_path() in env.path:
-            env.path = env.path.replace(self._get_path(), "")
+            env.path = env.path.replace(self._get_path() + self._path_delimiter, "")
 
 
 class PredictedVenv(BaseVenv):
-    def __init__(self, root: Path, venv_dir_name: str) -> None:
-        super().__init__(root, venv_dir_name)
+    def __init__(self, root: Path, venv_name: str) -> None:
+        super().__init__(root, venv_name)
 
-        self.venv_path = VenvPath(root_path=root, venv_dir_name=venv_dir_name)
+        self.venv_path = VenvPath(root_path=root, venv_name=venv_name)
 
     def activate(self, env: BaseEnv) -> None:
         super().activate(env)
@@ -96,13 +111,13 @@ class PredictedVenv(BaseVenv):
 
 
 class ExistingVenv(BaseVenv):
-    def __init__(self, root: Path, venv_dir_name: str, discover: bool = False) -> None:
-        super().__init__(root, venv_dir_name)
+    def __init__(self, root: Path, venv_name: str, discover: bool = False) -> None:
+        super().__init__(root, venv_name)
         self.discover = discover
 
         root_path = self._get_venv_dir() if discover else root
 
-        self.venv_path = VenvPath(root_path=root_path, venv_dir_name=venv_dir_name)
+        self.venv_path = VenvPath(root_path=root_path, venv_name=venv_name)
 
         if not self.venv_path.path.exists():
             raise CantFindEnv
@@ -110,7 +125,7 @@ class ExistingVenv(BaseVenv):
     def _get_venv_dir(self) -> Optional[Path]:
         path = self.root
 
-        while path.parent != Path("/"):
+        while path.parent != path:
             if (path / self.venv_dir_name).exists():
                 return path
             path = path.parent
@@ -144,12 +159,12 @@ class VirtualEnv(Plugin):
     venv_path: Path
 
     def __init__(
-        self, venv_path: Optional[Path] = None, venv_dir_name: str = ".venv"
+        self, venv_path: Optional[Path] = None, venv_name: str = ".venv"
     ) -> None:
         self.venv_path = self.root if not venv_path else venv_path
 
         self._possible_site_packages = []
-        self._venv_dir_name = venv_dir_name
+        self._venv_dir_name = venv_name
 
         self.__logger: Logger = logger.create_child("venv", descriptor="VirtualEnv")
 
@@ -158,14 +173,14 @@ class VirtualEnv(Plugin):
         try:
             self._venv = ExistingVenv(
                 root=self.venv_path,
-                venv_dir_name=venv_dir_name,
+                venv_name=venv_name,
                 discover=venv_path is None,
             )
             self._venv.activate(self)
 
         except CantFindEnv:
             self.__logger.info("Couldn't find venv. Falling back to predicting")
-            self._venv = PredictedVenv(root=self.venv_path, venv_dir_name=venv_dir_name)
+            self._venv = PredictedVenv(root=self.venv_path, venv_name=venv_name)
             self._venv.activate(self)
 
     @classmethod
@@ -173,9 +188,9 @@ class VirtualEnv(Plugin):
         cls,
         self: "VirtualEnv",
         venv_path: Optional[Path] = None,
-        venv_dir_name: str = ".venv",
+        venv_name: str = ".venv",
     ):
-        VirtualEnv.__init__(self, venv_path, venv_dir_name)
+        VirtualEnv.__init__(self, venv_path, venv_name)
 
     @venv.onunload
     def __deactivate(self) -> None:

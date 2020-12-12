@@ -16,11 +16,12 @@ import pyte
 import pyte.modes
 import pytest
 import requests
+import win32con
 from rhei import Stopwatch
 from stickybeak import Injector
 
 from envo import Env, const
-from envo.e2e import STICKYBEAK_PORT
+from envo.e2e import STICKYBEAK_PORT, is_windows
 from envo.logging import Logger
 from envo.shell import PromptBase
 from tests.utils import add_boot  # noqa F401
@@ -242,7 +243,7 @@ class SpawnEnvo:
                 if number == 0 and len(msgs) == 0:
                     break
 
-                if len(msgs) == number and str(msgs[-1].metadata["path"]).endswith(
+                if len(msgs) == number and str(msgs[-1].metadata["path"].replace("\\", "/")).endswith(
                     path
                 ):
                     break
@@ -257,7 +258,7 @@ class SpawnEnvo:
         self.stream = pyte.ByteStream(self.screen)
         self.stage = stage
 
-        self.command = f"envo {stage}"
+        self.command = fr"envo {stage}"
 
         self.expecter = None
         self._buffer = []
@@ -278,11 +279,12 @@ class SpawnEnvo:
             self.on_exit()
 
         self.process = Popen(
-            self.command.split(),
+            self.command,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE,
             env=environ,
+            shell=True
         )
 
         self.output_collector.start()
@@ -297,20 +299,18 @@ class SpawnEnvo:
         return self.expecter
 
     def exit(self) -> None:
+        self.print_info()
+
+        if not self.process:
+            return
         if self.process.poll() is not None:
             return
-
-        self.print_info()
 
         self.send("\x04", expect=False)
 
     def on_exit(self) -> None:
-        self.print_info()
-        if self.process.poll() is not None:
-            return
-        self.process.send_signal(signal.SIGINT)
-        self.process.send_signal(signal.SIGINT)
-        self.process.send_signal(signal.SIGKILL)
+        self.exit()
+        self.process.kill()
 
     @property
     def envo(self) -> Type["SpawnEnvo.RemoteEnvo"]:
@@ -403,11 +403,6 @@ def bash() -> SpawnEnvo:
     s = SpawnEnvo("bash")
     return s
 
-
-def run(cmd: str):
-    return pexpect.run(cmd).decode("utf-8")
-
-
 def single_command(command: str) -> str:
     return run(f'envo test -c "{command}"')
 
@@ -417,7 +412,7 @@ def envo_run(command: str) -> str:
 
 
 def run(command: str) -> str:
-    return subprocess.check_output(command, shell=True)
+    return subprocess.check_output(command, shell=True, stderr=subprocess.PIPE).decode("utf-8")
 
 
 def init_child_env(child_dir: Path) -> None:

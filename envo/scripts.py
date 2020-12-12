@@ -661,8 +661,12 @@ def _main() -> None:
             e.handle_command(args)
     except EnvoError as e:
         logger.error(str(e), print_msg=True)
+        if envo.e2e.enabled:
+            envo.e2e.on_exit()
         sys.exit(1)
-
+    finally:
+        if envo.e2e.enabled:
+            envo.e2e.on_exit()
 
 if __name__ == "__main__":
     _main()

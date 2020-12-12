@@ -27,8 +27,6 @@ from envo import (  # noqa: F401
 # like this:
 # my_namespace = command(namespace="my_namespace")
 
-trop = Namespace("trop")
-
 
 class EnvoCommEnv(UserEnv):  # type: ignore
     class Meta(UserEnv.Meta):  # type: ignore
@@ -55,18 +53,10 @@ class EnvoCommEnv(UserEnv):  # type: ignore
     def fun2(self) -> None:
         print("test")
 
-    @trop.command
-    def __bootstrap(self):
+    @command
+    def bootstrap(self):
         run(f"pip install poetry=={self.poetry_ver}")
         run("poetry install")
-
-    @trop.command
-    def __some_cmd(self):
-        run("echo 'test' && sleep 2 && echo 'test 2'")
-
-    @trop.context
-    def __some_context(self):
-        return {"df": 123}
 
     @onload
     def __on_load(self) -> None:

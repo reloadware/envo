@@ -1,7 +1,6 @@
 import os
 import shutil
 from pathlib import Path
-from typing import Generator
 
 from loguru_caplog import loguru_caplog as caplog  # noqa: ignore F401
 from pytest import fixture
@@ -11,12 +10,13 @@ envo_root = test_root.parent
 
 
 @fixture
-def sandbox() -> Generator:
+def sandbox() -> Path:
     sandbox_dir = test_root / "sandbox"
     if sandbox_dir.exists():
         shutil.rmtree(str(sandbox_dir), ignore_errors=True)
 
-    sandbox_dir.mkdir()
+    if not sandbox_dir.exists():
+        sandbox_dir.mkdir()
     os.chdir(str(sandbox_dir))
 
     yield sandbox_dir
