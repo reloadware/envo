@@ -27,15 +27,6 @@ def shell_unit() -> None:
 
 
 @fixture
-def env_comm() -> Type[Env]:
-    env_dir = Path(".").absolute()
-    sys.path.insert(0, str(env_dir))
-    env = reload(import_module("env_comm")).Env
-    sys.path.pop(0)
-    return env
-
-
-@fixture
 def mock_shell(mocker) -> None:
     mocker.patch("envo.shell.Shell.create")
 

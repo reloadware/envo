@@ -30,7 +30,7 @@ from watchdog.events import FileModifiedEvent
 
 from envo import logger
 from envo.logging import Logger
-from envo.misc import Callback, EnvoError, Inotify, import_from_file
+from envo.misc import Callback, EnvoError, FilesWatcher, import_from_file
 
 __all__ = [
     "UserEnv",
@@ -377,6 +377,33 @@ class BaseEnv:
 
     __initialised__ = False
 
+    def init_parts(self) -> None:
+        def decorated_init(klass, fun):
+            def init(*args, **kwargs):
+                if not klass.__initialised__:
+                    klass.__initialised__ = True
+                    fun(*args, **kwargs)
+
+            return init
+
+        parts = list(reversed(self.get_user_envs()))
+        parts.extend(self.get_plugin_envs())
+
+        for p in parts:
+            p.__initialised__ = False
+
+        for p in parts:
+            p.__undecorated_init__ = p.__init__
+            p.__init__ = decorated_init(p, p.__init__)
+
+        for p in parts:
+            if not p.__initialised__:
+                p.__init__(self)
+
+        for p in parts:
+            p.__init__ = p.__undecorated_init__
+
+
     @classmethod
     def is_user_env(cls) -> bool:
         return (
@@ -445,8 +472,70 @@ class EnvoEnv(BaseEnv):
     pass
 
 
+class ImportedEnv(BaseEnv):
+    def __init__(self):
+        self.meta = self.Meta()
+        self._name = self.meta.name
+
+        self.root = self.meta.root
+        self.stage = self.meta.stage
+        self.envo_stage = self.stage
+
+        self.path = os.environ["PATH"]
+
+        if "PYTHONPATH" not in os.environ:
+            self.pythonpath = ""
+        else:
+            self.pythonpath = os.environ["PYTHONPATH"]
+        self.pythonpath = str(self.root) + ":" + self.pythonpath
+
+        self.init_parts()
+
+
+class EnvBuilder:
+    @classmethod
+    def build_env(cls, env: Type[BaseEnv]) -> Type["UserEnv"]:
+        parents = env._get_parents_env(env)
+        plugins = env._get_plugin_envs(env)
+
+        class InheritedEnv(env, *parents, *plugins):
+            pass
+
+        env = InheritedEnv
+        env.__name__ = cls.__name__
+        env._parents = parents
+        return env
+
+    @classmethod
+    def build_shell_env(cls, env: Type[BaseEnv]) -> Type["Env"]:
+        user_env = cls.build_env(env)
+
+        class InheritedEnv(Env, user_env):
+            pass
+
+        return InheritedEnv
+
+    @classmethod
+    def build_imported_env(cls, env: Type[BaseEnv]) -> Type["ImportedEnv"]:
+        user_env = cls.build_env(env)
+
+        class InheritedEnv(ImportedEnv, user_env):
+            pass
+
+        return InheritedEnv
+
+    @classmethod
+    def build_shell_env_from_file(cls, file: Path) -> Type["Env"]:
+        env = import_from_file(file).Env  # type: ignore
+        return cls.build_shell_env(env)
+
+
 class UserEnv(BaseEnv):
-    pass
+    def __new__(cls) -> "UserEnv":
+        env_class = EnvBuilder.build_imported_env(cls)
+        obj = ImportedEnv.__new__(env_class)
+        obj.__init__()
+        return obj
 
 
 class Env(EnvoEnv):
@@ -467,28 +556,44 @@ class Env(EnvoEnv):
 
     @dataclass
     class Sets:
-        extra_watchers: List[Inotify]
+        extra_watchers: List[FilesWatcher]
         reloader_enabled: bool = True
         blocking: bool = False
 
     _parents: List[Type["Env"]]
-    _files_watchers: List[Inotify]
+    _files_watchers: List[FilesWatcher]
     _default_watch_files = ["env_*.py"]
     _default_ignore_files = [r"**/.*", r"**/*~", r"**/__pycache__"]
+
+    def __new__(cls, *args, **kwargs) -> "Env":
+        env = BaseEnv.__new__(cls)
+        return env
 
     def __init__(self, calls: Callbacks, se: Sets, li: Links) -> None:
         self._calls = calls
         self._se = se
         self._li = li
 
-        self.meta = super().Meta()
-
+        self.meta = self.Meta()
         self._name = self.meta.name
 
-        self.logger: Logger = logger
+        self.root = self.meta.root
+        self.stage = self.meta.stage
+        self.envo_stage = self.stage
+
+        self.path = os.environ["PATH"]
+
+        if "PYTHONPATH" not in os.environ:
+            self.pythonpath = ""
+        else:
+            self.pythonpath = os.environ["PYTHONPATH"]
+        self.pythonpath = str(self.root) + ":" + self.pythonpath
 
         self._exiting = False
         self._executing_cmd = False
+
+        self._environ_before = None
+        self._shell_environ_before = None
 
         self._files_watchers = self._se.extra_watchers
         self._reload_lock = Lock()
@@ -498,20 +603,9 @@ class Env(EnvoEnv):
         self._environ_before = None
         self._shell_environ_before = None
 
-        self.root = self.meta.root
-        self.stage = self.meta.stage
-        self.envo_stage = self.stage
         self.logger.info(
             "Starting env", metadata={"root": self.root, "stage": self.stage}
         )
-
-        self.path = os.environ["PATH"]
-
-        if "PYTHONPATH" not in os.environ:
-            self.pythonpath = ""
-        else:
-            self.pythonpath = os.environ["PYTHONPATH"]
-        self.pythonpath = str(self.root) + ":" + self.pythonpath
 
         self._magic_functions: Dict[str, Any] = {}
 
@@ -539,32 +633,6 @@ class Env(EnvoEnv):
         self.init_parts()
         if self._se.reloader_enabled:
             self._collect_watchers()
-
-    def init_parts(self) -> None:
-        def decorated_init(klass, fun):
-            def init(*args, **kwargs):
-                if not klass.__initialised__:
-                    klass.__initialised__ = True
-                    fun(*args, **kwargs)
-
-            return init
-
-        parts = list(reversed(self.get_user_envs()))
-        parts.extend(self.get_plugin_envs())
-
-        for p in parts:
-            p.__initialised__ = False
-
-        for p in parts:
-            p.__undecorated_init__ = p.__init__
-            p.__init__ = decorated_init(p, p.__init__)
-
-        for p in parts:
-            if not p.__initialised__:
-                p.__init__(self)
-
-        for p in parts:
-            p.__init__ = p.__undecorated_init__
 
     def validate(self) -> None:
         """
@@ -771,17 +839,17 @@ class Env(EnvoEnv):
 
         # inject callback int existing
         for w in self._files_watchers:
-            w.calls = Inotify.Callbacks(on_event=Callback(self._on_env_edit))
+            w.calls = FilesWatcher.Callbacks(on_event=Callback(self._on_env_edit))
 
         for p in constituents:
-            watcher = Inotify(
-                Inotify.Sets(
+            watcher = FilesWatcher(
+                FilesWatcher.Sets(
                     root=p.Meta.root,
                     include=p.Meta.watch_files + self._default_watch_files,
                     exclude=p.Meta.ignore_files + self._default_ignore_files,
                     name=p.__name__
                 ),
-                calls=Inotify.Callbacks(on_event=Callback(self._on_env_edit)),
+                calls=FilesWatcher.Callbacks(on_event=Callback(self._on_env_edit)),
             )
             self._files_watchers.append(watcher)
 
@@ -1003,22 +1071,3 @@ class Env(EnvoEnv):
             f()
         self._li.shell.calls.reset()
 
-
-class EnvBuilder:
-    @classmethod
-    def build_env(cls, env: Type[BaseEnv]) -> Type["Env"]:
-        parents = env._get_parents_env(env)
-        plugins = env._get_plugin_envs(env)
-
-        class InheritedEnv(Env, env, *parents, *plugins):
-            pass
-
-        env = InheritedEnv
-        env.__name__ = cls.__name__
-        env._parents = parents
-        return env
-
-    @classmethod
-    def build_env_from_file(cls, file: Path) -> Type["Env"]:
-        env = import_from_file(file).Env  # type: ignore
-        return cls.build_env(env)

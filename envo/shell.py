@@ -17,7 +17,7 @@ from xonsh.readline_shell import ReadlineShell
 
 import envo
 from envo import logger
-from envo.misc import Callback
+from envo.misc import Callback, is_linux, is_windows
 
 
 class PromptState(Enum):
@@ -212,8 +212,9 @@ class Shell(BaseShell):  # type: ignore
         def func_sig_ttin_ttou(n: Any, f: Any) -> None:
             pass
 
-        # signal.signal(signal.SIGTTIN, func_sig_ttin_ttou)
-        # signal.signal(signal.SIGTTOU, func_sig_ttin_ttou)
+        if not is_windows():
+            signal.signal(signal.SIGTTIN, func_sig_ttin_ttou)
+            signal.signal(signal.SIGTTOU, func_sig_ttin_ttou)
 
         shell = cls(calls, execer)
         builtins.__xonsh__.shell = shell  # type: ignore

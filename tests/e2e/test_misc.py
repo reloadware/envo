@@ -28,11 +28,11 @@ class TestMisc(utils.TestBase):
         ret = utils.run("envo test --dry-run")
         assert re.match(
             (
-                r'export ENVO_STAGE="test"\r\n'
-                r'export PATH=".*"\r\n'
-                r'export PYTHONPATH=".*"\r\n'
-                r'export SANDBOX_ROOT=".*sandbox"\r\n'
-                r'export SANDBOX_STAGE="test"\r\n'
+                r'export ENVO_STAGE="test"\n'
+                r'export PATH=".*"\n'
+                r'export PYTHONPATH=".*"\n'
+                r'export SANDBOX_ROOT=".*sandbox"\n'
+                r'export SANDBOX_STAGE="test"\n'
             ),
             ret,
         )

@@ -42,3 +42,7 @@ class TestMisc(utils.TestBase):
         Path("sandbox").mkdir()
         Path("sandbox/__init__.py").touch()
         utils.command("test")
+
+    def test_importing(self):
+        env = utils.get_env_class()
+        assert env.stage == "test"

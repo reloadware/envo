@@ -16,12 +16,11 @@ import pyte
 import pyte.modes
 import pytest
 import requests
-import win32con
 from rhei import Stopwatch
 from stickybeak import Injector
 
 from envo import Env, const
-from envo.e2e import STICKYBEAK_PORT, is_windows
+from envo.e2e import STICKYBEAK_PORT
 from envo.logging import Logger
 from envo.shell import PromptBase
 from tests.utils import add_boot  # noqa F401
@@ -91,7 +90,7 @@ class AssertInTime:
     class TIMEOUT(Exception):
         pass
 
-    def __init__(self, condition: Callable, timeout=2):
+    def __init__(self, condition: Callable, timeout=3):
         self.condition = condition
         self.sw = Stopwatch()
         self.sw.start()
@@ -198,7 +197,7 @@ class SpawnEnvo:
             return dict(os.environ)
 
         @classmethod
-        def wait_until_ready(cls, timeout=2) -> None:
+        def wait_until_ready(cls, timeout=3) -> None:
             from time import sleep
 
             import envo.e2e
@@ -209,6 +208,11 @@ class SpawnEnvo:
             while True:
                 sleep(sleep_time)
                 passed_time += sleep_time
+                if passed_time >= timeout:
+                    raise ReadyTimeout
+
+                if not envo.e2e.envo:
+                    continue
 
                 if not envo.e2e.envo.mode:
                     continue
@@ -217,14 +221,11 @@ class SpawnEnvo:
                 if mode.status.ready:
                     break
 
-                if passed_time >= timeout:
-                    raise ReadyTimeout
-
             sleep(0.2)
 
         @classmethod
         def assert_reloaded(
-            cls, number: int = 1, path="env_test.py", timeout=2
+            cls, number: int = 1, path="env_test.py", timeout=3
         ) -> None:
             from time import sleep
 
@@ -412,7 +413,10 @@ def envo_run(command: str) -> str:
 
 
 def run(command: str) -> str:
-    return subprocess.check_output(command, shell=True, stderr=subprocess.PIPE).decode("utf-8")
+    ret = subprocess.check_output(command, shell=True, stderr=subprocess.PIPE).decode("utf-8")
+    ret = ret.replace("\r", "")
+    ret = ret.replace("\x1b[0m", "")
+    return ret
 
 
 def init_child_env(child_dir: Path) -> None:

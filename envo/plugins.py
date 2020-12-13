@@ -12,9 +12,8 @@ __all__ = [
     "VirtualEnv",
 ]
 
-from envo.e2e import is_windows
-
 from envo.logging import Logger
+from envo.misc import is_windows
 
 
 class Plugin(envo.env.EnvoEnv):
@@ -176,12 +175,10 @@ class VirtualEnv(Plugin):
                 venv_name=venv_name,
                 discover=venv_path is None,
             )
-            self._venv.activate(self)
 
         except CantFindEnv:
             self.__logger.info("Couldn't find venv. Falling back to predicting")
             self._venv = PredictedVenv(root=self.venv_path, venv_name=venv_name)
-            self._venv.activate(self)
 
     @classmethod
     def init(
@@ -191,6 +188,10 @@ class VirtualEnv(Plugin):
         venv_name: str = ".venv",
     ):
         VirtualEnv.__init__(self, venv_path, venv_name)
+
+    @venv.onload
+    def __activate(self) -> None:
+        self._venv.activate(self)
 
     @venv.onunload
     def __deactivate(self) -> None:

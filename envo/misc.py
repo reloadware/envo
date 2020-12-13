@@ -1,6 +1,8 @@
+import errno
 import importlib.machinery
 import importlib.util
 import inspect
+import os
 import re
 import sys
 import time
@@ -24,10 +26,11 @@ __all__ = [
     "import_from_file",
     "EnvoError",
     "Callback",
-    "Inotify",
+    "FilesWatcher",
 ]
 
-from envo import logger
+from watchdog.observers.inotify_c import Inotify
+
 
 
 class EnvoError(Exception):
@@ -65,7 +68,8 @@ class InotifyPath:
         return self.absolute.is_dir()
 
 
-class Inotify(FileSystemEventHandler):
+
+class FilesWatcher(FileSystemEventHandler):
     @dataclass
     class Sets:
         include: List[str]
@@ -78,6 +82,8 @@ class Inotify(FileSystemEventHandler):
         on_event: Callback
 
     def __init__(self, se: Sets, calls: Callbacks):
+        from envo import logger
+
         self.include = [p.lstrip("./") for p in se.include]
         self.exclude = [p.lstrip("./") for p in se.exclude]
         self.root = se.root
@@ -86,7 +92,11 @@ class Inotify(FileSystemEventHandler):
         self.se = se
         self.calls = calls
 
+        self.logger = logger.create_child(f"{self.se.name} Inotify", descriptor=f"{self.se.name} Inotify")
+
+        self.logger.debug("Starting Inotify")
         self.observer = Observer()
+
         self.observer.schedule(self, str(self.se.root), recursive=True)
 
     def on_any_event(self, event: FileModifiedEvent):
@@ -95,12 +105,45 @@ class Inotify(FileSystemEventHandler):
     def match(self, path: str, include: List[str], exclude: List[str]) -> bool:
         return not glob_match(path, exclude) and glob_match(path, include)
 
-    def start(self) -> None:
-        logger.debug("Starting Inotify")
-        self.observer.start()
+    def walk_dirs(self, on_match: Callable) -> None:
+        def walk(path: Path):
+            for p in path.iterdir():
+                if not self.match(str(p.relative_to(self.root)), include=self.include, exclude=self.exclude):
+                    continue
+                on_match(str(p).encode("utf-8"))
+                if p.is_dir():
+                    walk(p)
 
-    def clone(self) -> "Inotify":
-        return Inotify(se=self.se, calls=self.calls)
+        walk(self.root)
+
+    def start(self) -> None:
+        self.logger.debug("Starting observer")
+
+        def _add_dir_watch(self2, path, recursive, mask):
+            """
+            Adds a watch (optionally recursively) for the given directory path
+            to monitor events specified by the mask.
+
+            :param path:
+                Path to monitor
+            :param recursive:
+                ``True`` to monitor recursively.
+            :param mask:
+                Event bit mask.
+            """
+            if not os.path.isdir(path):
+                raise OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), path)
+            self2._add_watch(path, mask)
+            if recursive:
+                self.walk_dirs(on_match=lambda p: self2._add_watch(p, mask))
+
+
+        Inotify._add_dir_watch = _add_dir_watch
+        self.observer.start()
+        self.logger.debug("Observer started")
+
+    def clone(self) -> "FilesWatcher":
+        return FilesWatcher(se=self.se, calls=self.calls)
 
     def stop(self) -> None:
         self.observer.stop()
@@ -263,3 +306,44 @@ class EnvParser:
         ret = parents_src + src + melted
 
         return ret
+
+
+import sys
+
+PLATFORM_WINDOWS = 'windows'
+PLATFORM_LINUX = 'linux'
+PLATFORM_BSD = 'bsd'
+PLATFORM_DARWIN = 'darwin'
+PLATFORM_UNKNOWN = 'unknown'
+
+
+def get_platform_name():
+    if sys.platform.startswith("win"):
+        return PLATFORM_WINDOWS
+    elif sys.platform.startswith('darwin'):
+        return PLATFORM_DARWIN
+    elif sys.platform.startswith('linux'):
+        return PLATFORM_LINUX
+    elif sys.platform.startswith(('dragonfly', 'freebsd', 'netbsd', 'openbsd', 'bsd')):
+        return PLATFORM_BSD
+    else:
+        return PLATFORM_UNKNOWN
+
+
+__platform__ = get_platform_name()
+
+
+def is_linux():
+    return __platform__ == PLATFORM_LINUX
+
+
+def is_bsd():
+    return __platform__ == PLATFORM_BSD
+
+
+def is_darwin():
+    return __platform__ == PLATFORM_DARWIN
+
+
+def is_windows():
+    return __platform__ == PLATFORM_WINDOWS

@@ -73,20 +73,20 @@ class TestCommands(utils.TestBase):
 
     def test_single_command(self):
         s = utils.run("""envo test -c "print('teest')" """)
-        assert s == "teest\r\n\r\r\n\x1b[0m"
+        assert s == "teest\n"
 
     def test_single_command_fail(self):
         with raises(CalledProcessError) as e:
             s = utils.run("""envo test -c "import sys;print('some msg');sys.exit(2)" """)
         assert e.value.returncode == 2
-        assert e.value.stdout == b"some msg\r\n\r\r\n\x1b[0m"
+        assert b"some msg" in e.value.stdout
         assert e.value.stderr == b""
 
         with raises(CalledProcessError) as e:
-            s = utils.run("""envo test -c "cat /home/non_existend_file" """)
+            s = utils.run("""envo test -c "cd /home/non_existend_file" """)
         assert e.value.returncode == 1
-        assert e.value.stdout == b"some msg\r\n\r\r\n\x1b[0m"
-        assert e.value.stderr == b""
+        assert e.value.stdout == b"\n"
+        assert b"no such file or directory" in e.value.stderr
 
     def test_single_command_command_fail(self):
         utils.add_command(
@@ -97,10 +97,11 @@ class TestCommands(utils.TestBase):
             """
         )
 
-        s = utils.run("""envo test -c "flake" """)
-        s.expect(pexpect.EOF)
-        s.close()
-        assert s.exitstatus == 127
+        with raises(CalledProcessError) as e:
+            s = utils.run("""envo test -c "flake" """)
+        assert e.value.returncode == 127
+        assert b"'flaake' not found" in e.value.stdout
+        assert b"" == e.value.stderr
 
     def test_single_command_command_fail_traceback(self):
         utils.add_command(
@@ -112,29 +113,30 @@ class TestCommands(utils.TestBase):
             """
         )
 
-        s = utils.run("""envo test -c "some_cmd" """)
-        s.expect(r".*Traceback .*ZeroDivisionError: division by zero")
-        s.expect(pexpect.EOF)
-        s.close()
-        assert s.exitstatus == 1
+        with raises(CalledProcessError) as e:
+            s = utils.run("""envo test -c "some_cmd" """)
+        assert e.value.returncode == 1
+        assert e.value.stdout == b""
+        assert b"ZeroDivisionError" in e.value.stderr
 
     def test_headless_error(self):
-        s = utils.run("""envo some_env -c "print('test')" """)
-        s.expect(pexpect.EOF)
-        s.close()
-        assert s.exitstatus == 1
+        with raises(CalledProcessError) as e:
+            s = utils.run("""envo some_env -c "print('test')" """)
+        assert e.value.returncode == 1
+        assert e.value.stdout == b""
+        assert b"find any env" in e.value.stderr
 
     def test_single_command_fire(self):
         utils.add_flake_cmd()
         res = utils.single_command("flake")
 
-        assert res == "Flake all good\r\nFlake return value\r\n"
+        assert res == "Flake all good\nFlake return value\n"
 
     def test_envo_run(self):
         utils.add_flake_cmd(file=Path("env_comm.py"))
         res = utils.envo_run("flake")
 
-        assert res == "Flake all good\r\nFlake return value\r\n"
+        assert res == "Flake all good\nFlake return value\n"
 
     def test_env_variables_available_in_run(self, shell):
         utils.add_declaration("test_var: Raw[str]")

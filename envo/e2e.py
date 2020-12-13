@@ -3,10 +3,10 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+from envo.misc import is_windows
+
 STICKYBEAK_PORT = 5416
 
-def is_windows():
-    return os.name == "nt"
 
 if TYPE_CHECKING:
     from envo.scripts import EnvoBase

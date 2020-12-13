@@ -65,7 +65,7 @@ class TestVenv(utils.TestBase):
         venv_path = VenvPath(root_path=sandbox, venv_name=".venv")
 
         utils.add_plugins("VirtualEnv")
-        utils.replace_in_code("pass", "VirtualEnv.init(self, venv_path=self.root)")
+        utils.replace_in_code("# Define your variables here", "VirtualEnv.init(self, venv_path=self.root)")
 
         e = shell.start()
         e.prompt().eval()
@@ -101,7 +101,7 @@ class TestVenv(utils.TestBase):
     def test_autodiscovery_cant_find(self, sandbox, shell):
         utils.add_plugins("VirtualEnv")
         utils.replace_in_code(
-            "pass", "VirtualEnv.init(self, venv_name='.some_venv')"
+            "# Define your variables here", "VirtualEnv.init(self, venv_name='.some_venv')"
         )
 
         e = shell.start()
@@ -122,13 +122,13 @@ class TestVenv(utils.TestBase):
 
         utils.add_plugins("VirtualEnv")
         utils.replace_in_code(
-            "pass", "VirtualEnv.init(self, venv_name='.custom_venv')"
+            "# Define your variables here", "VirtualEnv.init(self, venv_name='.custom_venv')"
         )
 
         e = shell.start()
         e.prompt(name="child").eval()
 
-        self.assert_activated(shell, venv_name=".custom_venv", activated_from="child")
+        self.assert_activated(shell, venv_dir=sandbox, venv_name=".custom_venv", activated_from="child")
 
         shell.exit()
         e.exit().eval()

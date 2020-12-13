@@ -16,7 +16,7 @@ from rhei import Stopwatch
 import envo.e2e
 from envo import Env, const, logger, logging, misc, shell
 from envo.env import EnvBuilder
-from envo.misc import Callback, EnvoError, Inotify, import_from_file
+from envo.misc import Callback, EnvoError, FilesWatcher, import_from_file
 from envo.shell import PromptBase, PromptState, Shell
 
 try:
@@ -233,7 +233,7 @@ class HeadlessMode:
         def on_context_ready():
             self.status.context_ready = True
 
-        env_class = EnvBuilder.build_env_from_file(file)
+        env_class = EnvBuilder.build_shell_env_from_file(file)
         env = env_class(
             li=Env.Links(self.li.shell),
             calls=Env.Callbacks(
@@ -328,15 +328,15 @@ class EmergencyMode(HeadlessMode):
     def get_env_file(self) -> Path:
         return Path(__file__).parent / "emergency_env.py"
 
-    def get_watchers_from_env(self, env: misc.EnvParser) -> List[Inotify]:
+    def get_watchers_from_env(self, env: misc.EnvParser) -> List[FilesWatcher]:
         watchers = [
-            Inotify(
-                Inotify.Sets(
+            FilesWatcher(
+                FilesWatcher.Sets(
                     root=env.path.parent,
                     include=Env._default_watch_files,
                     exclude=Env._default_ignore_files,
                 ),
-                calls=Inotify.Callbacks(on_event=Callback(None)),
+                calls=FilesWatcher.Callbacks(on_event=Callback(None)),
             )
         ]
 
@@ -457,7 +457,7 @@ class Envo(EnvoBase):
         pass
 
     environ_before = Dict[str, str]
-    inotify: Inotify
+    inotify: FilesWatcher
     env_dirs: List[Path]
     quit: bool
     env: Env

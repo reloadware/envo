@@ -47,8 +47,13 @@ class EnvoCommEnv(UserEnv):  # type: ignore
         self.poetry_ver = "1.0.5"
         self.some_var = "test"
 
+    @command
     def fun(self) -> None:
-        print("test")
+        run(
+            """
+            sudo echo 'test'
+            sudo echo "test2"
+            """)
 
     def fun2(self) -> None:
         print("test")

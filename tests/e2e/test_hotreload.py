@@ -136,25 +136,23 @@ class TestHotReload(utils.TestBase):
 
         utils.replace_in_code(
             "watch_files: List[str] = []",
-            'watch_files: List[str] = ["*.py", "./test_dir/*.py", "./test_dir"]',
+            'watch_files: List[str] = ["*.py", "./test_dir/*.py"]',
         )
         shell.envo.assert_reloaded(1)
 
         directory = Path("./test_dir")
         directory.mkdir()
 
-        shell.envo.assert_reloaded(2, "test_dir")
-
         file1 = Path("./test_dir/some_src_file.py")
         file1.touch()
-        shell.envo.assert_reloaded(3, "test_dir/some_src_file.py")
+        shell.envo.assert_reloaded(2, "test_dir/some_src_file.py")
 
         file2 = Path("./test_dir/some_src_file_2.py")
         file2.touch()
-        shell.envo.assert_reloaded(4, "test_dir/some_src_file_2.py")
+        shell.envo.assert_reloaded(3, "test_dir/some_src_file_2.py")
 
         shutil.rmtree(directory, ignore_errors=True)
-        shell.envo.assert_reloaded(5, "test_dir/some_src_file_2.py")
+        shell.envo.assert_reloaded(4, "test_dir/some_src_file_2.py")
 
         shell.exit()
         e.exit().eval()
@@ -295,7 +293,7 @@ class TestHotReload(utils.TestBase):
         shell.sendline("print($PATH)")
         sleep(0.5)
 
-        e.output(r"\['some_path', 'already_existing_path'.*\]\n")
+        e.output(r"\['[\\|/]some_path', '[\\|/]already_existing_path'.*\]\n")
         e.prompt()
 
         shell.exit()
