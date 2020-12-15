@@ -108,7 +108,7 @@ class FilesWatcher(FileSystemEventHandler):
     def walk_dirs(self, on_match: Callable) -> None:
         def walk(path: Path):
             for p in path.iterdir():
-                if not self.match(str(p.relative_to(self.root)), include=self.include, exclude=self.exclude):
+                if glob_match(path, self.exclude):
                     continue
                 on_match(str(p).encode("utf-8"))
                 if p.is_dir():

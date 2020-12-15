@@ -5,6 +5,7 @@ from subprocess import CalledProcessError
 import pexpect
 from pytest import raises
 
+from envo.misc import is_linux, is_windows
 from tests.e2e import utils
 
 
@@ -100,7 +101,11 @@ class TestCommands(utils.TestBase):
         with raises(CalledProcessError) as e:
             s = utils.run("""envo test -c "flake" """)
         assert e.value.returncode == 127
-        assert b"'flaake' not found" in e.value.stdout
+        if is_linux():
+            assert b"flaake: command not found" in e.value.stdout
+        if is_windows():
+            assert b"flaake: not found" in e.value.stdout
+
         assert b"" == e.value.stderr
 
     def test_single_command_command_fail_traceback(self):
