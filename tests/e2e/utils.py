@@ -404,6 +404,7 @@ def bash() -> SpawnEnvo:
     s = SpawnEnvo("bash")
     return s
 
+
 def single_command(command: str) -> str:
     return run(f'envo test -c "{command}"')
 
@@ -412,10 +413,20 @@ def envo_run(command: str) -> str:
     return run(f"envo run {command}")
 
 
-def run(command: str) -> str:
-    ret = subprocess.check_output(command, shell=True, stderr=subprocess.PIPE).decode("utf-8")
+def clean_output(output: str) -> str:
+    ret = output
+    if isinstance(output, bytes):
+        ret = output.decode("utf-8")
+
     ret = ret.replace("\r", "")
     ret = ret.replace("\x1b[0m", "")
+    ret = ret.replace("\n\n", "\n")
+    return ret
+
+
+def run(command: str) -> str:
+    ret = subprocess.check_output(command, shell=True, stderr=subprocess.PIPE).decode("utf-8")
+    ret = clean_output(ret)
     return ret
 
 

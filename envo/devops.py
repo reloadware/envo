@@ -4,7 +4,13 @@ import sys
 from getpass import getpass
 from typing import List
 
-import pexpect
+from envo.misc import is_linux, is_windows
+
+if is_linux():
+    import pexpect
+if is_windows():
+    import wexpect
+
 from tqdm import tqdm
 
 from envo import logger
@@ -53,14 +59,25 @@ def run(
 
     prompt = r"##PG_PROMPT##"
 
-    p = pexpect.spawn("bash --rcfile /dev/null", env=os.environ, echo=False)
+    if is_linux():
+        p = pexpect.spawn("bash --rcfile /dev/null", env=os.environ, echo=False)
+    if is_windows():
+        p = pexpect.spawn("cmd.exe", env=os.environ, echo=False)
+    else:
+        raise ValueError("Unsupported platform")
+
     p.delaybeforesend = None
 
-    p.expect(r"(\$|#)")
-    p.sendline(f"export PS1={prompt}")
+    p.expect(r"(\$|#|:\)")
+    if is_linux():
+        p.sendline(f"export PS1={prompt}")
+    if is_windows():
+        p.sendline(f"set PROMPT={prompt}")
+
     p.expect(prompt)
-    p.sendline(f"set -uo pipefail")
-    p.expect(prompt)
+    if is_linux():
+        p.sendline(f"set -uo pipefail")
+        p.expect(prompt)
 
     # Get sudo password if needed
     if "sudo " in command:
@@ -88,7 +105,7 @@ def run(
         pbar = tqdm(total=len(commands))
 
     for c in commands:
-        if "PG_DEBUG" in os.environ:
+        if "ENVO_DEBUG" in os.environ:
             logger.debug(c)
 
         if print_output:

@@ -57,7 +57,7 @@ pytest-rerunfailures = "^9.0"
 flask = "^1.1.2"
 wheel = "^0.35.1"
 isort = "^5.6.4"
-stickybeak = "0.5.1b"
+stickybeak = "0.5.2b"
 black = "^20.8b1"
 
 [tool.poetry.scripts]

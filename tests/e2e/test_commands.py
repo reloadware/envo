@@ -5,6 +5,7 @@ from subprocess import CalledProcessError
 import pexpect
 from pytest import raises
 
+from envo.misc import is_linux, is_windows
 from tests.e2e import utils
 
 
@@ -79,14 +80,14 @@ class TestCommands(utils.TestBase):
         with raises(CalledProcessError) as e:
             s = utils.run("""envo test -c "import sys;print('some msg');sys.exit(2)" """)
         assert e.value.returncode == 2
-        assert b"some msg" in e.value.stdout
-        assert e.value.stderr == b""
+        assert "some msg" in utils.clean_output(e.value.stdout)
+        assert utils.clean_output(e.value.stderr) == ""
 
         with raises(CalledProcessError) as e:
             s = utils.run("""envo test -c "cd /home/non_existend_file" """)
         assert e.value.returncode == 1
-        assert e.value.stdout == b"\n"
-        assert b"no such file or directory" in e.value.stderr
+        assert utils.clean_output(e.value.stdout) == "\n"
+        assert "no such file or directory" in utils.clean_output(e.value.stderr)
 
     def test_single_command_command_fail(self):
         utils.add_command(
@@ -99,9 +100,14 @@ class TestCommands(utils.TestBase):
 
         with raises(CalledProcessError) as e:
             s = utils.run("""envo test -c "flake" """)
-        assert e.value.returncode == 127
-        assert b"'flaake' not found" in e.value.stdout
-        assert b"" == e.value.stderr
+
+        if is_linux():
+            assert e.value.returncode == 127
+        if is_windows():
+            assert e.value.returncode == 1
+
+        assert "'flaake' not found" in utils.clean_output(e.value.stdout)
+        assert utils.clean_output(e.value.stderr) == ""
 
     def test_single_command_command_fail_traceback(self):
         utils.add_command(

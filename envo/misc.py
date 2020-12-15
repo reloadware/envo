@@ -29,10 +29,6 @@ __all__ = [
     "FilesWatcher",
 ]
 
-from watchdog.observers.inotify_c import Inotify
-
-
-
 class EnvoError(Exception):
     pass
 
@@ -119,26 +115,28 @@ class FilesWatcher(FileSystemEventHandler):
     def start(self) -> None:
         self.logger.debug("Starting observer")
 
-        def _add_dir_watch(self2, path, recursive, mask):
-            """
-            Adds a watch (optionally recursively) for the given directory path
-            to monitor events specified by the mask.
+        if is_linux():
+            def _add_dir_watch(self2, path, recursive, mask):
+                """
+                Adds a watch (optionally recursively) for the given directory path
+                to monitor events specified by the mask.
 
-            :param path:
-                Path to monitor
-            :param recursive:
-                ``True`` to monitor recursively.
-            :param mask:
-                Event bit mask.
-            """
-            if not os.path.isdir(path):
-                raise OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), path)
-            self2._add_watch(path, mask)
-            if recursive:
-                self.walk_dirs(on_match=lambda p: self2._add_watch(p, mask))
+                :param path:
+                    Path to monitor
+                :param recursive:
+                    ``True`` to monitor recursively.
+                :param mask:
+                    Event bit mask.
+                """
+                if not os.path.isdir(path):
+                    raise OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), path)
+                self2._add_watch(path, mask)
+                if recursive:
+                    self.walk_dirs(on_match=lambda p: self2._add_watch(p, mask))
 
+            from watchdog.observers.inotify_c import Inotify
+            Inotify._add_dir_watch = _add_dir_watch
 
-        Inotify._add_dir_watch = _add_dir_watch
         self.observer.start()
         self.logger.debug("Observer started")
 
