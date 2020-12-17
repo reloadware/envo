@@ -1,7 +1,6 @@
 import os
 import re
 import shutil
-import signal
 import subprocess
 from collections import Callable
 from enum import Enum
@@ -11,7 +10,6 @@ from threading import Thread
 from time import sleep
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Set
 
-import pexpect
 import pyte
 import pyte.modes
 import pytest
@@ -85,7 +83,6 @@ class TestBase:
     @pytest.fixture(autouse=True)
     def setup(self, sandbox, init):
         pass
-
 
 
 class AssertInTime:
@@ -273,7 +270,8 @@ class SpawnEnvo:
     def start(self, wait_until_ready=True) -> Expecter:
         environ = os.environ.copy()
         if self.debug:
-            environ["ENVO_E2E_TEST"] = "True"
+            environ["ENVO_E2E_STICKYBEAK"] = "True"
+        environ["ENVO_E2E_TEST"] = "True"
         environ["PYTHONUNBUFFERED"] = "True"
         environ["ENVO_SHELL_NOHISTORY"] = "True"
 

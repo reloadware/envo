@@ -12,11 +12,12 @@ if TYPE_CHECKING:
     from envo.scripts import EnvoBase
 
 
-__all__ = ["envo", "enabled"]
+__all__ = ["envo", "enabled", "stickybeak_enabled"]
 
 envo: Optional["EnvoBase"] = None
 
 enabled = "ENVO_E2E_TEST" in os.environ
+stickybeak_enabled = "ENVO_E2E_STICKYBEAK" in os.environ
 
 server = None
 
@@ -78,6 +79,7 @@ if enabled:
         prompt_toolkit.input.create_input = create_input
         prompt_toolkit.input.defaults.create_input = create_input
 
+if stickybeak_enabled:
     project_root = Path(__file__).parent
     server = stickybeak.Server(project_root, STICKYBEAK_PORT)
     server.start()

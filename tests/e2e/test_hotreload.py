@@ -146,14 +146,14 @@ class TestHotReload(utils.TestBase):
 
         file1 = Path("./test_dir/some_src_file.py")
         file1.touch()
-        shell.envo.assert_reloaded(2, r".*test_dir/some_src_file\.py")
+        shell.envo.assert_reloaded(2, r".*test_dir/some_src_file.py")
 
         file2 = Path("./test_dir/some_src_file_2.py")
         file2.touch()
-        shell.envo.assert_reloaded(3, r".*test_dir/some_src_file_2\.py")
+        shell.envo.assert_reloaded(3, r".*test_dir/some_src_file_2.py")
 
         shutil.rmtree(directory, ignore_errors=True)
-        shell.envo.assert_reloaded(4, r".*test_dir/some_src_file_.\.py")
+        shell.envo.assert_reloaded(4, r".*test_dir/some_src_file_?.?.py")
 
         shell.exit()
         e.exit().eval()
