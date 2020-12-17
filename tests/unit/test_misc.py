@@ -3,8 +3,6 @@ from pathlib import Path
 
 import pytest
 
-import envo.scripts
-from envo.const import STAGES
 from tests.unit import utils
 
 
@@ -14,7 +12,7 @@ class TestMisc(utils.TestBase):
         assert Path("env_test.py").exists()
 
         utils.flake8()
-        utils.mypy()
+        #utils.mypy()
 
     @pytest.mark.parametrize(
         "dir_name", ["my-sandbox", "my sandbox", ".sandbox", ".san.d- b  ox"]

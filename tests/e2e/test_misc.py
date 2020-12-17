@@ -6,6 +6,7 @@ from time import sleep
 import pytest
 from rhei import Stopwatch
 
+from envo.misc import is_linux, is_windows
 from tests.e2e import utils
 
 
@@ -102,7 +103,7 @@ class TestMisc(utils.TestBase):
     def test_multiple_instances(self):
         shells = []
         for i in range(6):
-            s = utils.SpawnEnvo("test", debug=False)
+            s = utils.SpawnEnvo("test")
             s.start()
             shells.append(s)
 
@@ -118,24 +119,21 @@ class TestMisc(utils.TestBase):
         e = shell.start()
         e.prompt().eval()
 
-        file = Path("script.sh")
-        file.touch()
-        file.write_text("echo $SANDBOX_ROOT\n")
+        if is_linux():
+            file = Path("script.sh")
+            file.touch()
+            file.write_text("echo $SANDBOX_ROOT\n")
+            shell.sendline("bash script.sh")
+            e.output(str(Path(".").absolute()) + r"\n")
 
-        shell.sendline("bash script.sh")
-        e.output(str(Path(".").absolute()) + r"\n")
+        if is_windows():
+            file = Path("script.bat")
+            file.touch()
+            file.write_text("@ECHO OFF\necho %SANDBOX_ROOT%\n")
+            shell.sendline("script.bat")
+            e.output(str(Path(".").absolute()).replace("\\", "\\\\") + r"\n")
 
         e.prompt().eval()
 
         shell.exit()
         e.exit().eval()
-
-    def test_timing(self, shell):
-        stopwatch = Stopwatch()
-
-        stopwatch.start()
-        shell.start()
-        shell.exit()
-        stopwatch.pause()
-
-        assert stopwatch.value < 3.5

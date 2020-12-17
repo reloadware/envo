@@ -46,7 +46,7 @@ class TestStubs(utils.TestBase):
         env = stub.SandboxCommEnv
 
         # user defined command
-        assert "_SandboxCommEnv__flake" in dir(env)
+        assert "_SandboxCommEnv__my_flake" in dir(env)
         assert "pre_print" not in dir(env)
 
         # Envo methods
@@ -73,7 +73,7 @@ class TestStubs(utils.TestBase):
         env = stub.SandboxTestEnv
 
         # user defined command
-        assert "_SandboxCommEnv__flake" in dir(env)
+        assert "_SandboxCommEnv__my_flake" in dir(env)
 
         # Envo methods
         assert "genstub" in dir(env)
@@ -108,11 +108,11 @@ class TestStubs(utils.TestBase):
         test_env = test_stub.SandboxTestEnv
 
         # user defined command
-        assert "_SandboxCommEnv__flake" in dir(comm_env)
-        assert "_SandboxCommEnv__flake" in dir(test_env)
+        assert "_SandboxCommEnv__my_flake" in dir(comm_env)
+        assert "_SandboxCommEnv__my_flake" in dir(test_env)
 
-        assert "_SandboxTestEnv__mypy" in dir(test_env)
-        assert "_SandboxCommEnv__mypy" not in dir(comm_env)
+        assert "_SandboxTestEnv__my_mypy" in dir(test_env)
+        assert "_SandboxCommEnv__my_mypy" not in dir(comm_env)
 
         assert "comm_var" in self.get_annotations(comm_env)
         assert "comm_var" in self.get_annotations(test_env)

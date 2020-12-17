@@ -1,10 +1,11 @@
 import json
 import os
+import subprocess
 import textwrap
 import time
 from pathlib import Path
 from threading import Thread
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
@@ -21,7 +22,33 @@ __all__ = [
     "add_context",
     "add_plugins",
     "add_boot",
+    "clean_output",
+    "run"
 ]
+
+def clean_output(output: str) -> str:
+    ret = output
+    if isinstance(output, bytes):
+        ret = output.decode("utf-8")
+
+    ret = ret.replace("\r", "")
+    ret = ret.replace("\x1b[0m", "")
+    ret = ret.replace("\n\n", "\n")
+    return ret
+
+def run(command: str, env: Optional[Dict[str, Any]]=None, pipe_stderr=True) -> str:
+    kwargs = {}
+    if env:
+        kwargs["env"] = env
+
+    if not pipe_stderr:
+        kwargs["stderr"] =subprocess.STDOUT
+    else:
+        kwargs["stderr"] = subprocess.PIPE
+
+    ret = subprocess.check_output(command, shell=True, **kwargs).decode("utf-8")
+    ret = clean_output(ret)
+    return ret
 
 
 def change_file(file: Path, delay_s: float, new_content: str) -> None:
@@ -108,7 +135,7 @@ def add_flake_cmd(
     add_command(
         f"""
         @{namespaced_command}
-        def __flake(self, test_arg: str = "") -> str:
+        def __my_flake(self, test_arg: str = "") -> str:
             print("{message}" + test_arg)
             return "Flake return value"
         """,
@@ -124,7 +151,7 @@ def add_mypy_cmd(
     add_command(
         f"""
         @{namespaced_command}
-        def __mypy(self, test_arg: str = "") -> None:
+        def __my_mypy(self, test_arg: str = "") -> None:
             print("{message}" + test_arg)
         """,
         file=file,

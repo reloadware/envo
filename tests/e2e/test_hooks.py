@@ -1,3 +1,4 @@
+from envo.misc import is_linux, is_windows
 from tests.e2e import utils
 from tests.e2e.utils import PromptState
 
@@ -132,7 +133,10 @@ class TestHooks(utils.TestBase):
         e.prompt().eval()
 
         shell.sendline('print("pancake");print("banana")')
-        e.output(r" sweet pancake sweet\n sweet banana sweet\n").prompt().eval()
+        if is_linux():
+            e.output(r" sweet pancake sweet\n sweet banana sweet\n").prompt().eval()
+        if is_windows():
+            e.output(r" sweet pancake sweet\n sweet banana sweet\n sweet\n sweet ").prompt().eval()
 
         shell.exit()
         e.exit().eval()
@@ -147,7 +151,7 @@ class TestHooks(utils.TestBase):
             @postcmd(cmd_regex=r"print\(.*\)")
             def post_print(self, command: str, stdout: List[str], stderr: List[str]) -> None:
                 assert "ZeroDivisionError: division by zero\n" in stderr
-                assert stdout == ['not good :/', '\n']
+                assert "not good :/" in stdout
                 print("post command test")
             """
         )
@@ -172,7 +176,7 @@ class TestHooks(utils.TestBase):
             def post_print(self, command: str, stdout: List[str], stderr: List[str]) -> None:
                 assert command == 'print("pancake");print("banana")'
                 assert stderr == []
-                assert stdout == ["pancake", "\n", "banana", "\n"]
+                assert "pancake" in stdout and "banana" in stdout
                 print("post")
             """
         )

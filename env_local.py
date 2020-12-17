@@ -58,12 +58,12 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
         run("pytest tests -v")
 
     @command
-    def flake(self) -> None:
+    def run_flake(self) -> None:
         self.black()
         run("flake8")
 
     @command
-    def mypy(self) -> None:
+    def run_mypy(self) -> None:
         logger.info("Running mypy")
         run("mypy envo")
 

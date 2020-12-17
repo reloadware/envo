@@ -18,16 +18,16 @@ class TestCommands(utils.TestBase):
 
         e.prompt().eval()
 
-        shell.sendline("flake")
+        shell.sendline("my_flake")
         e.output(r"Flake all good\nFlake return value\n").prompt().eval()
 
-        shell.sendline("mypy")
+        shell.sendline("my_mypy")
         e.output(r"Mypy all good\n").prompt().eval()
 
-        shell.sendline("flake()")
+        shell.sendline("my_flake()")
         e.output(r"Flake all good\n'Flake return value'\n").prompt().eval()
 
-        shell.sendline("mypy()")
+        shell.sendline("my_mypy()")
         e.output(r"Mypy all good\n").prompt().eval()
 
         shell.exit()
@@ -63,10 +63,10 @@ class TestCommands(utils.TestBase):
 
         e.prompt().eval()
 
-        shell.sendline('flake("dd")')
+        shell.sendline('my_flake("dd")')
         e.output(r"Flake all gooddd\n'Flake return value'\n").prompt().eval()
 
-        shell.sendline("flake dd")
+        shell.sendline("my_flake dd")
         e.output(r"Flake all gooddd\nFlake return value\n").prompt().eval()
 
         shell.exit()
@@ -103,10 +103,11 @@ class TestCommands(utils.TestBase):
 
         if is_linux():
             assert e.value.returncode == 127
+            assert "flaake: command not found" in utils.clean_output(e.value.stdout)
         if is_windows():
-            assert e.value.returncode == 1
+            assert e.value.returncode == 255
+            assert "'flaake' is not recognized as an internal or external command" in utils.clean_output(e.value.stdout)
 
-        assert "'flaake' not found" in utils.clean_output(e.value.stdout)
         assert utils.clean_output(e.value.stderr) == ""
 
     def test_single_command_command_fail_traceback(self):
@@ -121,39 +122,54 @@ class TestCommands(utils.TestBase):
 
         with raises(CalledProcessError) as e:
             s = utils.run("""envo test -c "some_cmd" """)
-        assert e.value.returncode == 1
-        assert e.value.stdout == b""
-        assert b"ZeroDivisionError" in e.value.stderr
+
+        if is_linux():
+            assert e.value.returncode == 1
+            assert utils.clean_output(e.value.stdout) == ""
+        if is_windows():
+            assert e.value.returncode == 1
+            assert utils.clean_output(e.value.stdout) == "\n"
+
+        assert "ZeroDivisionError" in utils.clean_output(e.value.stderr)
 
     def test_headless_error(self):
         with raises(CalledProcessError) as e:
             s = utils.run("""envo some_env -c "print('test')" """)
         assert e.value.returncode == 1
-        assert e.value.stdout == b""
-        assert b"find any env" in e.value.stderr
+        assert utils.clean_output(e.value.stdout) == ""
+        assert "find any env" in utils.clean_output(e.value.stderr)
 
     def test_single_command_fire(self):
         utils.add_flake_cmd()
-        res = utils.single_command("flake")
+        res = utils.single_command("my_flake")
 
         assert res == "Flake all good\nFlake return value\n"
 
     def test_envo_run(self):
         utils.add_flake_cmd(file=Path("env_comm.py"))
-        res = utils.envo_run("flake")
+        res = utils.envo_run("my_flake")
 
         assert res == "Flake all good\nFlake return value\n"
 
     def test_env_variables_available_in_run(self, shell):
         utils.add_declaration("test_var: Raw[str]")
         utils.add_definition('self.test_var = "test_value"')
-        utils.add_command(
-            """
-            @command
-            def print_path(self) -> None:
-                run("echo $TEST_VAR")
-            """
-        )
+        if is_linux():
+            utils.add_command(
+                """
+                @command
+                def print_path(self) -> None:
+                    run("echo $TEST_VAR")
+                """
+            )
+        if is_windows():
+            utils.add_command(
+                """
+                @command
+                def print_path(self) -> None:
+                    run("echo %TEST_VAR%")
+                """
+            )
         e = shell.start()
         e.prompt().eval()
 
@@ -176,30 +192,29 @@ class TestCommands(utils.TestBase):
         utils.add_mypy_cmd(namespace=namespace_name, file=Path("env_test.py"))
 
         e = shell.start()
-
         e.prompt().eval()
 
-        shell.sendline("flake")
+        shell.sendline("my_flake")
         e.output(r"Flake all good\nFlake return value\n").prompt().eval()
 
-        shell.sendline("flake()")
+        shell.sendline("my_flake()")
         e.output(r"Flake all good\n'Flake return value'\n").prompt().eval()
 
-        shell.sendline("test_namespace.flake")
+        shell.sendline("test_namespace.my_flake")
         e.output(r"Namespaced flake\nFlake return value\n").prompt().eval()
 
-        shell.sendline("test_namespace.flake()")
+        shell.sendline("test_namespace.my_flake()")
         e.output(r"Namespaced flake\n'Flake return value'\n").prompt().eval()
 
-        shell.sendline("mypy")
+        shell.sendline("my_mypy")
         e.output(
-            r".*mypy: error: Missing target module, package, files, or command.\n"
+            r"xonsh: subprocess mode: command not found: my_mypy\n"
         ).prompt().eval()
 
-        shell.sendline("test_namespace.mypy")
+        shell.sendline("test_namespace.my_mypy")
         e.output(r"Mypy all good\n").prompt().eval()
 
-        shell.sendline("test_namespace.mypy()")
+        shell.sendline("test_namespace.my_mypy()")
         e.output(r"Mypy all good\n").prompt().eval()
 
         shell.exit()

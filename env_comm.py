@@ -51,8 +51,9 @@ class EnvoCommEnv(UserEnv):  # type: ignore
     def fun(self) -> None:
         run(
             """
-            sudo echo 'test'
-            sudo echo "test2"
+            echo "reading"
+            read varname
+            echo $varname
             """)
 
     def fun2(self) -> None:

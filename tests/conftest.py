@@ -43,3 +43,16 @@ def flake_cmd() -> None:
     from tests.utils import add_flake_cmd
 
     add_flake_cmd()
+
+
+@fixture
+def is_windows():
+    from envo.misc import is_windows
+    return is_windows()
+
+
+@fixture
+def is_linux():
+    from envo.misc import is_linux
+    return is_linux()
+

@@ -1,139 +1,63 @@
-import os
 import re
+import subprocess
 import sys
-from getpass import getpass
+import time
+from subprocess import Popen
+from threading import Thread
 from typing import List
 
-from envo.misc import is_linux, is_windows
-
-if is_linux():
-    import pexpect
-if is_windows():
-    import wexpect
-
-from tqdm import tqdm
-
-from envo import logger
-
 __all__ = ["CommandError", "run"]
+
+from envo.misc import is_windows, is_linux
 
 
 class CommandError(RuntimeError):
     pass
 
 
-class CustomPrint:
-    def __init__(self, prompt: str, command: str) -> None:
-        self.old_stdout = sys.stdout
-        self.command = command
-        self.prompt = prompt
-
-    def write(self, text: bytes) -> None:
-        for line in text.splitlines(keepends=True):
-            if len(text) == 0:
-                return
-
-            if not any(
-                (s in line)
-                for s in [self.command.encode("utf-8"), self.prompt.encode("utf-8")]
-            ):
-                self.old_stdout.buffer.write(line)
-
-    def flush(self) -> None:
-        self.old_stdout.flush()
-
-
 def run(
     command: str,
     ignore_errors: bool = False,
     print_output: bool = True,
-    progress_bar: bool = False,
-) -> List[str]:
-    # preprocess
+) -> str:
     # join multilines
     command = re.sub(r"\\(?:\t| )*\n(?:\t| )*", "", command)
 
-    commands: List[str] = [s.strip() for s in command.splitlines() if s.strip()]
-
-    rets: List[str] = []
-
-    prompt = r"##PG_PROMPT##"
-
-    if is_linux():
-        p = pexpect.spawn("bash --rcfile /dev/null", env=os.environ, echo=False)
     if is_windows():
-        p = pexpect.spawn("cmd.exe", env=os.environ, echo=False)
+        command = command.strip()
+        command = command.replace("\r", "")
+        command = command.replace("\n", " & ")
+        popen_cmd = [f"cmd.exe", "/c", command]
+    elif is_linux():
+        command = "set -uoe pipefail\n" + command
+        popen_cmd = [f"/bin/bash", "--rcfile", "/dev/null", "-c", command]
     else:
-        raise ValueError("Unsupported platform")
+        raise NotImplementedError()
 
-    p.delaybeforesend = None
+    proc = Popen(popen_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-    p.expect(r"(\$|#|:\)")
-    if is_linux():
-        p.sendline(f"export PS1={prompt}")
-    if is_windows():
-        p.sendline(f"set PROMPT={prompt}")
+    buffer = []
 
-    p.expect(prompt)
-    if is_linux():
-        p.sendline(f"set -uo pipefail")
-        p.expect(prompt)
-
-    # Get sudo password if needed
-    if "sudo " in command:
-        tries = 3
+    def std_out_reader():
         while True:
-            sudo_password = getpass("Sudo password: ")
-            p.sendline('sudo echo "granting sudo"')
-            p.sendline(sudo_password)
-            try:
-                p.expect(prompt, timeout=1)
-                print("Thank you.")
-            except pexpect.exceptions.TIMEOUT:
-                tries -= 1
+            c = proc.stdout.read(1)
+            if not c or c == b"\xf0":
+                break
+            c = c.decode("utf-8")
+            if print_output:
+                sys.stdout.write(c)
+            buffer.append(c)
 
-                if tries == 0:
-                    print("sudo: 3 incorrect password attempts")
-                    exit(1)
+    Thread(target=std_out_reader).start()
 
-                print("Sorry, try again.")
-                continue
-            break
+    while True:
+        ret_code = proc.poll()
+        if ret_code is None:
+            time.sleep(0.05)
+            continue
 
-    pbar: tqdm
-    if progress_bar:
-        pbar = tqdm(total=len(commands))
-
-    for c in commands:
-        if "ENVO_DEBUG" in os.environ:
-            logger.debug(c)
-
-        if print_output:
-            p.logfile = CustomPrint(command=c, prompt=prompt)
-        p.sendline(c)
-        p.expect(prompt, timeout=60 * 15)
-        if print_output:
-            p.logfile = None
-
-        raw_outputs: List[bytes] = p.before.splitlines()
-        outputs: List[str] = [s.decode("utf-8").strip() for s in raw_outputs]
-        # get exit code
-        p.sendline('echo "$?"')
-        p.expect(prompt)
-        ret_code = int(p.before.splitlines()[0].strip())
-
-        if outputs:
-            ret = "\n".join(outputs)
-            rets.append(ret)
-
-        if not ignore_errors:
-            if ret_code:
-                sys.exit(ret_code)
-
-        if progress_bar:
-            pbar.update(1)
-
-    if progress_bar:
-        pbar.close()
-
-    return rets
+        if ret_code != 0 and not ignore_errors:
+            sys.exit(ret_code)
+        else:
+            ret = "".join(buffer)
+            return ret

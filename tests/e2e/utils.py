@@ -35,6 +35,8 @@ from tests.utils import add_namespace  # noqa F401
 from tests.utils import add_plugins  # noqa F401
 from tests.utils import change_file  # noqa F401
 from tests.utils import replace_in_code  # noqa F401
+from tests.utils import run  # noqa F401
+from tests.utils import clean_output  # noqa F401
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
@@ -225,9 +227,10 @@ class SpawnEnvo:
 
         @classmethod
         def assert_reloaded(
-            cls, number: int = 1, path="env_test.py", timeout=3
+            cls, number: int = 1, path=r".*env_test.py", timeout=3
         ) -> None:
             from time import sleep
+            import re
 
             from envo import logger, logging
             from envo.e2e import ReloadTimeout
@@ -244,9 +247,7 @@ class SpawnEnvo:
                 if number == 0 and len(msgs) == 0:
                     break
 
-                if len(msgs) == number and str(msgs[-1].metadata["path"].replace("\\", "/")).endswith(
-                    path
-                ):
+                if len(msgs) == number and re.findall(path, str(msgs[-1].metadata["path"].replace("\\", "/"))):
                     break
 
                 if passed_time >= timeout:
@@ -413,27 +414,10 @@ def envo_run(command: str) -> str:
     return run(f"envo run {command}")
 
 
-def clean_output(output: str) -> str:
-    ret = output
-    if isinstance(output, bytes):
-        ret = output.decode("utf-8")
-
-    ret = ret.replace("\r", "")
-    ret = ret.replace("\x1b[0m", "")
-    ret = ret.replace("\n\n", "\n")
-    return ret
-
-
-def run(command: str) -> str:
-    ret = subprocess.check_output(command, shell=True, stderr=subprocess.PIPE).decode("utf-8")
-    ret = clean_output(ret)
-    return ret
-
-
 def init_child_env(child_dir: Path) -> None:
     cwd = Path(".").absolute()
     if child_dir.exists():
-        shutil.rmtree(child_dir, ignore_errors=True)
+        shutil.rmtree(child_dir, ignore_errors=False)
 
     child_dir.mkdir()
     os.chdir(str(child_dir))
