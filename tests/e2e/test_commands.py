@@ -207,9 +207,16 @@ class TestCommands(utils.TestBase):
         e.output(r"Namespaced flake\n'Flake return value'\n").prompt().eval()
 
         shell.sendline("my_mypy")
-        e.output(
-            r"xonsh: subprocess mode: command not found: my_mypy\n"
-        ).prompt().eval()
+        if is_linux():
+            e.output(
+                r"xonsh: subprocess mode: command not found: my_mypy\nmy_mypy: command not found\n"
+            )
+        if is_windows():
+            e.output(
+                r"xonsh: subprocess mode: command not found: my_mypy\n"
+            )
+
+        e.prompt().eval()
 
         shell.sendline("test_namespace.my_mypy")
         e.output(r"Mypy all good\n").prompt().eval()

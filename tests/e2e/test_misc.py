@@ -103,7 +103,7 @@ class TestMisc(utils.TestBase):
     def test_multiple_instances(self):
         shells = []
         for i in range(6):
-            s = utils.SpawnEnvo("test")
+            s = utils.SpawnEnvo("test", debug=False)
             s.start()
             shells.append(s)
 

@@ -78,10 +78,10 @@ class TestHotReload(utils.TestBase):
 
         file = Path("./test_dir/some_src_file.py")
         file.touch()
-        shell.envo.assert_reloaded(2, r".*test_dir/some_src_file.py")
+        shell.envo.assert_reloaded(2, r".*test_dir/some_src_file\.py")
 
         file.write_text("test = 1")
-        shell.envo.assert_reloaded(3, r".*test_dir/some_src_file.py")
+        shell.envo.assert_reloaded(3, r".*test_dir/some_src_file\.py")
 
         shell.exit()
         e.exit().eval()
@@ -98,10 +98,10 @@ class TestHotReload(utils.TestBase):
 
         file = Path("some_src_file.py")
         file.touch()
-        shell.envo.assert_reloaded(2, r".*some_src_file.py")
+        shell.envo.assert_reloaded(2, r".*some_src_file\.py")
 
         file.unlink()
-        shell.envo.assert_reloaded(3, r".*some_src_file.py")
+        shell.envo.assert_reloaded(3, r".*some_src_file\.py")
 
         shell.exit()
         e.exit().eval()
@@ -124,7 +124,7 @@ class TestHotReload(utils.TestBase):
         shell.envo.assert_reloaded(1)
 
         some_file.unlink()
-        shell.envo.assert_reloaded(2, r".*test_dir/some_file.py")
+        shell.envo.assert_reloaded(2, r".*test_dir/some_file\.py")
 
         shutil.rmtree(directory, ignore_errors=True)
 
@@ -146,14 +146,14 @@ class TestHotReload(utils.TestBase):
 
         file1 = Path("./test_dir/some_src_file.py")
         file1.touch()
-        shell.envo.assert_reloaded(2, r".*test_dir/some_src_file.py")
+        shell.envo.assert_reloaded(2, r".*test_dir/some_src_file\.py")
 
         file2 = Path("./test_dir/some_src_file_2.py")
         file2.touch()
-        shell.envo.assert_reloaded(3, r".*test_dir/some_src_file_2.py")
+        shell.envo.assert_reloaded(3, r".*test_dir/some_src_file_2\.py")
 
         shutil.rmtree(directory, ignore_errors=True)
-        shell.envo.assert_reloaded(4, r".*test_dir/some_src_file_?.py")
+        shell.envo.assert_reloaded(4, r".*test_dir/some_src_file_.\.py")
 
         shell.exit()
         e.exit().eval()
@@ -180,15 +180,15 @@ class TestHotReload(utils.TestBase):
         watched_file = Path("./test_dir/watched_file.py")
         watched_file.touch()
 
-        shell.envo.assert_reloaded(3, r".*test_dir/watched_file.py")
+        shell.envo.assert_reloaded(3, r".*test_dir/watched_file\.py")
 
         watched_file.write_text("test = 1")
-        shell.envo.assert_reloaded(4, r".*test_dir/watched_file.py")
+        shell.envo.assert_reloaded(4, r".*test_dir/watched_file\.py")
 
         ignored_file.touch()
 
         with pytest.raises(ReloadTimeout):
-            shell.envo.assert_reloaded(5, r".*test_dir/ignored_file.py")
+            shell.envo.assert_reloaded(5, r".*test_dir/ignored_file\.py")
 
         shell.exit()
         e.exit().eval()
@@ -257,7 +257,7 @@ class TestHotReload(utils.TestBase):
         )
         e.prompt(name=r"child", state=PromptState.MAYBE_LOADING).eval()
 
-        shell.envo.assert_reloaded(1, path=r".*sandbox/env_comm.py")
+        shell.envo.assert_reloaded(1, path=r".*sandbox/env_comm\.py")
 
         shell.exit()
         e.exit().eval()
@@ -280,7 +280,7 @@ class TestHotReload(utils.TestBase):
             os.environ["PATH"] = f"/already_existing_path:" + os.environ["PATH"]
             utils.add_definition(
                 f"""
-                self.path = "/some_path;" + self.path
+                self.path = "/some_path:" + self.path
                 """
             )
         if is_windows():
@@ -290,8 +290,6 @@ class TestHotReload(utils.TestBase):
                 self.path = "\\\\some_path;" + self.path
                 """
             )
-        else:
-            raise NotImplementedError()
 
         e = shell.start()
         e.prompt(PromptState.MAYBE_LOADING).eval()
@@ -305,7 +303,6 @@ class TestHotReload(utils.TestBase):
 
         if is_linux():
             e.output(rf"\['/some_path', .*'/already_existing_path'.*\]\n")
-
         if is_windows():
             e.output(rf"\['\\\\some_path', .*'\\\\already_existing_path'.*\]\n")
 
@@ -318,7 +315,7 @@ class TestHotReload(utils.TestBase):
         e = shell.start()
         e.prompt().eval()
 
-        shell2 = utils.SpawnEnvo("test")
+        shell2 = utils.SpawnEnvo("test", debug=False)
         shell2.start()
         shell2.expecter.prompt().eval()
         shell2.exit()
@@ -348,7 +345,7 @@ class TestHotReload(utils.TestBase):
 
         e.output("command_test\n")
         e.prompt(PromptState.MAYBE_LOADING)
-        shell.envo.assert_reloaded(1, timeout=7)
+        shell.envo.assert_reloaded(1, timeout=10)
 
         shell.exit()
         e.exit().eval()

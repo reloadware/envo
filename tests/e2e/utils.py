@@ -227,7 +227,7 @@ class SpawnEnvo:
 
         @classmethod
         def assert_reloaded(
-            cls, number: int = 1, path=r".*env_test.py", timeout=3
+            cls, number: int = 1, path=r".*env_test\.py", timeout=3
         ) -> None:
             from time import sleep
             import re
