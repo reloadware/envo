@@ -84,5 +84,7 @@ if stickybeak_enabled:
     server = stickybeak.Server(project_root, STICKYBEAK_PORT)
     server.start()
 
-    def on_exit():
+
+def on_exit():
+    if stickybeak_enabled:
         server.exit()
