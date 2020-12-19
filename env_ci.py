@@ -1,19 +1,47 @@
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
 
-from env_comm import EnvoEnvComm
-from envo import Raw, command, logger, run  # noqa: F401
+import envo  # noqa: F401
+from envo import (  # noqa: F401
+    Namespace,
+    Plugin,
+    Raw,
+    UserEnv,
+    VirtualEnv,
+    boot_code,
+    command,
+    context,
+    logger,
+    oncreate,
+    ondestroy,
+    onload,
+    onstderr,
+    onstdout,
+    onunload,
+    postcmd,
+    precmd,
+    run,
+)
+
+# Declare your command namespaces here
+# like this:
+# my_namespace = command(namespace="my_namespace")
 
 
-class EnvoEnv(EnvoEnvComm):  # type: ignore
-    class Meta(EnvoEnvComm.Meta):  # type: ignore
-        stage = "ci"
-        emoji = "🧪"
+class EnvoCiEnv(UserEnv):  # type: ignore
+    class Meta(UserEnv.Meta):  # type: ignore
+        root: str = Path(__file__).parent.absolute()
+        stage: str = "ci"
+        emoji: str = "🧪"
+        parents: List[str] = ["env_comm.py"]
+        plugins: List[Plugin] = []
+        name: str = "env"
+        version: str = "0.1.0"
+        watch_files: List[str] = []
+        ignore_files: List[str] = []
 
-    # Declare your variables here
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
+    def __init__(self) -> None:
+        super().__init__()
         # Define your variables here
 
     @command
@@ -21,7 +49,7 @@ class EnvoEnv(EnvoEnvComm):  # type: ignore
         run("mkdir -p workspace")
         super().bootstrap()
 
-    @command(glob=True)
+    @command
     def test(self) -> None:
         run(
             "pytest --reruns 10 -v tests --cov-report xml:workspace/cov.xml --cov=envo ./workspace"
@@ -76,5 +104,4 @@ class EnvoEnv(EnvoEnvComm):  # type: ignore
         )
 
 
-Env = EnvoEnv
-
+Env = EnvoCiEnv

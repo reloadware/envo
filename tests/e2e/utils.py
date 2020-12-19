@@ -8,7 +8,7 @@ from pathlib import Path
 from subprocess import Popen
 from threading import Thread
 from time import sleep
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Type
 
 import pyte
 import pyte.modes
@@ -32,9 +32,9 @@ from tests.utils import add_mypy_cmd  # noqa F401
 from tests.utils import add_namespace  # noqa F401
 from tests.utils import add_plugins  # noqa F401
 from tests.utils import change_file  # noqa F401
+from tests.utils import clean_output  # noqa F401
 from tests.utils import replace_in_code  # noqa F401
 from tests.utils import run  # noqa F401
-from tests.utils import clean_output  # noqa F401
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
@@ -226,8 +226,8 @@ class SpawnEnvo:
         def assert_reloaded(
             cls, number: int = 1, path=r".*env_test\.py", timeout=3
         ) -> None:
-            from time import sleep
             import re
+            from time import sleep
 
             from envo import logger, logging
             from envo.e2e import ReloadTimeout
@@ -244,7 +244,9 @@ class SpawnEnvo:
                 if number == 0 and len(msgs) == 0:
                     break
 
-                if len(msgs) == number and re.findall(path, str(msgs[-1].metadata["path"].replace("\\", "/"))):
+                if len(msgs) == number and re.findall(
+                    path, str(msgs[-1].metadata["path"].replace("\\", "/"))
+                ):
                     break
 
                 if passed_time >= timeout:
@@ -258,25 +260,21 @@ class SpawnEnvo:
         self.stage = stage
 
         self.command = fr"envo {stage}"
+        self.debug = debug
 
+    def start(self, wait_until_ready=True) -> Expecter:
         self.expecter = None
         self._buffer = []
 
         self.stop_collecting = False
         self._printed_info = False
-        self.debug = debug
         self.output_collector = Thread(target=self._ouptut_collector)
 
-    def start(self, wait_until_ready=True) -> Expecter:
         environ = os.environ.copy()
         if self.debug:
             environ["ENVO_E2E_STICKYBEAK"] = "True"
         environ["ENVO_E2E_TEST"] = "True"
         environ["PYTHONUNBUFFERED"] = "True"
-        environ["ENVO_SHELL_NOHISTORY"] = "True"
-
-        if self.process:
-            self.on_exit()
 
         self.process = Popen(
             self.command,
@@ -284,7 +282,7 @@ class SpawnEnvo:
             stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE,
             env=environ,
-            shell=True
+            shell=True,
         )
 
         self.output_collector.start()
@@ -408,8 +406,8 @@ def single_command(command: str) -> str:
     return run(f'envo test -c "{command}"')
 
 
-def envo_run(command: str) -> str:
-    return run(f"envo run {command}")
+def envo_run(command: str, stage: str ="") -> str:
+    return run(f"envo {stage} run {command}")
 
 
 def init_child_env(child_dir: Path) -> None:
@@ -419,7 +417,7 @@ def init_child_env(child_dir: Path) -> None:
 
     child_dir.mkdir()
     os.chdir(str(child_dir))
-    result = run("envo init test")
+    result = run("envo test init")
     assert "Created test environment" in result
 
     comm_file = Path("env_comm.py")

@@ -8,7 +8,7 @@ from typing import List
 
 __all__ = ["CommandError", "run"]
 
-from envo.misc import is_windows, is_linux
+from envo.misc import is_linux, is_windows
 
 
 class CommandError(RuntimeError):
@@ -43,9 +43,13 @@ def run(
             c = proc.stdout.read(1)
             if not c or c == b"\xf0":
                 break
-            c = c.decode("utf-8")
+
             if print_output:
-                sys.stdout.write(c)
+                try:
+                    sys.stdout.buffer.write(c)
+                    sys.stdout.flush()
+                except ValueError:
+                    return
             buffer.append(c)
 
     Thread(target=std_out_reader).start()
@@ -59,5 +63,6 @@ def run(
         if ret_code != 0 and not ignore_errors:
             sys.exit(ret_code)
         else:
-            ret = "".join(buffer)
+            ret = b"".join(buffer)
+            ret = ret.decode("utf-8")
             return ret

@@ -24,5 +24,6 @@ class StubGen:
     def _generate_env(self, env: Type["Env"]):
         env_descr = misc.EnvParser(env.get_env_path())
 
-        file = Path(f"{str(env.Meta.root.absolute())}/env_{env.Meta.stage}.pyi")
+        file = Path(f"{env.get_env_path()}i")
+        file.touch(exist_ok=True)
         file.write_text(env_descr.get_stub(), "utf-8")

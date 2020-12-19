@@ -48,11 +48,12 @@ def flake_cmd() -> None:
 @fixture
 def is_windows():
     from envo.misc import is_windows
+
     return is_windows()
 
 
 @fixture
 def is_linux():
     from envo.misc import is_linux
-    return is_linux()
 
+    return is_linux()

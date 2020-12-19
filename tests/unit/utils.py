@@ -14,8 +14,8 @@ from tests.utils import add_definition  # noqa F401
 from tests.utils import add_flake_cmd  # noqa F401
 from tests.utils import add_mypy_cmd  # noqa F401
 from tests.utils import change_file  # noqa F401
-from tests.utils import replace_in_code  # noqa F401
 from tests.utils import clean_output  # noqa F401
+from tests.utils import replace_in_code  # noqa F401
 from tests.utils import run  # noqa F401
 
 test_root = Path(os.path.realpath(__file__)).parent
@@ -76,7 +76,7 @@ def init() -> None:
     if env_local_file.exists():
         env_local_file.unlink()
 
-    command("init test")
+    command("test init")
 
 
 def env(env_dir: Path = Path(".")) -> Env:
@@ -100,7 +100,7 @@ def init_child_env(child_dir: Path) -> None:
     child_dir.mkdir()
 
     os.chdir(str(child_dir))
-    command("init test")
+    command("test init")
 
     replace_in_code("parent: Optional[str] = None", 'parent: Optional[str] = ".."')
 

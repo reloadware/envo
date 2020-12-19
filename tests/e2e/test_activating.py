@@ -50,21 +50,21 @@ class TestActivating:
         self.assert_healthy_and_correct_files_in_dir(Path(".."), 2)
 
     def test_comm_other_envs_priority(self, default_shell):
-        result = utils.run("envo init test")
+        result = utils.run("envo test init")
         assert "Created test environment" in result
 
         self.shell = default_shell
         self.assert_healthy_and_correct_files_in_dir(Path("."), 4)
 
     def test_comm_other_envs_priority_local(self, default_shell):
-        result = utils.run("envo init local")
+        result = utils.run("envo local init")
         assert "Created local environment" in result
 
         self.shell = default_shell
         self.assert_healthy_and_correct_files_in_dir(Path("."), 4, stage="local")
 
     def test_custom_env(self):
-        result = utils.run("envo init damian")
+        result = utils.run("envo damian init")
         assert "Created damian environment" in result
 
         shell = utils.SpawnEnvo("damian")

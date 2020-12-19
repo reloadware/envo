@@ -3,7 +3,7 @@ import os
 import pytest
 
 from envo import run
-from envo.misc import is_windows, is_linux
+from envo.misc import is_linux, is_windows
 
 
 @pytest.mark.skipif(not is_linux(), reason="Platform specific")
@@ -104,9 +104,9 @@ class TestWindowsRun:
 
         out, err = capsys.readouterr()
 
-        assert '\'missing_command\' is not recognized' in out
+        assert "'missing_command' is not recognized" in out
         assert e.value.code == 1
 
     def test_ignore_errors(self):
         result = run("""non_existend_command""", ignore_errors=True)
-        assert '\'non_existend_command\' is not recognized' in result
+        assert "'non_existend_command' is not recognized" in result

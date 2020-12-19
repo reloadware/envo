@@ -26,7 +26,7 @@ class TestMisc(utils.TestBase):
         e.exit().eval()
 
     def test_dry_run(self):
-        ret = utils.run("envo test --dry-run")
+        ret = utils.run("envo test dry-run")
         assert re.match(
             (
                 r'export ENVO_STAGE="test"\n'
@@ -38,11 +38,11 @@ class TestMisc(utils.TestBase):
             ret,
         )
 
-    def test_save(self):
+    def test_dump(self):
         utils.add_declaration("test_var: str")
         utils.add_definition('self.test_var = "test_value"')
 
-        ret = utils.run("envo test --save")
+        ret = utils.run("envo test dump")
         assert "Saved envs to .env_test" in ret
 
         dot_env = Path(".env_test")
@@ -71,7 +71,7 @@ class TestMisc(utils.TestBase):
         env_dir.mkdir()
         os.chdir(str(env_dir))
 
-        utils.run("envo init test")
+        utils.run("envo test init")
 
         assert Path("env_comm.py").exists()
         assert Path("env_test.py").exists()

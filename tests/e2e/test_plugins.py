@@ -14,7 +14,6 @@ class TestVenv(utils.TestBase):
         venv_dir: Path,
         activated_from="sandbox",
         venv_name=".venv",
-
     ) -> None:
         e = shell.expecter
         shell.sendline("import url_regex")
@@ -41,7 +40,9 @@ class TestVenv(utils.TestBase):
         assert path.count(str(venv_path.bin_path)) == 1
 
         sys_path = shell.envo.get_sys_path()
-        assert set(str(p) for p in venv_path.possible_site_packages).issubset(set(sys_path))
+        assert set(str(p) for p in venv_path.possible_site_packages).issubset(
+            set(sys_path)
+        )
 
     @pytest.mark.parametrize(
         "file",
@@ -65,7 +66,9 @@ class TestVenv(utils.TestBase):
         venv_path = VenvPath(root_path=sandbox, venv_name=".venv")
 
         utils.add_plugins("VirtualEnv")
-        utils.replace_in_code("# Define your variables here", "VirtualEnv.init(self, venv_path=self.root)")
+        utils.replace_in_code(
+            "# Define your variables here", "VirtualEnv.init(self, venv_path=self.root)"
+        )
 
         e = shell.start()
         e.prompt().eval()
@@ -101,7 +104,8 @@ class TestVenv(utils.TestBase):
     def test_autodiscovery_cant_find(self, sandbox, shell):
         utils.add_plugins("VirtualEnv")
         utils.replace_in_code(
-            "# Define your variables here", "VirtualEnv.init(self, venv_name='.some_venv')"
+            "# Define your variables here",
+            "VirtualEnv.init(self, venv_name='.some_venv')",
         )
 
         e = shell.start()
@@ -122,13 +126,16 @@ class TestVenv(utils.TestBase):
 
         utils.add_plugins("VirtualEnv")
         utils.replace_in_code(
-            "# Define your variables here", "VirtualEnv.init(self, venv_name='.custom_venv')"
+            "# Define your variables here",
+            "VirtualEnv.init(self, venv_name='.custom_venv')",
         )
 
         e = shell.start()
         e.prompt(name="child").eval()
 
-        self.assert_activated(shell, venv_dir=sandbox, venv_name=".custom_venv", activated_from="child")
+        self.assert_activated(
+            shell, venv_dir=sandbox, venv_name=".custom_venv", activated_from="child"
+        )
 
         shell.exit()
         e.exit().eval()

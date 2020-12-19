@@ -52,7 +52,7 @@ save_cache: &save_cache
 bootstrap: &bootstrap
   run:
     name: Bootstrap
-    command: ./bootstrap
+    command: pip install envo==0.9.1.9b && envo run bootstrap
 
 
 jobs:

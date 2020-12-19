@@ -6,7 +6,7 @@ from time import sleep
 import pytest
 
 from envo.e2e import ReloadTimeout
-from envo.misc import is_windows, is_linux
+from envo.misc import is_linux, is_windows
 from tests.e2e import utils
 from tests.e2e.utils import PromptState
 
@@ -329,7 +329,7 @@ class TestHotReload(utils.TestBase):
         e = shell.start()
         e.prompt().eval()
         sleep(0.5)
-        shell.sendline('from time import sleep; sleep(10)')
+        shell.sendline("from time import sleep; sleep(10)")
         e.prompt()
         shell.sendline('print("command_test")')
         sleep(0.5)

@@ -136,7 +136,9 @@ class TestHooks(utils.TestBase):
         if is_linux():
             e.output(r" sweet pancake sweet\n sweet banana sweet\n").prompt().eval()
         if is_windows():
-            e.output(r" sweet pancake sweet\n sweet banana sweet\n sweet\n sweet ").prompt().eval()
+            e.output(
+                r" sweet pancake sweet\n sweet banana sweet\n sweet\n sweet "
+            ).prompt().eval()
 
         shell.exit()
         e.exit().eval()

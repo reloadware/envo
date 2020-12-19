@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
 import os
 import re
 import sys
@@ -9,7 +10,7 @@ from copy import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock, Thread
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, ClassVar, Type
 
 from rhei import Stopwatch
 
@@ -17,7 +18,7 @@ import envo.e2e
 from envo import Env, const, logger, logging, misc, shell
 from envo.env import EnvBuilder
 from envo.misc import Callback, EnvoError, FilesWatcher, import_from_file
-from envo.shell import PromptBase, PromptState, Shell
+from envo.shell import PromptBase, PromptState, Shell, FancyShell
 
 try:
     from typing import Literal
@@ -29,6 +30,8 @@ templates_dir = package_root / "templates"
 
 
 __all__ = ["_main"]
+
+DEFAULT_STAGE = "Default"
 
 
 class Status:
@@ -103,13 +106,13 @@ class HeadlessMode:
     @dataclass
     class Links:
         shell: Shell
-        envo: "EnvoBase"
 
     @dataclass
     class Sets:
         stage: str
         restart_nr: int
         msg: str
+        env_path: Path
 
     @dataclass
     class Callbacks:
@@ -125,20 +128,9 @@ class HeadlessMode:
         self.li = li
         self.calls = calls
 
-        self.env_dirs = self._get_env_dirs()
-
         self.extra_watchers = []
 
-        if not self.env_dirs:
-            raise CantFindEnvFile
-
         self.status = Status(calls=Status.Callbacks(on_ready=Callback(self._on_ready)))
-
-        try:
-            sys.path.remove(str(self.env_dirs[0]))
-        except ValueError:
-            pass
-        sys.path.insert(0, str(self.env_dirs[0]))
 
         self.env = None
 
@@ -151,21 +143,6 @@ class HeadlessMode:
     def _on_ready(self) -> None:
         self.prompt.state = PromptState.NORMAL
         self.li.shell.set_prompt(self.prompt.as_str())
-
-    def _get_env_dirs(self) -> List[Path]:
-        ret = []
-        path = Path(".").absolute()
-        while True:
-            if path.parent == path:
-                break
-
-            for p in path.glob("env_*.py"):
-                if p.parent not in ret:
-                    ret.append(p.parent)
-
-            path = path.parent
-
-        return ret
 
     def unload(self) -> None:
         if self.env:
@@ -194,37 +171,8 @@ class HeadlessMode:
 
         self.env.load()
 
-    def _find_env(self) -> Path:
-        # TODO: Test this
-        if self.se.stage != "Default":
-            matches: Dict[Path, const.Stage] = OrderedDict()
-            for d in self.env_dirs:
-                for p in d.glob("env_*.py"):
-                    stage = const.STAGES.filename_to_stage(p.name)
-                    if stage:
-                        matches[p] = stage
-
-            results = [p for p, s in matches.items() if self.se.stage == s.name]
-            if results:
-                return results[0]
-        else:
-            for d in self.env_dirs:
-                matches: Dict[Path, const.Stage] = OrderedDict()
-                for p in d.glob("env_*.py"):
-                    stage = const.STAGES.filename_to_stage(p.name)
-                    if stage:
-                        matches[p] = stage
-
-                results = sorted(
-                    matches.items(), key=lambda x: x[1].priority, reverse=True
-                )
-                if results:
-                    return results[0][0]
-
-        raise CantFindEnvFile()
-
     def get_env_file(self) -> Path:
-        return self._find_env()
+        return self.se.env_path
 
     def _create_env_object(self, file: Path) -> Env:
         def on_reloader_ready():
@@ -353,7 +301,7 @@ class EmergencyMode(HeadlessMode):
         )
         super()._create_env()
 
-        self.env.Meta.root = self.env_dirs[0]
+        self.env.Meta.root = self.se.env_path.parent
 
     def stop(self) -> None:
         self.env._exit()
@@ -366,13 +314,66 @@ class EnvoBase:
 
     shell: shell.Shell
     mode: Optional[HeadlessMode]
+    env_dirs: List[Path]
 
     def __init__(self, se: Sets):
         self.se = se
         logger.set_level(logging.Level.INFO)
         self.mode = None
 
+        self.env_dirs = self._get_env_dirs()
+
         self.restart_count = -1
+
+    def _get_env_dirs(self) -> List[Path]:
+        ret = []
+        path = Path(".").absolute()
+        while True:
+            if path.parent == path:
+                break
+
+            for p in path.glob("env_*.py"):
+                if p.parent not in ret:
+                    ret.append(p.parent)
+
+            path = path.parent
+
+        return ret
+
+    def find_env(self) -> Path:
+        # TODO: Test this
+        if self.se.stage != DEFAULT_STAGE:
+            matches: Dict[Path, const.Stage] = OrderedDict()
+            for d in self.env_dirs:
+                for p in d.glob("env_*.py"):
+                    stage = const.STAGES.filename_to_stage(p.name)
+                    if stage:
+                        matches[p] = stage
+
+            results = [p for p, s in matches.items() if self.se.stage == s.name]
+            if results:
+                return results[0]
+        else:
+            for d in self.env_dirs:
+                matches: Dict[Path, const.Stage] = OrderedDict()
+                for p in d.glob("env_*.py"):
+                    stage = const.STAGES.filename_to_stage(p.name)
+                    if stage:
+                        matches[p] = stage
+
+                results = sorted(
+                    matches.items(), key=lambda x: x[1].priority, reverse=True
+                )
+                if results:
+                    return results[0][0]
+
+        raise CantFindEnvFile()
+
+    @property
+    def data_dir_name(self) -> str:
+        hash_object = hashlib.md5(str(self.find_env()).encode("utf-8"))
+        ret = hash_object.hexdigest()
+        return ret
 
     def init(self, *args: Any, **kwargs: Any) -> None:
         raise NotImplementedError()
@@ -386,7 +387,7 @@ class EnvoBase:
     def dry_run(self) -> None:
         raise NotImplementedError()
 
-    def save(self) -> None:
+    def dump(self) -> None:
         raise NotImplementedError()
 
 
@@ -403,6 +404,9 @@ class EnvoHeadless(EnvoBase):
         self.se = se
         logger.set_level(logging.Level.INFO)
 
+        if not self.env_dirs:
+            raise CantFindEnvFile
+
         self.restart_count = -1
 
     def on_error(self) -> None:
@@ -414,17 +418,18 @@ class EnvoHeadless(EnvoBase):
 
         self.mode = HeadlessMode(
             se=HeadlessMode.Sets(
-                stage=self.se.stage, restart_nr=self.restart_count, msg=""
+                stage=self.se.stage, restart_nr=self.restart_count, msg="",
+                env_path=self.find_env()
             ),
             calls=HeadlessMode.Callbacks(
                 restart=Callback(self.restart), on_error=Callback(self.on_error)
             ),
-            li=HeadlessMode.Links(shell=self.shell, envo=self),
+            li=HeadlessMode.Links(shell=self.shell),
         )
         self.mode.init()
 
     def single_command(self, command: str) -> None:
-        self.shell = shell.shells["headless"].create(Shell.Callbacs())
+        self.shell = Shell.create(Shell.Callbacks(), data_dir_name=self.data_dir_name)
         self.init()
 
         try:
@@ -437,15 +442,15 @@ class EnvoHeadless(EnvoBase):
             self.mode.unload()
 
     def dry_run(self) -> None:
-        self.shell = shell.shells["headless"].create(Shell.Callbacs())
+        self.shell = Shell.create(Shell.Callbacks(), data_dir_name=self.data_dir_name)
         self.init()
         content = "\n".join(
             [f'export {k}="{v}"' for k, v in self.mode.env.get_env_vars().items()]
         )
         print(content)
 
-    def save(self) -> None:
-        self.shell = shell.shells["headless"].create(Shell.Callbacs())
+    def dump(self) -> None:
+        self.shell = Shell.create(Shell.Callbacks(), data_dir_name=self.data_dir_name)
         self.init()
         path = self.mode.env.dump_dot_env()
         logger.info(f"Saved envs to {str(path)} 💾", print_msg=True)
@@ -458,7 +463,6 @@ class Envo(EnvoBase):
 
     environ_before = Dict[str, str]
     inotify: FilesWatcher
-    env_dirs: List[Path]
     quit: bool
     env: Env
     mode: HeadlessMode
@@ -480,9 +484,10 @@ class Envo(EnvoBase):
 
             self.mode = NormalMode(
                 se=NormalMode.Sets(
-                    stage=self.se.stage, restart_nr=self.restart_count, msg=""
+                    stage=self.se.stage, restart_nr=self.restart_count, msg="",
+                env_path=self.find_env()
                 ),
-                li=NormalMode.Links(shell=self.shell, envo=self),
+                li=NormalMode.Links(shell=self.shell),
                 calls=NormalMode.Callbacks(
                     restart=Callback(self.restart), on_error=Callback(self.on_error)
                 ),
@@ -504,9 +509,10 @@ class Envo(EnvoBase):
 
         self.mode = EmergencyMode(
             se=EmergencyMode.Sets(
-                stage=self.se.stage, restart_nr=self.restart_count, msg=msg
+                stage=self.se.stage, restart_nr=self.restart_count, msg=msg,
+                env_path=self.find_env()
             ),
-            li=EmergencyMode.Links(shell=self.shell, envo=self),
+            li=EmergencyMode.Links(shell=self.shell),
             calls=EmergencyMode.Callbacks(
                 restart=Callback(self.restart), on_error=Callback(None)
             ),
@@ -514,7 +520,7 @@ class Envo(EnvoBase):
 
         self.mode.init()
 
-    def spawn_shell(self, type: Literal["fancy", "simple"]) -> None:
+    def spawn_shell(self) -> None:
         """
         :param type: shell type
         """
@@ -522,8 +528,9 @@ class Envo(EnvoBase):
         def on_ready():
             pass
 
-        self.shell = shell.shells[type].create(
-            calls=Shell.Callbacs(on_ready=Callback(on_ready))
+        self.shell = FancyShell.create(
+            calls=FancyShell.Callbacks(on_ready=Callback(on_ready)),
+            data_dir_name=self.data_dir_name
         )
         self.init()
 
@@ -531,9 +538,6 @@ class Envo(EnvoBase):
 
         self.shell.start()
         self.mode.unload()
-
-    def handle_command(self, args: argparse.Namespace) -> None:
-        self.spawn_shell(args.shell)
 
 
 class EnvoCreator:
@@ -596,69 +600,97 @@ class EnvoCreator:
         print(f"Created {self.se.stage} environment 🍰!")
 
 
+@dataclass
+class BaseOption:
+    stage: str
+    flesh: str
+
+    keywords: ClassVar[str] = NotImplemented
+
+    def run(self) -> None:
+        raise NotImplementedError()
+
+
+@dataclass
+class Command(BaseOption):
+    def run(self) -> None:
+        envo.e2e.envo = env_headless = EnvoHeadless(
+            EnvoHeadless.Sets(stage=self.stage)
+        )
+        env_headless.single_command(self.flesh)
+
+
+@dataclass
+class DryRun(BaseOption):
+    def run(self) -> None:
+        envo.e2e.envo = env_headless = EnvoHeadless(
+            EnvoHeadless.Sets(stage=self.stage)
+        )
+        env_headless.dry_run()
+
+
+@dataclass
+class Dump(BaseOption):
+    def run(self) -> None:
+        envo.e2e.envo = env_headless = EnvoHeadless(
+            EnvoHeadless.Sets(stage=self.stage)
+        )
+        env_headless.dump()
+
+
+@dataclass
+class Version(BaseOption):
+    def run(self) -> None:
+        from envo.__version__ import __version__
+        print(__version__)
+
+
+@dataclass
+class Init(BaseOption):
+    def run(self) -> None:
+        stage = "comm" if self.stage == DEFAULT_STAGE else self.stage
+        envo_creator = EnvoCreator(EnvoCreator.Sets(stage=stage))
+        envo_creator.create()
+
+
+@dataclass
+class Start(BaseOption):
+    def run(self) -> None:
+        envo.e2e.envo = e = Envo(Envo.Sets(stage=self.stage))
+        e.spawn_shell()
+
+
+
+option_name_to_option: Dict[str, Type[BaseOption]] = {
+    "-c": Command,
+    "run": Command,
+    "dry-run": DryRun,
+    "dump": Dump,
+    "": Start,
+    "init": Init,
+    "version": Version,
+}
+
+
 def _main() -> None:
     logger.debug(f"Starting")
 
-    sys.argv[0] = "/home/kwazar/Code/opensource/envo/.venv/bin/xonsh"
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "stage", type=str, default="Default", help="Stage to activate.", nargs="?"
-    )
-    parser.add_argument("--init", type=str, default=None, nargs="?")
-    parser.add_argument("--dry-run", default=False, action="store_true")
-    parser.add_argument("--version", default=False, action="store_true")
-    parser.add_argument("--save", default=False, action="store_true")
-    parser.add_argument("--shell", default="fancy")
-    parser.add_argument("--run", default=None, nargs="?")
-    parser.add_argument("-c", "--command", default=None)
-
     argv = sys.argv[1:]
+    keywords = ["init", "dry-run", "version", "dump", "run"]
 
-    if argv and argv[0] == "run":
-        argv[0] = "--run"
+    stage = DEFAULT_STAGE
+    if argv and argv[0] not in keywords:
+        stage = argv[0]
+        option_name = argv[1] if len(argv) >= 2 else ""
+        flesh = " ".join(argv[2:])
+    else:
+        option_name = argv[0] if len(argv) >= 1 else ""
+        flesh = " ".join(argv[1:])
 
-    if argv and argv[0] == "init":
-        argv[0] = "--init"
-
-        if len(argv) == 1:
-            argv.append("comm")
-
-    if not argv:
-        argv = ["Default"]
-
-    args = parser.parse_args(argv)
-    sys.argv = sys.argv[:1]
+    option = option_name_to_option[option_name](stage, flesh=flesh)
 
     try:
-        if args.version:
-            from envo.__version__ import __version__
-
-            print(__version__)
-            return
-
-        if args.command or args.run:
-            command = args.command or args.run
-
-            envo.e2e.envo = env_headless = EnvoHeadless(
-                EnvoHeadless.Sets(stage=args.stage)
-            )
-            env_headless.single_command(command)
-        elif args.init:
-            envo_creator = EnvoCreator(EnvoCreator.Sets(stage=args.init))
-            envo_creator.create()
-        elif args.dry_run:
-            envo.e2e.envo = env_headless = EnvoHeadless(
-                EnvoHeadless.Sets(stage=args.stage)
-            )
-            env_headless.dry_run()
-        elif args.save:
-            envo.e2e.envo = env_headless = EnvoHeadless(
-                EnvoHeadless.Sets(stage=args.stage)
-            )
-            env_headless.save()
-        else:
-            envo.e2e.envo = e = Envo(Envo.Sets(stage=args.stage))
-            e.handle_command(args)
+        option.run()
     except EnvoError as e:
         logger.error(str(e), print_msg=True)
         if envo.e2e.enabled:
@@ -667,6 +699,7 @@ def _main() -> None:
     finally:
         if envo.e2e.enabled:
             envo.e2e.on_exit()
+
 
 if __name__ == "__main__":
     _main()

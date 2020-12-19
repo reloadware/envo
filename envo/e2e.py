@@ -37,6 +37,7 @@ if enabled:
 
     if is_windows():
         import prompt_toolkit.output.windows10
+
         prompt_toolkit.output.windows10.is_win_vt100_enabled = lambda: True
 
         import prompt_toolkit.output.win32
@@ -53,6 +54,7 @@ if enabled:
 
             self.stdout.flush()
             self._buffer = []
+
         prompt_toolkit.output.win32.Win32Output.flush = flush
 
         import prompt_toolkit.input
@@ -72,6 +74,7 @@ if enabled:
                         return
 
             from threading import Thread
+
             Thread(target=collector).start()
 
             return input

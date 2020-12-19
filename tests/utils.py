@@ -23,8 +23,9 @@ __all__ = [
     "add_plugins",
     "add_boot",
     "clean_output",
-    "run"
+    "run",
 ]
+
 
 def clean_output(output: str) -> str:
     ret = output
@@ -36,13 +37,14 @@ def clean_output(output: str) -> str:
     ret = ret.replace("\n\n", "\n")
     return ret
 
-def run(command: str, env: Optional[Dict[str, Any]]=None, pipe_stderr=True) -> str:
+
+def run(command: str, env: Optional[Dict[str, Any]] = None, pipe_stderr=True) -> str:
     kwargs = {}
     if env:
         kwargs["env"] = env
 
     if not pipe_stderr:
-        kwargs["stderr"] =subprocess.STDOUT
+        kwargs["stderr"] = subprocess.STDOUT
     else:
         kwargs["stderr"] = subprocess.PIPE
 

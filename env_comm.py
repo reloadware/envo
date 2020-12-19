@@ -30,7 +30,7 @@ from envo import (  # noqa: F401
 
 class EnvoCommEnv(UserEnv):  # type: ignore
     class Meta(UserEnv.Meta):  # type: ignore
-        root = Path(__file__).parent.absolute()
+        root: str = Path(__file__).parent.absolute()
         stage: str = "comm"
         emoji: str = "👌"
         parents: List[str] = []
@@ -54,7 +54,8 @@ class EnvoCommEnv(UserEnv):  # type: ignore
             echo "reading"
             read varname
             echo $varname
-            """)
+            """
+        )
 
     def fun2(self) -> None:
         print("test")
@@ -81,4 +82,3 @@ class EnvoCommEnv(UserEnv):  # type: ignore
 
 
 Env = EnvoCommEnv
-

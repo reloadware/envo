@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
 import envo  # noqa: F401
 from envo import (  # noqa: F401
     BaseEnv,
+    Namespace,
     Plugin,
     Raw,
     UserEnv,
@@ -25,12 +26,13 @@ from envo import (  # noqa: F401
 
 # Declare your command namespaces here
 # like this:
-# my_namespace = command(namespace="my_namespace")
+
+localci = Namespace(name="localci")
 
 
 class EnvoLocalEnv(UserEnv):  # type: ignore
     class Meta(UserEnv.Meta):  # type: ignore
-        root = Path(__file__).parent.absolute()
+        root: Path = Path(__file__).parent.absolute()
         stage: str = "local"
         emoji: str = "🐣"
         parents: List[str] = ["env_comm.py"]
@@ -58,12 +60,12 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
         run("pytest tests -v")
 
     @command
-    def run_flake(self) -> None:
+    def flake(self) -> None:
         self.black()
         run("flake8")
 
     @command
-    def run_mypy(self) -> None:
+    def mypy(self) -> None:
         logger.info("Running mypy")
         run("mypy envo")
 
@@ -80,22 +82,11 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
 
     @command
     def sandbox(self) -> None:
-        import sys
-        import time
-        import logging
-        from watchdog.observers import Observer
-        from watchdog.events import PatternMatchingEventHandler
+        ...
 
-        class MyEventHandler(PatternMatchingEventHandler):
-            def on_any_event(self, event):
-                pass
-
-        handler = MyEventHandler("*.py")
-
-        observer = Observer()
-        observer.schedule(handler, ".", recursive=True)
-        observer.start()
+    @localci.command
+    def __flake(self) -> None:
+        run("circleci local execute --job flake8")
 
 
 Env = EnvoLocalEnv
-

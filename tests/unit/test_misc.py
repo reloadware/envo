@@ -12,7 +12,7 @@ class TestMisc(utils.TestBase):
         assert Path("env_test.py").exists()
 
         utils.flake8()
-        #utils.mypy()
+        # utils.mypy()
 
     @pytest.mark.parametrize(
         "dir_name", ["my-sandbox", "my sandbox", ".sandbox", ".san.d- b  ox"]
@@ -21,7 +21,7 @@ class TestMisc(utils.TestBase):
         env_dir = Path(dir_name)
         env_dir.mkdir()
         os.chdir(str(env_dir))
-        utils.command("init test")
+        utils.command("test init")
 
         assert Path("env_comm.py").exists()
         assert Path("env_test.py").exists()
@@ -30,7 +30,7 @@ class TestMisc(utils.TestBase):
         utils.flake8()
 
     def test_version(self, capsys):
-        utils.command("--version")
+        utils.command("version")
         assert capsys.readouterr().out == "1.2.3\n"
 
     def test_shell(self):

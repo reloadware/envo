@@ -1,7 +1,7 @@
 import os
+import subprocess
 from pathlib import Path
 
-import subprocess
 from pytest import fixture
 
 from tests.e2e import utils
@@ -12,7 +12,7 @@ envo_root = test_root.parent / "envo"
 
 @fixture
 def init() -> None:
-    result = utils.run("envo init test")
+    result = utils.run("envo test init")
     assert "Created test environment" in result
 
 

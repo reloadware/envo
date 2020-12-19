@@ -78,7 +78,9 @@ class TestCommands(utils.TestBase):
 
     def test_single_command_fail(self):
         with raises(CalledProcessError) as e:
-            s = utils.run("""envo test -c "import sys;print('some msg');sys.exit(2)" """)
+            s = utils.run(
+                """envo test -c "import sys;print('some msg');sys.exit(2)" """
+            )
         assert e.value.returncode == 2
         assert "some msg" in utils.clean_output(e.value.stdout)
         assert utils.clean_output(e.value.stderr) == ""
@@ -106,7 +108,10 @@ class TestCommands(utils.TestBase):
             assert "flaake: command not found" in utils.clean_output(e.value.stdout)
         if is_windows():
             assert e.value.returncode == 255
-            assert "'flaake' is not recognized as an internal or external command" in utils.clean_output(e.value.stdout)
+            assert (
+                "'flaake' is not recognized as an internal or external command"
+                in utils.clean_output(e.value.stdout)
+            )
 
         assert utils.clean_output(e.value.stderr) == ""
 
@@ -148,6 +153,12 @@ class TestCommands(utils.TestBase):
     def test_envo_run(self):
         utils.add_flake_cmd(file=Path("env_comm.py"))
         res = utils.envo_run("my_flake")
+
+        assert res == "Flake all good\nFlake return value\n"
+
+    def test_envo_test_run(self):
+        utils.add_flake_cmd(file=Path("env_test.py"))
+        res = utils.envo_run("my_flake", stage="test")
 
         assert res == "Flake all good\nFlake return value\n"
 
@@ -212,9 +223,7 @@ class TestCommands(utils.TestBase):
                 r"xonsh: subprocess mode: command not found: my_mypy\nmy_mypy: command not found\n"
             )
         if is_windows():
-            e.output(
-                r"xonsh: subprocess mode: command not found: my_mypy\n"
-            )
+            e.output(r"xonsh: subprocess mode: command not found: my_mypy\n")
 
         e.prompt().eval()
 

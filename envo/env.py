@@ -83,7 +83,8 @@ class MagicFunction:
 
     def __post_init__(self) -> None:
         search = re.search(r"def ((.|\s)*?):\n", inspect.getsource(self.func))
-        assert search is not None
+        if not search:
+            return
         decl = search.group(1)
         decl = re.sub(r"self,?\s?", "", decl)
         self.decl = decl
@@ -402,7 +403,6 @@ class BaseEnv:
 
         for p in parts:
             p.__init__ = p.__undecorated_init__
-
 
     @classmethod
     def is_user_env(cls) -> bool:
@@ -847,7 +847,7 @@ class Env(EnvoEnv):
                     root=p.Meta.root,
                     include=p.Meta.watch_files + self._default_watch_files,
                     exclude=p.Meta.ignore_files + self._default_ignore_files,
-                    name=p.__name__
+                    name=p.__name__,
                 ),
                 calls=FilesWatcher.Callbacks(on_event=Callback(self._on_env_edit)),
             )
@@ -1030,7 +1030,7 @@ class Env(EnvoEnv):
 
         self.genstub()
 
-    def _on_precmd(self, command: str) -> Optional[str]:
+    def _on_precmd(self, command: str) -> Tuple[Optional[str], Optional[str]]:
         functions = self._magic_functions["precmd"]
         for f in functions.values():
             if re.match(f.kwargs["cmd_regex"], command):
@@ -1070,4 +1070,3 @@ class Env(EnvoEnv):
         for f in functions.values():
             f()
         self._li.shell.calls.reset()
-

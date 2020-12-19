@@ -2,14 +2,17 @@ import builtins
 import os
 import sys
 import time
+from pathlib import Path
+
 from dataclasses import dataclass
 from enum import Enum
+from functools import partial
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, TextIO, Union
 
 import fire
 from prompt_toolkit.data_structures import Size
-from xonsh.base_shell import BaseShell
+from xonsh.base_shell import BaseShell, Tee
 from xonsh.execer import Execer
 from xonsh.prompt.base import DEFAULT_PROMPT
 from xonsh.ptk_shell.shell import PromptToolkitShell
@@ -55,7 +58,7 @@ class Shell(BaseShell):  # type: ignore
     """
 
     @dataclass
-    class Callbacs:
+    class Callbacks:
         pre_cmd: Callback = Callback()
         on_stdout: Callback = Callback()
         on_stderr: Callback = Callback()
@@ -75,7 +78,7 @@ class Shell(BaseShell):  # type: ignore
             self.on_exit = Callback()
             self.on_ready = Callback()
 
-    def __init__(self, calls: Callbacs, execer: Execer) -> None:
+    def __init__(self, calls: Callbacks, execer: Execer) -> None:
         super().__init__(execer=execer, ctx={})
 
         logger.debug(f"Shell __init__")
@@ -175,7 +178,7 @@ class Shell(BaseShell):  # type: ignore
         return str(ansi_partial_color_format(super().prompt))
 
     @classmethod
-    def create(cls, calls: Callbacs) -> "Shell":
+    def create(cls, calls: Callbacks, data_dir_name: str) -> "Shell":
         import signal
 
         import xonsh.history.main as xhm
@@ -184,6 +187,9 @@ class Shell(BaseShell):  # type: ignore
         from xonsh.xontribs import xontribs_load
 
         ctx: Dict[str, Any] = {}
+
+        data_dir = Path.home() / f".envo/xonsh_data/{data_dir_name}"
+        os.makedirs(data_dir, exist_ok=True)
 
         execer = Execer(xonsh_ctx=ctx)
 
@@ -196,12 +202,13 @@ class Shell(BaseShell):  # type: ignore
                 "XONSH_INTERACTIVE": True,
                 "SHELL_TYPE": "prompt_toolkit",
                 "COMPLETIONS_BRACKETS": False,
+                "XONSH_DATA_DIR": data_dir
             }
         )
 
         if "ENVO_SHELL_NOHISTORY" not in os.environ:
             builtins.__xonsh__.history = xhm.construct_history(  # type: ignore
-                env=env.detype(), ts=[time.time(), None], locked=True
+                env=env.detype(), ts=[time.time(), None], locked=True, buffersize=100
             )
             builtins.__xonsh__.history.gc.wait_for_shell = False  # type: ignore
 
@@ -225,8 +232,20 @@ class Shell(BaseShell):  # type: ignore
     def set_fulll_traceback_enabled(self, enabled: bool = True):
         self.environ["XONSH_SHOW_TRACEBACK"] = enabled
 
-    def execute(self, line: str) -> Any:
-        return BaseShell.default(self, line)
+    def execute(self, line: str, history_line: str) -> Any:
+        self.append_history = self._append_history
+        BaseShell._append_history = lambda self, inp, ts, tee_out: None
+
+        ts0 = time.time()
+
+        if history_line:
+            self.append_history(inp=history_line, ts=[ts0, ts0], tee_out="")
+
+        BaseShell.default(self, line)
+
+        if self.history and self.history.buffer:
+            self.history.buffer[-1]["rtn"] = self.history.last_cmd_rtn
+            self.history.flush()
 
     def default(self, line: str) -> Any:
         logger.info("Executing command", {"command": line})
@@ -263,8 +282,9 @@ class Shell(BaseShell):  # type: ignore
             err = None
 
             # W want to catch all exceptions just in case the command fails so we can handle std_err and post_cmd
+            hist_line = line
             if self.calls.pre_cmd:
-                line = self.calls.pre_cmd(line)
+                line =  self.calls.pre_cmd(line)
 
             if self.calls.on_stdout:
                 out = StdOut(command=line, on_write=self.calls.on_stdout)
@@ -273,7 +293,7 @@ class Shell(BaseShell):  # type: ignore
             if self.calls.on_stderr:
                 err = StdErr(command=line, on_write=self.calls.on_stderr)
                 sys.stderr = err  # type: ignore
-            ret = self.execute(line)
+            ret = self.execute(line, hist_line)
         finally:
             if self.calls.on_stdout:
                 sys.stdout = sys.__stdout__
@@ -290,12 +310,16 @@ class Shell(BaseShell):  # type: ignore
 
 
 class FancyShell(Shell, PromptToolkitShell):  # type: ignore
+    @dataclass
+    class Callbacks(Shell.Callbacks):
+        pass
+
     @classmethod
-    def create(cls, calls: Callback) -> "Shell":
+    def create(cls, calls: Callbacks, data_dir_name: str) -> "Shell":
         logger.debug(f"Creating FancyShell")
         from xonsh.main import _pprint_displayhook
 
-        shell = super().create(calls)
+        shell = super().create(calls, data_dir_name=data_dir_name)
 
         setattr(sys, "displayhook", _pprint_displayhook)
         return shell

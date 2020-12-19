@@ -13,11 +13,13 @@ from textwrap import dedent
 from threading import Thread
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from watchdog.observers import Observer
-
-from watchdog.events import PatternMatchingEventHandler, FileModifiedEvent, FileSystemEventHandler
-
 from globmatch_temp import glob_match
+from watchdog.events import (
+    FileModifiedEvent,
+    FileSystemEventHandler,
+    PatternMatchingEventHandler,
+)
+from watchdog.observers import Observer
 
 __all__ = [
     "dir_name_to_class_name",
@@ -28,6 +30,7 @@ __all__ = [
     "Callback",
     "FilesWatcher",
 ]
+
 
 class EnvoError(Exception):
     pass
@@ -64,7 +67,6 @@ class InotifyPath:
         return self.absolute.is_dir()
 
 
-
 class FilesWatcher(FileSystemEventHandler):
     @dataclass
     class Sets:
@@ -88,7 +90,9 @@ class FilesWatcher(FileSystemEventHandler):
         self.se = se
         self.calls = calls
 
-        self.logger = logger.create_child(f"{self.se.name} Inotify", descriptor=f"{self.se.name} Inotify")
+        self.logger = logger.create_child(
+            f"{self.se.name} Inotify", descriptor=f"{self.se.name} Inotify"
+        )
 
         self.logger.debug("Starting Inotify")
         self.observer = Observer()
@@ -116,6 +120,7 @@ class FilesWatcher(FileSystemEventHandler):
         self.logger.debug("Starting observer")
 
         if is_linux():
+
             def _add_dir_watch(self2, path, recursive, mask):
                 """
                 Adds a watch (optionally recursively) for the given directory path
@@ -135,6 +140,7 @@ class FilesWatcher(FileSystemEventHandler):
                     self.walk_dirs(on_match=lambda p: self2._add_watch(p, mask))
 
             from watchdog.observers.inotify_c import Inotify
+
             Inotify._add_dir_watch = _add_dir_watch
 
         self.observer.start()
@@ -154,17 +160,22 @@ class FilesWatcher(FileSystemEventHandler):
         :type event:
             :class:`FileSystemEvent`
         """
-        from watchdog.utils import has_attribute
-        from watchdog.utils import unicode_paths
+        from watchdog.utils import has_attribute, unicode_paths
 
         paths = []
-        if has_attribute(event, 'dest_path'):
+        if has_attribute(event, "dest_path"):
             paths.append(unicode_paths.decode(event.dest_path))
         if event.src_path:
             paths.append(unicode_paths.decode(event.src_path))
 
-        if any(self.match(str(Path(p).relative_to(self.root)), include=self.include,
-                      exclude=self.exclude) for p in paths):
+        if any(
+            self.match(
+                str(Path(p).relative_to(self.root)),
+                include=self.include,
+                exclude=self.exclude,
+            )
+            for p in paths
+        ):
             super().dispatch(event)
 
 
@@ -291,7 +302,14 @@ class EnvParser:
         parents = [f"__{p.class_name}" for p in self.parents]
 
         class_name = f"__{self.class_name}"
+
         src = self.source.replace(self.class_name, class_name)
+        # Remove method bodies
+        src = re.sub(r"(def.*\(.*\).*?:)\n(?:(?:\n* {8,}.*?\n)+)", r"\1 ...", src)
+        # Remove Env declaration
+        src = re.sub(r"Env *?=.*?\n", r"", src)
+        # Leave only variable declarations
+        src = re.sub(r"((?:    )+\S*:.*)=.*\n", r"\1\n", src)
 
         melted = dedent(
             f"""\n
@@ -308,21 +326,21 @@ class EnvParser:
 
 import sys
 
-PLATFORM_WINDOWS = 'windows'
-PLATFORM_LINUX = 'linux'
-PLATFORM_BSD = 'bsd'
-PLATFORM_DARWIN = 'darwin'
-PLATFORM_UNKNOWN = 'unknown'
+PLATFORM_WINDOWS = "windows"
+PLATFORM_LINUX = "linux"
+PLATFORM_BSD = "bsd"
+PLATFORM_DARWIN = "darwin"
+PLATFORM_UNKNOWN = "unknown"
 
 
 def get_platform_name():
     if sys.platform.startswith("win"):
         return PLATFORM_WINDOWS
-    elif sys.platform.startswith('darwin'):
+    elif sys.platform.startswith("darwin"):
         return PLATFORM_DARWIN
-    elif sys.platform.startswith('linux'):
+    elif sys.platform.startswith("linux"):
         return PLATFORM_LINUX
-    elif sys.platform.startswith(('dragonfly', 'freebsd', 'netbsd', 'openbsd', 'bsd')):
+    elif sys.platform.startswith(("dragonfly", "freebsd", "netbsd", "openbsd", "bsd")):
         return PLATFORM_BSD
     else:
         return PLATFORM_UNKNOWN
