@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 from pathlib import Path
 
 from loguru_caplog import loguru_caplog as caplog  # noqa: ignore F401
@@ -11,9 +12,15 @@ envo_root = test_root.parent
 
 @fixture
 def sandbox() -> Path:
-    sandbox_dir = test_root / "sandbox"
+    pwd = Path(os.environ["PWD"])
+
+    test_dir = Path(os.getenv('PYTEST_CURRENT_TEST').split("::")[0]).parent
+
+    sandbox_dir = pwd / test_dir / "sandbox"
     if sandbox_dir.exists():
         shutil.rmtree(str(sandbox_dir), ignore_errors=True)
+
+    sys.path.insert(0, str(sandbox_dir))
 
     if not sandbox_dir.exists():
         sandbox_dir.mkdir()

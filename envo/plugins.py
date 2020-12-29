@@ -180,6 +180,8 @@ class VirtualEnv(Plugin):
             self.__logger.info("Couldn't find venv. Falling back to predicting")
             self._venv = PredictedVenv(root=self.venv_path, venv_name=venv_name)
 
+        self._venv.activate(self)
+
     @classmethod
     def init(
         cls,
@@ -188,10 +190,6 @@ class VirtualEnv(Plugin):
         venv_name: str = ".venv",
     ):
         VirtualEnv.__init__(self, venv_path, venv_name)
-
-    @venv.onload
-    def __activate(self) -> None:
-        self._venv.activate(self)
 
     @venv.onunload
     def __deactivate(self) -> None:

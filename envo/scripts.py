@@ -38,14 +38,20 @@ class Status:
     @dataclass
     class Callbacks:
         on_ready: Callback
+        on_not_ready: Callback
 
     _context_ready: bool
     _reloader_ready: bool
+    _source_ready: bool
 
     def __init__(self, calls: Callbacks) -> None:
         self.calls = calls
         self._context_ready = False
         self._reloader_ready = False
+        self._source_ready = False
+
+    def __repr__(self) -> str:
+        return f"Status (context_ready={self.context_ready}, reloader_ready={self._reloader_ready}, source_ready={self._source_ready})"
 
     @property
     def context_ready(self) -> bool:
@@ -55,6 +61,16 @@ class Status:
     def context_ready(self, value: bool) -> None:
         self._context_ready = value
         logger.debug(f"Context", {"ready": value})
+        self._on_status_change()
+
+    @property
+    def source_ready(self) -> bool:
+        return self._source_ready
+
+    @source_ready.setter
+    def source_ready(self, value: bool) -> None:
+        self._source_ready = value
+        logger.debug(f"Source", {"ready": value})
         self._on_status_change()
 
     @property
@@ -69,12 +85,15 @@ class Status:
 
     @property
     def ready(self) -> bool:
-        return self.context_ready and self.reloader_ready
+        return self.context_ready and self.reloader_ready and self.source_ready
 
     def _on_status_change(self) -> None:
         if self.ready:
             logger.debug(f"Everything ready")
             self.calls.on_ready()
+        else:
+            logger.debug(f"Not ready {repr(self)}")
+            self.calls.on_not_ready()
 
 
 class CantFindEnvFile(EnvoError):
@@ -130,7 +149,8 @@ class HeadlessMode:
 
         self.extra_watchers = []
 
-        self.status = Status(calls=Status.Callbacks(on_ready=Callback(self._on_ready)))
+        self.status = Status(calls=Status.Callbacks(on_ready=Callback(self._on_ready),
+                                                    on_not_ready=Callback(self._on_not_ready)))
 
         self.env = None
 
@@ -142,6 +162,10 @@ class HeadlessMode:
 
     def _on_ready(self) -> None:
         self.prompt.state = PromptState.NORMAL
+        self.li.shell.set_prompt(self.prompt.as_str())
+
+    def _on_not_ready(self) -> None:
+        self.prompt.state = PromptState.LOADING
         self.li.shell.set_prompt(self.prompt.as_str())
 
     def unload(self) -> None:
@@ -175,19 +199,11 @@ class HeadlessMode:
         return self.se.env_path
 
     def _create_env_object(self, file: Path) -> Env:
-        def on_reloader_ready():
-            self.status.reloader_ready = True
-
-        def on_context_ready():
-            self.status.context_ready = True
-
         env_class = EnvBuilder.build_shell_env_from_file(file)
         env = env_class(
-            li=Env.Links(self.li.shell),
+            li=Env.Links(self.li.shell, status=self.status),
             calls=Env.Callbacks(
                 restart=self.calls.restart,
-                reloader_ready=Callback(on_reloader_ready),
-                context_ready=Callback(on_context_ready),
                 on_error=self.calls.on_error,
             ),
             se=Env.Sets(
@@ -281,8 +297,8 @@ class EmergencyMode(HeadlessMode):
             FilesWatcher(
                 FilesWatcher.Sets(
                     root=env.path.parent,
-                    include=Env._default_watch_files,
-                    exclude=Env._default_ignore_files,
+                    include=["env_*.py"],
+                    exclude=[],
                 ),
                 calls=FilesWatcher.Callbacks(on_event=Callback(None)),
             )

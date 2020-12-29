@@ -102,6 +102,9 @@ class FilesWatcher(FileSystemEventHandler):
     def on_any_event(self, event: FileModifiedEvent):
         self.calls.on_event(event)
 
+    def flush(self) -> None:
+        self.observer.event_queue.queue.clear()
+
     def match(self, path: str, include: List[str], exclude: List[str]) -> bool:
         return not glob_match(path, exclude) and glob_match(path, include)
 

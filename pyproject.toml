@@ -40,6 +40,7 @@ pygments = "^2.6.1"
 xonsh = "^0.9.24"
 fire = "^0.3.1"
 watchdog = "^0.10.4"
+importlab = "^0.5.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.4.1"

@@ -49,7 +49,9 @@ __all__ = [
     "ondestroy",
     "boot_code",
     "Namespace",
+    "Source"
 ]
+
 
 
 T = TypeVar("T")
@@ -59,6 +61,7 @@ if TYPE_CHECKING:
     Raw = Union[T]
     from envo import Plugin
     from envo.shell import Shell
+    from envo.scripts import Status
 else:
 
     class Raw(Generic[T]):
@@ -354,6 +357,112 @@ class Field:
         )
 
 
+@dataclass
+class Source:
+    root: Path
+    watch_files: List[str] = field(default_factory=list)
+    ignore_files: List[str] = field(default_factory=list)
+
+
+class Reloader:
+    @dataclass
+    class Callbacks:
+        on_partial_reload: Callback
+        on_full_reload: Callback
+        on_env_edit: Callback
+
+    @dataclass
+    class Sets:
+        extra_watchers: List[FilesWatcher]
+
+    @dataclass
+    class Links:
+        env: "Env"
+        status: "Status"
+
+    _env_watchers: List[FilesWatcher]
+    _source_watchers: List[FilesWatcher]
+    _default_watch_files = ["**/*.py"]
+    _default_ignore_files = [r"**/.*", r"**/*~", r"**/__pycache__"]
+    _modules_before: Dict[str, Any]
+
+    def __init__(self, li: Links, se: Sets, calls: Callbacks) -> None:
+        self.li = li
+        self.se = se
+        self.calls = calls
+
+        self._env_watchers = []
+        self._source_watchers = []
+
+        self._collect_env_watchers()
+        self._collect_source_watchers()
+
+        self._modules_before = sys.modules.copy()
+
+    def _unload_modules(self) -> None:
+        to_pop = set(sys.modules.keys()) - set(self._modules_before.keys())
+        for p in to_pop:
+            sys.modules.pop(p)
+
+    def _on_source_edit(self, event: FileModifiedEvent) -> None:
+        self._unload_modules()
+        self.calls.on_full_reload()
+
+        for fw in self._source_watchers:
+            fw.flush()
+        pass
+
+    @property
+    def _all_watchers(self) -> List[FilesWatcher]:
+        return [*self._env_watchers, *self._source_watchers]
+
+    def _collect_source_watchers(self) -> None:
+        for s in self.li.env.meta.sources:
+            watcher = FilesWatcher(
+                FilesWatcher.Sets(
+                    root=s.root,
+                    include=s.watch_files + self._default_watch_files,
+                    exclude=s.ignore_files + self._default_ignore_files,
+                    name=str(s.root),
+                ),
+                calls=FilesWatcher.Callbacks(on_event=Callback(self._on_source_edit)),
+            )
+            self._source_watchers.append(watcher)
+
+    def _collect_env_watchers(self) -> None:
+        constituents = self.li.env.get_user_envs()
+
+        # inject callbacks into existing watchers
+        for w in self.se.extra_watchers:
+            w.calls = FilesWatcher.Callbacks(on_event=self.calls.on_env_edit)
+            self._env_watchers.append(w)
+
+        for p in constituents:
+            watcher = FilesWatcher(
+                FilesWatcher.Sets(
+                    root=p.Meta.root,
+                    include=self.li.env.meta.watch_files + ["env_*.py"],
+                    exclude=self.li.env.meta.ignore_files + self._default_ignore_files,
+                    name=p.__name__,
+                ),
+                calls=FilesWatcher.Callbacks(on_event=self.calls.on_env_edit),
+            )
+            self._env_watchers.append(watcher)
+
+    def start(self) -> None:
+        for w in self._all_watchers:
+            w.start()
+
+        self.li.status.reloader_ready = True
+
+    def stop(self):
+        def fun():
+            for w in self._all_watchers:
+                w.stop()
+
+        Thread(target=fun).start()
+
+
 class BaseEnv:
     class Meta:
         """
@@ -365,10 +474,11 @@ class BaseEnv:
         version: str = "0.1.0"
         parents: List[str] = []
         plugins: List["Plugin"] = []
-        watch_files: List[str] = []
-        ignore_files: List[str] = []
+        sources: List[Source] = []
         emoji: str = ""
         stage: str = "comm"
+        watch_files: List[str] = []
+        ignore_files: List[str] = []
 
     root: Path
     path: Raw[str]
@@ -546,13 +656,12 @@ class Env(EnvoEnv):
     @dataclass
     class Callbacks:
         restart: Callback
-        reloader_ready: Callback
-        context_ready: Callback
         on_error: Callable
 
     @dataclass
     class Links:
         shell: Optional["Shell"]
+        status: "Status"
 
     @dataclass
     class Sets:
@@ -561,9 +670,7 @@ class Env(EnvoEnv):
         blocking: bool = False
 
     _parents: List[Type["Env"]]
-    _files_watchers: List[FilesWatcher]
-    _default_watch_files = ["env_*.py"]
-    _default_ignore_files = [r"**/.*", r"**/*~", r"**/__pycache__"]
+    _reloader: Reloader
 
     def __new__(cls, *args, **kwargs) -> "Env":
         env = BaseEnv.__new__(cls)
@@ -582,11 +689,13 @@ class Env(EnvoEnv):
         self.envo_stage = self.stage
 
         self.path = os.environ["PATH"]
-
         if "PYTHONPATH" not in os.environ:
             self.pythonpath = ""
         else:
             self.pythonpath = os.environ["PYTHONPATH"]
+
+        self._add_sources_to_syspath()
+
         self.pythonpath = str(self.root) + ":" + self.pythonpath
 
         self._exiting = False
@@ -630,9 +739,21 @@ class Env(EnvoEnv):
         self._li.shell.calls.post_cmd = Callback(self._on_postcmd)
         self._li.shell.calls.on_exit = Callback(self._on_destroy)
 
+        self.genstub()
+
         self.init_parts()
+        self._reloader = None
+
         if self._se.reloader_enabled:
-            self._collect_watchers()
+            self._reloader = Reloader(li=Reloader.Links(env=self, status=self._li.status),
+                                      se=Reloader.Sets(extra_watchers=se.extra_watchers),
+                                      calls=Reloader.Callbacks(on_partial_reload=Callback(self._on_partial_reload),
+                                                               on_full_reload=Callback(self._on_full_reload),
+                                                               on_env_edit=Callback(self._on_env_edit)))
+
+    def _add_sources_to_syspath(self) -> None:
+        for p in reversed(self.meta.sources):
+            sys.path.insert(0, str(p.root))
 
     def validate(self) -> None:
         """
@@ -642,6 +763,12 @@ class Env(EnvoEnv):
         errors = self._get_errors()
         if errors:
             raise EnvoError("\n".join(errors))
+
+    def _on_partial_reload(self) -> None:
+        pass
+
+    def _on_full_reload(self) -> None:
+        self._run_boot_codes()
 
     def _get_errors(self) -> List[str]:
         """
@@ -779,15 +906,15 @@ class Env(EnvoEnv):
             sw.start()
             functions = self._magic_functions["onload"].values()
 
-            if self._se.reloader_enabled:
-                self._start_watchers()
+            if self._reloader:
+                self._reloader.start()
 
             for h in functions:
                 try:
                     h()
                 except BaseException as e:
                     # TODO: pass env code to exception to get relevant traceback?
-                    self._calls.context_ready()
+                    self._li.status.context_ready = True
                     self._calls.on_error(e)
                     self._exit()
                     return
@@ -802,7 +929,7 @@ class Env(EnvoEnv):
                 sleep(0.1)
 
             logger.debug("Finished load context thread")
-            self._calls.context_ready()
+            self._li.status.context_ready = True
 
         if not self._se.blocking:
             Thread(target=thread, args=(self,)).start()
@@ -834,38 +961,6 @@ class Env(EnvoEnv):
 
         self._exit()
 
-    def _collect_watchers(self) -> None:
-        constituents = self.get_user_envs()
-
-        # inject callback int existing
-        for w in self._files_watchers:
-            w.calls = FilesWatcher.Callbacks(on_event=Callback(self._on_env_edit))
-
-        for p in constituents:
-            watcher = FilesWatcher(
-                FilesWatcher.Sets(
-                    root=p.Meta.root,
-                    include=p.Meta.watch_files + self._default_watch_files,
-                    exclude=p.Meta.ignore_files + self._default_ignore_files,
-                    name=p.__name__,
-                ),
-                calls=FilesWatcher.Callbacks(on_event=Callback(self._on_env_edit)),
-            )
-            self._files_watchers.append(watcher)
-
-    def _start_watchers(self) -> None:
-        for w in self._files_watchers:
-            w.start()
-
-        self._calls.reloader_ready()
-
-    def _stop_watchers(self):
-        def fun():
-            for w in self._files_watchers:
-                w.stop()
-
-        Thread(target=fun).start()
-
     def _on_env_edit(self, event: FileModifiedEvent) -> None:
         while self._executing_cmd:
             sleep(0.2)
@@ -884,7 +979,7 @@ class Env(EnvoEnv):
 
         if any([s in event.event_type for s in subscribe_events]):
             if self._se.reloader_enabled:
-                self._stop_watchers()
+                self._reloader.stop()
 
             self.logger.info(
                 "Reloading",
@@ -902,8 +997,8 @@ class Env(EnvoEnv):
 
     def _exit(self) -> None:
         self.logger.info("Exiting env")
-        if self._se.reloader_enabled:
-            self._stop_watchers()
+        if self._reloader:
+            self._reloader.stop()
 
     def activate(self) -> None:
         """
@@ -1012,8 +1107,8 @@ class Env(EnvoEnv):
 
         StubGen(self).generate()
 
-    @onload
-    def _on_load(self) -> None:
+    def _run_boot_codes(self) -> None:
+        self._li.status.source_ready = False
         boot_codes_f = self._magic_functions["boot_code"]
 
         codes = []
@@ -1027,8 +1122,11 @@ class Env(EnvoEnv):
             except Exception as e:
                 # TODO: make nice traceback?
                 raise e from None
+        self._li.status.source_ready = True
 
-        self.genstub()
+    @onload
+    def _on_load(self) -> None:
+        self._run_boot_codes()
 
     def _on_precmd(self, command: str) -> Tuple[Optional[str], Optional[str]]:
         functions = self._magic_functions["precmd"]
