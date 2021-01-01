@@ -26,7 +26,7 @@ class Object:
     name: str = ""
     parent: Optional["Object"] = None
 
-    def get_actions_for_update(self, new_object: "Object") -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Function", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
         raise NotImplementedError()
 
     @classmethod
@@ -45,7 +45,7 @@ class Object:
         return {self.full_name: self}
 
     def _is_ignored(self, name: str) -> bool:
-        return False
+        return name in ["__module__", "__annotations__", "__doc__", "__weakref__"]
 
     @property
     def source(self) -> str:
@@ -62,6 +62,17 @@ class Object:
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}: {self.full_name}"
+
+
+def compare_codes(left, right) -> bool:
+    compare_fields = ["co_argcount", "co_cellvars", "co_code", "co_consts", "co_flags", "co_freevars",
+                      "co_Kwanlyargcount", "co_lnotab", "co_name", "co_names", "co_nlocals", "co_stacksize", "co_varnames"]
+    
+    for f in compare_fields:
+        if getattr(left, f) != getattr(right, f):
+            return False
+
+    return True
 
 
 @dataclass
@@ -132,7 +143,7 @@ class Function(FinalObj):
             old_fun.__code__ = self.old_object.parent.python_obj.__dict__[self.old_object.name].__code__
             self.old_object.parent.python_obj.__dict__[self.old_object.name] = old_fun
 
-    def get_actions_for_update(self, new_object: "Function") -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Function", ignore_objects: Optional[List[Object]] = None) -> List["Action"]:
         return [Function.Update(reloader=self.reloader, parent=self.parent, old_object=self, new_object=new_object)]
 
     @classmethod
@@ -143,15 +154,41 @@ class Function(FinalObj):
         raise NotImplementedError()
 
     def __eq__(self, other: "ContainerObj") -> bool:
-        return self.python_obj.__code__ == other.python_obj.__code__
+        if self.python_obj.__class__ is not other.python_obj.__class__:
+            return False
+
+        ret = self.python_obj.__code__ == other.python_obj.__code__
+        return ret
 
     def __ne__(self, other: "Object") -> bool:
-        return self.python_obj.__code__ != other.python_obj.__code__
+        if self.python_obj.__class__ is not other.python_obj.__class__:
+            return True
+
+        ret = self.python_obj.__code__ != other.python_obj.__code__
+        return ret
 
 
 @dataclass
 class ContainerObj(Object):
     children: Dict[str, "Object"] = field(init=False, default_factory=dict)
+
+    # def get_actions_for_update(self, new_object: "Function", ignore_objects: Optional[List[Object]] = None) -> List["Action"]:
+    #     if not ignore_objects:
+    #         ignore_objects = []
+    #
+    #     ret = []
+    #
+    #     for c in self.children.values():
+    #         if ignore_objects and c.full_name in [o.full_name for o in ignore_objects]:
+    #             continue
+    #
+    #         if isinstance(c, Import):
+    #             continue
+    #
+    #         actions = c.get_actions_for_update(c, ignore_objects=[self] + ignore_objects)
+    #         ret.extend(actions)
+    #
+    #     return ret
 
     def __post_init__(self) -> None:
         self._collect_objs()
@@ -166,7 +203,7 @@ class ContainerObj(Object):
                 Cls = Function
             elif inspect.isclass(o):
                 Cls = Class
-            elif isinstance(o, dict):
+            elif isinstance(o, dict) or inspect.isgetsetdescriptor(o):
                 Cls = Dictionary
             elif inspect.ismodule(o):
                 Cls = Import
@@ -174,12 +211,6 @@ class ContainerObj(Object):
                 Cls = GlobalVariable
 
             self.children[n] = Cls(o,parent=self, name=n, reloader=self.reloader)
-
-    def __eq__(self, other: "ContainerObj") -> bool:
-        return self.source == other.source
-
-    def __ne__(self, other: "Object") -> bool:
-        return self.source != other.source
 
     @property
     def flat(self) -> Dict[str, Object]:
@@ -195,15 +226,61 @@ class ContainerObj(Object):
         ret = [o for o in self.children if isinstance(o, Function)]
         return ret
 
+    @property
+    def source(self) -> str:
+        ret = inspect.getsource(self.python_obj)
+        for c in self.children.values():
+            ret = ret.replace(c.source, "")
+
+        return ret
+
 
 @dataclass
 class Class(ContainerObj):
-    pass
+    class Update(Update):
+        def execute(self) -> None:
+            ignore_fields = ["__module__", "__annotations__", "__doc__", "__weakref__", "__dict__"]
+
+            context = self.parent.python_obj.__dict__
+            exec(self.old_object.source, context)
+            new_obj = context[self.old_object.name]
+            for k, v in new_obj.__dict__.items():
+                if k in ignore_fields:
+                    continue
+
+                if getattr(self.old_object.python_obj, k) == v:
+                    continue
+                setattr(self.old_object.python_obj, k, v)
+            pass
+
+    def get_actions_for_update(self, new_object: "Class", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+        return [Class.Update(reloader=self.reloader, parent=self.parent, old_object=self, new_object=None)]
 
 
 @dataclass
 class Dictionary(FinalObj):
-    pass
+    class Add(Add):
+        def execute(self) -> None:
+            exec(self.object.source, self.parent.python_obj.__dict__)
+
+    class Update(Update):
+        def execute(self) -> None:
+            to_delete = self.old_object.python_obj.keys() - self.new_object.python_obj.keys()
+            to_add = self.new_object.python_obj.keys() - self.old_object.python_obj.keys()
+            to_update = self.new_object.python_obj.keys() & self.old_object.python_obj.keys()
+
+            for k in to_delete:
+                self.old_object.python_obj.pop(k)
+
+            for k in to_add:
+                self.python_obj.old_object[k] = copy(self.python_obj.new_object[k])
+
+            for k in to_update:
+                if self.python_obj.old_object[k] != self.python_obj.new_object[k]:
+                    self.python_obj.old_object[k] = copy(self.python_obj.new_object[k])
+
+    def get_actions_for_update(self, new_object: "Class", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+        return [Dictionary.Update(reloader=self.reloader, parent=self.parent, old_object=self, new_object=new_object)]
 
 
 @dataclass
@@ -212,36 +289,10 @@ class GlobalVariable(FinalObj):
         def execute(self) -> None:
             self.parent.python_obj.__dict__[self.object.name] = copy(self.object.python_obj)
 
-    def get_actions_for_update(self, new_object: "Function") -> List["Action"]:
-        assert isinstance(self.parent, Module)
+    def get_actions_for_update(self, new_object: "GlobalVariable", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+        assert isinstance(self.parent, ContainerObj)
 
-        ret = []
-
-        ret.extend(self.parent.get_actions_for_update(self.parent))
-
-        for m in self.reloader.get_dependent_modules(self.parent):
-            ret.extend(m.get_actions_for_update(m))
-            for c in m.children.values():
-                if c.full_name == self.full_name:
-                    continue
-
-                if isinstance(c, Import) or isinstance(c, Class):
-                    continue
-
-                actions = c.get_actions_for_update(c)
-                ret.extend(actions)
-
-        for a in ret:
-            a.priority = 100
-
-        # remove duplicates
-        ret_tmp = []
-        for a in reversed(ret):
-            if a not in ret_tmp:
-                ret_tmp.append(a)
-
-        ret = list(reversed(ret_tmp))
-
+        ret = [self.parent.get_actions_for_update(new_object, ignore_objects=[self]+ignore_objects)]
         return ret
 
     @classmethod
@@ -263,8 +314,10 @@ class Module(ContainerObj):
         def execute(self) -> None:
             exec(self.old_object.source, self.old_object.python_obj.__dict__)
 
-    def get_actions_for_update(self, new_object: "Module") -> List["Action"]:
-        return [Module.Update(reloader=self.reloader, parent=None, old_object=self, new_object=None)]
+    def get_actions_for_update(self, new_object: "GlobalVariable", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+        ret = [Module.Update(reloader=self.reloader, parent=None, old_object=self, new_object=None)]
+        # ret.extend(super().get_actions_for_update(new_object, ignore_objects))
+        return ret
 
     def _is_ignored(self, name: str) -> bool:
         return name.startswith("__") and name.endswith("__")
@@ -286,14 +339,6 @@ class Module(ContainerObj):
         ret = {}
         for o in self.children.values():
             ret.update(o.flat)
-
-        return ret
-
-    @property
-    def source(self) -> str:
-        ret = inspect.getsource(self.python_obj)
-        for c in self.children.values():
-            ret = ret.replace(c.source, "")
 
         return ret
 
@@ -345,8 +390,7 @@ class PartialReloader:
     module_obj: Any
     cache = Cache()
 
-    def __init__(self, module_obj: Any, source_dirs: List[Path]) -> None:
-        self.source_dirs = source_dirs
+    def __init__(self, module_obj: Any) -> None:
         self.module_obj = module_obj
 
         self.user_modules = self._get_user_modules()
@@ -380,12 +424,12 @@ class PartialReloader:
             ret.extend([str(p) for p in d.glob("*.py")])
         return ret
 
-    def get_dependent_modules(self, module: Module) -> List[Module]:
+    def get_dependent_modules(self, obj: Object) -> List[Module]:
         env = environment.Environment(path=environment.path_from_pythonpath(os.environ["PYTHONPATH"]),
                                       python_version=sys.version_info[0:2])
         g = graph.ImportGraph.create(env, self.source_files)
         all_pred = dict(g.graph.pred)
-        pred = all_pred[module.python_obj.__file__]
+        pred = all_pred[inspect.getmodule(obj.python_obj).__file__]
 
         def flatten(graph_pred) -> List[str]:
             ret = []

@@ -119,30 +119,79 @@ class TestFunctions(TestBase):
         Path("__init__.py").touch()
         carwash_file_module = sandbox / "carwash.py"
         carwash_file_module.touch()
-        carwash_file_module.write_text("""sprinkler_n = 1""")
+        carwash_file_module.write_text(dedent("""
+        sprinkler_n = 1
+        
+        def print_sprinkler():
+            return f"There is {sprinkler_n} sprinkler."
+        """))
 
-        car_file_module = sandbox / "car.py"
-        car_file_module.touch()
-        car_file_module.write_text(
-            dedent(
-                """
-                from carwash import sprinkler_n
-                car_sprinklers = sprinkler_n
-                
-                def clean_car(arg: str) -> None:
-                    return (f"Cleaning car using {car_sprinklers} sprinklers " + arg) 
-                """)
-        )
+        module = import_from_file(carwash_file_module)
+
+        print_sprinkler_id = id(module.print_sprinkler)
+        assert module.sprinkler_n == 1
+
+        carwash_file_module.write_text(dedent(f"""
+        sprinkler_n = 
+
+        def print_sprinkler():
+            return f"There is {{sprinkler_n}} sprinkler."
+        """))
+
+        reloader = PartialReloader(module)
+        actions = reloader.old_module.get_actions(reloader.new_module)
+        assert len(actions) == 5
+
+        actions_str = [repr(a) for a in actions]
+        assert actions_str == ['Update: Module: carwash', 'Update: Module: office', 'Update: Module: accounting', 'Update: Module: car', 'Update: Module: /home/kwazar/Code/opensource/envo/tests/unit/sandbox/main.py']
+
+        reloader.run()
+
+        assert clean_car_fun_id == id(main_module.car.clean_car)
+        assert print_sprinkler_id == id(main_module.carwash.print_sprinkler)
+        assert main_module.carwash.print_sprinkler() == f"There is {i} sprinkler."
+
+        assert fun_from_accounting_id == id(main_module.accounting.fun_from_accounting)
+        assert main_module.car.clean_car("and hi btw") == f"Cleaning car using {i} sprinklers and hi btw"
+        assert main_module.accounting.fun_from_accounting() == f"Calling fun from accounting. There are {i} sprinklers"
+
+        assert main_module.carwash.sprinkler_n == i
+        assert main_module.office.sprinkler_n == i
+        assert main_module.office.how_many_sprinklers == i
+        assert main_module.accounting.how_many_sprinklers == i
+
+    def test_modified_class(self, sandbox):
+        carwash_file_module = sandbox / "carwash.py"
+        carwash_file_module.touch()
+        carwash_file_module.write_text(dedent(
+        """
+        import math
+        
+        class CarwashBase:
+            sprinklers_n: int = 12
+            
+            def print_sprinklers(self) -> str:
+                return f"There are {self.sprinklers_n} sprinklers (Base)."
+        
+        class Carwash(CarwashBase):
+            sprinklers_n: int = 22
+            
+            def print_sprinklers(self) -> str:
+                return f"There are {self.sprinklers_n} sprinklers (Inherited)." 
+        """
+        ))
+
 
         office_file_module = sandbox / "office.py"
         office_file_module.touch()
         office_file_module.write_text(
             dedent(
-        """
-        import carwash
-        from carwash import sprinkler_n
-        how_many_sprinklers = carwash.sprinkler_n
-        """)
+                """
+                import carwash
+                from carwash import Carwash
+                
+                my_carwash = Carwash()
+                """)
         )
 
         accounting_file_module = sandbox / "accounting.py"
@@ -150,10 +199,9 @@ class TestFunctions(TestBase):
         accounting_file_module.write_text(
             dedent(
                 """
-                from office import how_many_sprinklers
-                
-                def fun_from_accounting() -> None:
-                    return (f"Calling fun from accounting. There are {how_many_sprinklers} sprinklers")  
+                from office import my_carwash
+
+                account_carwash = my_carwash 
                 """)
         )
 
@@ -163,60 +211,48 @@ class TestFunctions(TestBase):
             """
             import carwash
             import office
-            import car
             import accounting
             """
         ))
 
         main_module = import_from_file(main_module_file)
-        clean_car_fun_id = id(main_module.car.clean_car)
-        fun_from_accounting_id = id(main_module.accounting.fun_from_accounting)
-        # we have to add it manually since we're importing from file
         sys.modules["main"] = main_module
 
-        assert main_module.carwash.sprinkler_n == 1
-        assert main_module.office.sprinkler_n == 1
-        assert main_module.office.how_many_sprinklers == 1
+        print_sprinklers_id = id(main_module.accounting.account_carwash.print_sprinklers)
 
         # First edit
-        carwash_file_module.write_text("""sprinkler_n = 2""")
+        carwash_file_module.write_text(dedent(
+            """
+            import math
+
+            class CarwashBase:
+                sprinklers_n: int = 55
+
+                def print_sprinklers(self) -> str:
+                    return f"There are {self.sprinklers_n} sprinklers (Base)."
+
+            class Carwash(CarwashBase):
+                sprinklers_n: int = 77
+
+                def print_sprinklers(self) -> str:
+                    return f"There are {self.sprinklers_n} sprinklers (Inherited)." 
+            """
+        ))
 
         reloader = PartialReloader(main_module.carwash, [sandbox])
         actions = reloader.old_module.get_actions(reloader.new_module)
-        assert len(actions) == 7
+        # assert len(actions) == 7
 
-        actions_str = [repr(a) for a in actions]
-        assert actions_str == ['Update: Module: carwash', 'Update: Module: office', 'Update: Module: accounting', 'Update: Function: accounting.fun_from_accounting', 'Update: Module: car', 'Update: Function: car.clean_car', 'Update: Module: /home/kwazar/Code/opensource/envo/tests/unit/sandbox/main.py']
-
-        reloader.run()
-
-        assert clean_car_fun_id == id(main_module.car.clean_car)
-        assert fun_from_accounting_id == id(main_module.accounting.fun_from_accounting)
-        assert main_module.car.clean_car("and hi btw") == "Cleaning car using 2 sprinklers and hi btw"
-        assert main_module.accounting.fun_from_accounting() == "Calling fun from accounting. There are 2 sprinklers"
-
-        assert main_module.carwash.sprinkler_n == 2
-        assert main_module.office.sprinkler_n == 2
-        assert main_module.office.how_many_sprinklers == 2
-        assert main_module.accounting.how_many_sprinklers == 2
-
-        # Second edit
-        carwash_file_module.write_text("""sprinkler_n = 3""")
-
-        actions = reloader.old_module.get_actions(reloader.new_module)
-        assert len(actions) == 7
-
-        actions_str = [repr(a) for a in actions]
-        assert actions_str == ['Update: Module: carwash', 'Update: Module: office', 'Update: Module: accounting', 'Update: Function: accounting.fun_from_accounting', 'Update: Module: car', 'Update: Function: car.clean_car', 'Update: Module: /home/kwazar/Code/opensource/envo/tests/unit/sandbox/main.py']
+        # actions_str = [repr(a) for a in actions]
+        # assert actions_str == ['Update: Module: carwash', 'Update: Module: office', 'Update: Module: accounting',
+        #                        'Update: Function: accounting.fun_from_accounting', 'Update: Module: car',
+        #                        'Update: Function: car.clean_car',
+        #                        'Update: Module: /home/kwazar/Code/opensource/envo/tests/unit/sandbox/main.py']
 
         reloader.run()
 
-        assert clean_car_fun_id == id(main_module.car.clean_car)
-        assert fun_from_accounting_id == id(main_module.accounting.fun_from_accounting)
-        assert main_module.car.clean_car("and hi btw") == "Cleaning car using 3 sprinklers and hi btw"
-        assert main_module.accounting.fun_from_accounting() == "Calling fun from accounting. There are 3 sprinklers"
+        assert main_module.carwash.CarwashBase.sprinklers_n == 55
+        assert main_module.carwash.Carwash.sprinklers_n == 77
+        assert main_module.office.my_carwash.sprinklers_n == 77
+        assert main_module.accounting.account_carwash.sprinklers_n == 77
 
-        assert main_module.carwash.sprinkler_n == 3
-        assert main_module.office.sprinkler_n == 3
-        assert main_module.office.how_many_sprinklers == 3
-        assert main_module.accounting.how_many_sprinklers == 3
