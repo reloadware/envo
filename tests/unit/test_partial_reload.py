@@ -3,12 +3,24 @@ import os
 import sys
 from pathlib import Path
 from textwrap import dedent
+from typing import List, Any
 
 import pytest
 
 from envo.misc import import_from_file
-from envo.partial_reloader import PartialReloader
+from envo.partial_reloader import PartialReloader, Action
 from tests.unit import utils
+
+
+def assert_actions(reloader: PartialReloader, actions_names: List[str]) -> None:
+    actions_str = [repr(a) for a in reloader.old_module.get_actions(reloader.new_module)]
+    assert actions_str == actions_names
+
+
+def load_module(path: Path) -> Any:
+    module = import_from_file(path)
+    module.__name__ = "module"
+    return module
 
 
 class TestBase:
@@ -21,17 +33,17 @@ class TestFunctions(TestBase):
     def test_added_function(self, sandbox):
         module_file = sandbox / "module.py"
         module_file.touch()
-        source ="""
+        source = """
         import math
         
-        global_var = [1, 2, 3]
+        global_var = 2
         
         def fun(arg1: str, arg2: str) -> str:
             return f"{arg1}_{arg2}_{id(global_var)}"
         """
         module_file.write_text(dedent(source))
 
-        module = import_from_file(module_file)
+        module = load_module(module_file)
 
         utils.add_function(
             """
@@ -41,9 +53,9 @@ class TestFunctions(TestBase):
             module_file
         )
 
-        reloader = PartialReloader(module, source_dirs=[sandbox])
-        actions = reloader.old_module.get_actions(reloader.new_module)
-        assert len(actions) == 1
+        reloader = PartialReloader(module)
+        assert_actions(reloader, ['Add: Function: module.fun2', 'Update: GlobalVariable: module.global_var'])
+
         reloader.run()
 
         assert "fun" in  module.__dict__
@@ -57,29 +69,28 @@ class TestFunctions(TestBase):
         source = """
         import math
 
-        global_var = [1, 2, 3]
+        global_var = 2
 
         def fun(arg1: str, arg2: str) -> str:
             return f"{arg1}_{arg2}_{id(global_var)}"
         """
         module_file.write_text(dedent(source))
+        module = load_module(module_file)
 
-        module = import_from_file(module_file)
         fun_id_before = id(module.fun)
 
         new_source = """
         import math
 
-        global_var = [1, 2, 3]
+        global_var = 2
 
         def fun(arg1: str) -> str:
             return f"{arg1}_{id(global_var)}"
         """
         module_file.write_text(dedent(new_source))
 
-        reloader = PartialReloader(module, source_dirs=[sandbox])
-        actions = reloader.old_module.get_actions(reloader.new_module)
-        assert len(actions) == 1
+        reloader = PartialReloader(module)
+        assert_actions(reloader, ['Update: GlobalVariable: module.global_var', 'Update: Function: module.fun'])
         reloader.run()
 
         assert "fun" in module.__dict__
@@ -97,16 +108,18 @@ class TestFunctions(TestBase):
         """
         module_file.write_text(dedent(source))
 
-        module = import_from_file(module_file)
+        module = load_module(module_file)
         new_source = """
         global_var1 = 1
         global_var2 = 2
         """
         module_file.write_text(dedent(new_source))
 
-        reloader = PartialReloader(module, source_dirs=[sandbox])
-        actions = reloader.old_module.get_actions(reloader.new_module)
-        assert len(actions) == 1
+        reloader = PartialReloader(module)
+        assert_actions(reloader,
+                       ['Add: GlobalVariable: module.global_var2',
+                        'Update: GlobalVariable: module.global_var1']
+                       )
         reloader.run()
 
         assert "global_var1" in module.__dict__
@@ -117,53 +130,59 @@ class TestFunctions(TestBase):
 
     def test_modified_global_var(self, sandbox):
         Path("__init__.py").touch()
-        carwash_file_module = sandbox / "carwash.py"
-        carwash_file_module.touch()
-        carwash_file_module.write_text(dedent("""
+        module_file = sandbox / "module.py"
+        module_file.touch()
+        module_file.write_text(dedent("""
         sprinkler_n = 1
-        
+
+        def some_fun():
+            return "Some Fun"
+
+        sample_dict = {
+            "sprinkler_n_plus_1": sprinkler_n + 1,
+            "sprinkler_n_plus_2": sprinkler_n + 2,
+            "lambda_fun": lambda x: sprinkler_n + x,
+            "fun": some_fun 
+        }
+
         def print_sprinkler():
-            return f"There is {sprinkler_n} sprinkler."
+            return f"There is {sprinkler_n} sprinkler. ({sample_dict['sprinkler_n_plus_1']}, {sample_dict['sprinkler_n_plus_2']})"
+            
+        class Car:
+            car_sprinkler_n = sprinkler_n 
+        
         """))
 
-        module = import_from_file(carwash_file_module)
+        module = load_module(module_file)
 
         print_sprinkler_id = id(module.print_sprinkler)
+        lambda_fun_id = id(module.sample_dict["lambda_fun"])
+        some_fun_id = id(module.some_fun)
         assert module.sprinkler_n == 1
 
-        carwash_file_module.write_text(dedent(f"""
-        sprinkler_n = 
-
-        def print_sprinkler():
-            return f"There is {{sprinkler_n}} sprinkler."
-        """))
+        utils.replace_in_code("sprinkler_n = 1", "sprinkler_n = 2", module_file)
 
         reloader = PartialReloader(module)
-        actions = reloader.old_module.get_actions(reloader.new_module)
-        assert len(actions) == 5
-
-        actions_str = [repr(a) for a in actions]
-        assert actions_str == ['Update: Module: carwash', 'Update: Module: office', 'Update: Module: accounting', 'Update: Module: car', 'Update: Module: /home/kwazar/Code/opensource/envo/tests/unit/sandbox/main.py']
+        assert_actions(reloader,
+                       ['Update: GlobalVariable: module.sprinkler_n',
+                        'Update: DictionaryItem: module.sample_dict.sprinkler_n_plus_1',
+                        'Update: DictionaryItem: module.sample_dict.sprinkler_n_plus_2',
+                        'Update: GlobalVariable: module.Car.car_sprinkler_n']
+                       )
 
         reloader.run()
 
-        assert clean_car_fun_id == id(main_module.car.clean_car)
-        assert print_sprinkler_id == id(main_module.carwash.print_sprinkler)
-        assert main_module.carwash.print_sprinkler() == f"There is {i} sprinkler."
+        assert print_sprinkler_id == id(module.print_sprinkler)
+        assert module.Car.car_sprinkler_n == 2
+        assert lambda_fun_id == id(module.sample_dict["lambda_fun"])
+        assert some_fun_id == id(module.some_fun)
+        assert module.sample_dict == {'sprinkler_n_plus_1': 3, 'sprinkler_n_plus_2': 4,
+                                      "lambda_fun": module.sample_dict["lambda_fun"], "fun": module.some_fun}
 
-        assert fun_from_accounting_id == id(main_module.accounting.fun_from_accounting)
-        assert main_module.car.clean_car("and hi btw") == f"Cleaning car using {i} sprinklers and hi btw"
-        assert main_module.accounting.fun_from_accounting() == f"Calling fun from accounting. There are {i} sprinklers"
-
-        assert main_module.carwash.sprinkler_n == i
-        assert main_module.office.sprinkler_n == i
-        assert main_module.office.how_many_sprinklers == i
-        assert main_module.accounting.how_many_sprinklers == i
-
-    def test_modified_class(self, sandbox):
-        carwash_file_module = sandbox / "carwash.py"
-        carwash_file_module.touch()
-        carwash_file_module.write_text(dedent(
+    def test_modified_class_attr(self, sandbox):
+        module_file = sandbox / "module.py"
+        module_file.touch()
+        module_file.write_text(dedent(
         """
         import math
         
@@ -177,51 +196,16 @@ class TestFunctions(TestBase):
             sprinklers_n: int = 22
             
             def print_sprinklers(self) -> str:
-                return f"There are {self.sprinklers_n} sprinklers (Inherited)." 
+                return f"There are {self.sprinklers_n} sprinklers (Inherited)."
         """
+
         ))
 
-
-        office_file_module = sandbox / "office.py"
-        office_file_module.touch()
-        office_file_module.write_text(
-            dedent(
-                """
-                import carwash
-                from carwash import Carwash
-                
-                my_carwash = Carwash()
-                """)
-        )
-
-        accounting_file_module = sandbox / "accounting.py"
-        accounting_file_module.touch()
-        accounting_file_module.write_text(
-            dedent(
-                """
-                from office import my_carwash
-
-                account_carwash = my_carwash 
-                """)
-        )
-
-        main_module_file = sandbox / "main.py"
-        main_module_file.touch()
-        main_module_file.write_text(dedent(
-            """
-            import carwash
-            import office
-            import accounting
-            """
-        ))
-
-        main_module = import_from_file(main_module_file)
-        sys.modules["main"] = main_module
-
-        print_sprinklers_id = id(main_module.accounting.account_carwash.print_sprinklers)
+        module = load_module(module_file)
+        print_sprinklers_id = id(module.CarwashBase.print_sprinklers)
 
         # First edit
-        carwash_file_module.write_text(dedent(
+        module_file.write_text(dedent(
             """
             import math
 
@@ -239,20 +223,85 @@ class TestFunctions(TestBase):
             """
         ))
 
-        reloader = PartialReloader(main_module.carwash, [sandbox])
-        actions = reloader.old_module.get_actions(reloader.new_module)
-        # assert len(actions) == 7
-
-        # actions_str = [repr(a) for a in actions]
-        # assert actions_str == ['Update: Module: carwash', 'Update: Module: office', 'Update: Module: accounting',
-        #                        'Update: Function: accounting.fun_from_accounting', 'Update: Module: car',
-        #                        'Update: Function: car.clean_car',
-        #                        'Update: Module: /home/kwazar/Code/opensource/envo/tests/unit/sandbox/main.py']
-
+        reloader = PartialReloader(module)
+        assert_actions(reloader, ['Update: GlobalVariable: module.CarwashBase.sprinklers_n',
+ 'Update: GlobalVariable: module.Carwash.sprinklers_n'])
         reloader.run()
 
-        assert main_module.carwash.CarwashBase.sprinklers_n == 55
-        assert main_module.carwash.Carwash.sprinklers_n == 77
-        assert main_module.office.my_carwash.sprinklers_n == 77
-        assert main_module.accounting.account_carwash.sprinklers_n == 77
+        assert module.CarwashBase.sprinklers_n == 55
+        assert module.Carwash.sprinklers_n == 77
+        assert print_sprinklers_id == id(module.CarwashBase.print_sprinklers)
 
+    def test_modified_method(self, sandbox):
+        module_file = sandbox / "module.py"
+        module_file.touch()
+        module_file.write_text(dedent(
+            """
+            class Carwash:
+                @classmethod
+                def print_sprinklers_cls(cls) -> str:
+                    return f"There is one sprinkler (Cls)."
+                    
+                def print_sprinklers(self) -> str:
+                    return f"There is one sprinkler."
+            """
+
+        ))
+
+        module = load_module(module_file)
+        reffered_print_sprinklers_cls = module.Carwash.print_sprinklers_cls
+        assert module.Carwash.print_sprinklers_cls() == "There is one sprinkler (Cls)."
+        assert reffered_print_sprinklers_cls() == "There is one sprinkler (Cls)."
+        assert module.Carwash().print_sprinklers() == "There is one sprinkler."
+
+        print_sprinklers_id = id(module.Carwash.print_sprinklers)
+
+        # First edit
+        module_file.write_text(dedent(
+            """
+            class Carwash:
+                @classmethod
+                def print_sprinklers_cls(cls) -> str:
+                    return f"There are 5 sprinklers (Cls)."
+                    
+                def print_sprinklers(self) -> str:
+                    return f"There are 5 sprinklers." 
+            """
+        ))
+
+        reloader = PartialReloader(module)
+        assert_actions(reloader, ['Update: Method: module.Carwash.print_sprinklers_cls',
+                                  'Update: Function: module.Carwash.print_sprinklers'])
+        reloader.run()
+
+        assert module.Carwash.print_sprinklers_cls() == "There are 5 sprinklers (Cls)."
+        assert reffered_print_sprinklers_cls() == "There are 5 sprinklers (Cls)."
+        assert module.Carwash().print_sprinklers() == "There are 5 sprinklers."
+        assert print_sprinklers_id == id(module.Carwash.print_sprinklers)
+
+    def test_added_method(self, sandbox):
+        module_file = sandbox / "module.py"
+        module_file.touch()
+        module_file.write_text(dedent(
+            """
+            class Carwash:
+                pass
+            """
+
+        ))
+
+        module = load_module(module_file)
+
+        module_file.write_text(dedent(
+            """
+            class Carwash:
+                def print_sprinklers(self) -> str:
+                    return f"There are 5 sprinklers." 
+            """
+        ))
+
+        reloader = PartialReloader(module)
+        assert_actions(reloader, ['Add: Function: module.Carwash.print_sprinklers'])
+        reloader.run()
+
+        assert module.Carwash().print_sprinklers() == "There are 5 sprinklers."

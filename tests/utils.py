@@ -195,6 +195,12 @@ def add_boot(
     )
 
 
+def add_on_partial_reload(
+    code: str, file=Path("env_test.py")
+) -> None:
+    add_command(code, file)
+
+
 def add_plugins(name: str, file=Path("env_test.py")) -> None:
     replace_in_code(
         "plugins: List[Plugin] = []", f"plugins: List[Plugin] = [{name}]", file=file

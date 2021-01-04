@@ -2,9 +2,11 @@ import builtins
 import gc
 import inspect
 import os
+import re
 import sys
 from copy import copy
 from pathlib import Path
+from textwrap import dedent
 from types import ModuleType, FunctionType
 from typing import Any, List, Callable, Type, Dict, Optional, Set
 
@@ -19,14 +21,19 @@ from importlab import environment
 dataclass = dataclass(repr=False)
 
 
+class LoadError(Exception):
+    pass
+
+
 @dataclass
 class Object:
     python_obj: Any
     reloader: "PartialReloader"
     name: str = ""
-    parent: Optional["Object"] = None
+    module: Optional["Module"] = None
+    parent: Optional["ContainerObj"] = None
 
-    def get_actions_for_update(self, new_object: "Function", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Object", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
         raise NotImplementedError()
 
     @classmethod
@@ -45,12 +52,14 @@ class Object:
         return {self.full_name: self}
 
     def _is_ignored(self, name: str) -> bool:
-        return name in ["__module__", "__annotations__", "__doc__", "__weakref__"]
+        return name in ["__module__", "__annotations__", "__doc__", "__weakref__", "__dict__"]
 
     @property
     def source(self) -> str:
         try:
-            return inspect.getsource(self.python_obj)
+            ret = inspect.getsource(self.python_obj)
+            ret = dedent(ret)
+            return ret
         except (TypeError, OSError):
             return ""
 
@@ -133,22 +142,24 @@ class FinalObj(Object):
 class Function(FinalObj):
     class Add(Add):
         def execute(self) -> None:
-            exec(self.object.source, self.parent.python_obj.__dict__)
+            setattr(self.parent.python_obj, self.object.name, self.object.python_obj)
 
     class Update(Update):
-        def execute(self) -> None:
-            old_fun = self.old_object.python_obj
-            exec(self.new_object.source, self.old_object.parent.python_obj.__dict__)
+        old_object: "Function"
+        new_object: Optional["Function"]
 
-            old_fun.__code__ = self.old_object.parent.python_obj.__dict__[self.old_object.name].__code__
-            self.old_object.parent.python_obj.__dict__[self.old_object.name] = old_fun
+        def execute(self) -> None:
+            self.old_object.get_func(self.old_object.python_obj).__code__ = self.new_object.get_func(self.new_object.python_obj).__code__
 
     def get_actions_for_update(self, new_object: "Function", ignore_objects: Optional[List[Object]] = None) -> List["Action"]:
-        return [Function.Update(reloader=self.reloader, parent=self.parent, old_object=self, new_object=new_object)]
+        if self != new_object:
+            return [self.Update(reloader=self.reloader, parent=self.parent, old_object=self, new_object=new_object)]
+        else:
+            return []
 
     @classmethod
     def get_actions_for_add(cls, reloader: "PartialReloader", parent: "Object", obj: "Object") -> List["Action"]:
-        return [Function.Add(reloader=reloader, parent=parent, object=obj)]
+        return [cls.Add(reloader=reloader, parent=parent, object=obj)]
 
     def get_actions_for_delete(self) -> List["Action"]:
         raise NotImplementedError()
@@ -157,15 +168,40 @@ class Function(FinalObj):
         if self.python_obj.__class__ is not other.python_obj.__class__:
             return False
 
-        ret = self.python_obj.__code__ == other.python_obj.__code__
+        ret = self.get_func(self.python_obj).__code__ == self.get_func(other.python_obj).__code__
         return ret
 
     def __ne__(self, other: "Object") -> bool:
         if self.python_obj.__class__ is not other.python_obj.__class__:
             return True
 
-        ret = self.python_obj.__code__ != other.python_obj.__code__
+        ret = self.get_func(self.python_obj).__code__ != self.get_func(other.python_obj).__code__
         return ret
+
+    @property
+    def source(self) -> str:
+        try:
+            ret = inspect.getsource(self.get_func(self.python_obj))
+            ret = dedent(ret)
+        except (TypeError, OSError):
+            return ""
+
+        if isinstance(self.parent, Dictionary) and self.python_obj.__name__ == "<lambda>":
+            ret = ret[ret.find(":")+1:]
+            ret = dedent(ret)
+
+        return ret
+
+    @classmethod
+    def get_func(cls, obj: Any) -> Any:
+        return obj
+
+
+@dataclass
+class Method(Function):
+    @classmethod
+    def get_func(cls, obj: Any) -> Any:
+        return obj.__func__
 
 
 @dataclass
@@ -193,13 +229,22 @@ class ContainerObj(Object):
     def __post_init__(self) -> None:
         self._collect_objs()
 
+    def get_dict(self) -> Dict[str, Any]:
+        raise NotImplementedError()
+
     def _collect_objs(self) -> None:
-        for n, o in self.python_obj.__dict__.items():
+        for n, o in self.get_dict().items():
             if self._is_ignored(n):
                 continue
 
+            if hasattr(o, "__module__") and o.__module__:
+                if self.module.name not in o.__module__.replace(".py", "").replace("/", ".").replace("\\", "."):
+                    continue
+
             Cls: Type[Object]
-            if inspect.isfunction(o):
+            if inspect.ismethod(o) or inspect.ismethoddescriptor(o):
+                Cls = Method
+            elif inspect.isfunction(o):
                 Cls = Function
             elif inspect.isclass(o):
                 Cls = Class
@@ -207,10 +252,12 @@ class ContainerObj(Object):
                 Cls = Dictionary
             elif inspect.ismodule(o):
                 Cls = Import
+            elif isinstance(self, Dictionary):
+                Cls = DictionaryItem
             else:
                 Cls = GlobalVariable
 
-            self.children[n] = Cls(o,parent=self, name=n, reloader=self.reloader)
+            self.children[n] = Cls(o,parent=self, name=n, reloader=self.reloader, module=self.module)
 
     @property
     def flat(self) -> Dict[str, Object]:
@@ -237,50 +284,25 @@ class ContainerObj(Object):
 
 @dataclass
 class Class(ContainerObj):
-    class Update(Update):
-        def execute(self) -> None:
-            ignore_fields = ["__module__", "__annotations__", "__doc__", "__weakref__", "__dict__"]
-
-            context = self.parent.python_obj.__dict__
-            exec(self.old_object.source, context)
-            new_obj = context[self.old_object.name]
-            for k, v in new_obj.__dict__.items():
-                if k in ignore_fields:
-                    continue
-
-                if getattr(self.old_object.python_obj, k) == v:
-                    continue
-                setattr(self.old_object.python_obj, k, v)
-            pass
-
     def get_actions_for_update(self, new_object: "Class", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
-        return [Class.Update(reloader=self.reloader, parent=self.parent, old_object=self, new_object=None)]
+        return []
+
+    def get_dict(self) -> Dict[str, Any]:
+        ret = dict(self.python_obj.__dict__)
+        return ret
 
 
 @dataclass
-class Dictionary(FinalObj):
+class Dictionary(ContainerObj):
     class Add(Add):
         def execute(self) -> None:
-            exec(self.object.source, self.parent.python_obj.__dict__)
-
-    class Update(Update):
-        def execute(self) -> None:
-            to_delete = self.old_object.python_obj.keys() - self.new_object.python_obj.keys()
-            to_add = self.new_object.python_obj.keys() - self.old_object.python_obj.keys()
-            to_update = self.new_object.python_obj.keys() & self.old_object.python_obj.keys()
-
-            for k in to_delete:
-                self.old_object.python_obj.pop(k)
-
-            for k in to_add:
-                self.python_obj.old_object[k] = copy(self.python_obj.new_object[k])
-
-            for k in to_update:
-                if self.python_obj.old_object[k] != self.python_obj.new_object[k]:
-                    self.python_obj.old_object[k] = copy(self.python_obj.new_object[k])
+            setattr(self.parent.python_obj, self.object.name, self.object)
 
     def get_actions_for_update(self, new_object: "Class", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
-        return [Dictionary.Update(reloader=self.reloader, parent=self.parent, old_object=self, new_object=new_object)]
+        return []
+
+    def get_dict(self) -> Dict[str, Any]:
+        return self.python_obj
 
 
 @dataclass
@@ -289,10 +311,12 @@ class GlobalVariable(FinalObj):
         def execute(self) -> None:
             self.parent.python_obj.__dict__[self.object.name] = copy(self.object.python_obj)
 
-    def get_actions_for_update(self, new_object: "GlobalVariable", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
-        assert isinstance(self.parent, ContainerObj)
+    class Update(Update):
+        def execute(self) -> None:
+            setattr(self.old_object.parent.python_obj, self.old_object.name, self.new_object.python_obj)
 
-        ret = [self.parent.get_actions_for_update(new_object, ignore_objects=[self]+ignore_objects)]
+    def get_actions_for_update(self, new_object: "GlobalVariable", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+        ret = [self.Update(reloader=self.reloader, parent=self.parent, old_object=self, new_object=new_object)]
         return ret
 
     @classmethod
@@ -304,19 +328,52 @@ class GlobalVariable(FinalObj):
 
 
 @dataclass
+class DictionaryItem(FinalObj):
+    class Add(Add):
+        def execute(self) -> None:
+            self.parent.python_obj[self.object.name] = copy(self.object.python_obj)
+
+    class Update(Update):
+        def execute(self) -> None:
+            self.old_object.parent.python_obj[self.new_object.name] = self.new_object.python_obj
+
+    def get_actions_for_update(self, new_object: "GlobalVariable", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+        return [DictionaryItem.Update(reloader=self.reloader, parent=self.parent, old_object=self, new_object=new_object)]
+
+    @classmethod
+    def get_actions_for_add(cls, reloader: "PartialReloader", parent: "Object", obj: "Object") -> List["Action"]:
+        return [GlobalVariable.Add(reloader=reloader, parent=parent, object=obj)]
+
+
+@dataclass
 class Import(FinalObj):
-    pass
+    class Add(Add):
+        def execute(self) -> None:
+            self.parent.python_obj[self.object.name] = copy(self.object.python_obj)
+
+    def get_actions_for_update(self, new_object: "GlobalVariable", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+        return []
+
+    @classmethod
+    def get_actions_for_add(cls, reloader: "PartialReloader", parent: "Object", obj: "Object") -> List["Action"]:
+        return [Import.Add(reloader=reloader, parent=parent, object=obj)]
 
 
 @dataclass
 class Module(ContainerObj):
     class Update(Update):
         def execute(self) -> None:
-            exec(self.old_object.source, self.old_object.python_obj.__dict__)
+            pass
+
+    def __post_init__(self) -> None:
+        self.module = self
+        super().__post_init__()
+
+    def get_dict(self) -> Dict[str, Any]:
+        return self.python_obj.__dict__
 
     def get_actions_for_update(self, new_object: "GlobalVariable", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
-        ret = [Module.Update(reloader=self.reloader, parent=None, old_object=self, new_object=None)]
-        # ret.extend(super().get_actions_for_update(new_object, ignore_objects))
+        ret = []
         return ret
 
     def _is_ignored(self, name: str) -> bool:
@@ -336,7 +393,7 @@ class Module(ContainerObj):
 
     @property
     def flat(self) -> Dict[str, Object]:
-        ret = {}
+        ret = {self.name: self}
         for o in self.children.values():
             ret.update(o.flat)
 
@@ -350,106 +407,36 @@ class Module(ContainerObj):
         new_objects_names = b.keys() - a.keys()
         new_objects = {n: b[n] for n in new_objects_names}
         for o in new_objects.values():
-            ret.extend(o.get_actions_for_add(reloader=self.reloader, parent=self, obj=o))
+            parent = a[o.parent.full_name]
+            ret.extend(o.get_actions_for_add(reloader=self.reloader, parent=parent, obj=o))
 
         # deleted_objects_names = a.keys() - b.keys()
         # deleted_objects = {n: a[n] for n in deleted_objects_names}
         # ret.extend([Deleted(reloader=self.reloader) for o in deleted_objects.values()])
 
         for n, o in a.items():
-            if o != b[n]:
-                ret.extend(o.get_actions_for_update(new_object=b[n]))
+            ret.extend(o.get_actions_for_update(new_object=b[n]))
 
         ret = sorted(ret, key=lambda x: x.priority, reverse=True)
 
         return ret
 
-    def apply_actions(self, obj: Object) -> None:
+    def apply_actions(self, obj: Object) -> List[Action]:
         actions = self.get_actions(obj)
         for a in actions:
             a.execute()
+
+        return actions
 
     def __repr__(self) -> str:
         return f"Module: {self.python_obj.__name__}"
 
 
-class Cache:
-    non_user_modules: Set[str] = []
-
-    def init(self, reloader: "PartialReloader") -> None:
-        if self.non_user_modules:
-            return
-
-        user_modules = reloader.user_modules
-        user_modules_objs = [m.python_obj for m in user_modules.values()]
-
-        self.non_user_modules = set(n for n, m in sys.modules.items() if m not in user_modules_objs)
-
-
 class PartialReloader:
     module_obj: Any
-    cache = Cache()
 
     def __init__(self, module_obj: Any) -> None:
         self.module_obj = module_obj
-
-        self.user_modules = self._get_user_modules()
-
-        self.cache.init(self)
-
-    def _is_user_module(self, module: Any):
-        if not hasattr(module, "__file__"):
-            return False
-
-        ret = any(p in Path(module.__file__).parents for p in self.source_dirs)
-        return ret
-
-    def _get_user_modules(self) -> Dict[str, Module]:
-        ret = {}
-
-        modules_to_search = sys.modules.keys() - self.cache.non_user_modules
-
-        for n in modules_to_search:
-            m = sys.modules[n]
-            if not self._is_user_module(m):
-                continue
-            ret[m.__file__] = Module(m, reloader=self, name=n)
-
-        return ret
-
-    @property
-    def source_files(self) -> List[str]:
-        ret = []
-        for d in self.source_dirs:
-            ret.extend([str(p) for p in d.glob("*.py")])
-        return ret
-
-    def get_dependent_modules(self, obj: Object) -> List[Module]:
-        env = environment.Environment(path=environment.path_from_pythonpath(os.environ["PYTHONPATH"]),
-                                      python_version=sys.version_info[0:2])
-        g = graph.ImportGraph.create(env, self.source_files)
-        all_pred = dict(g.graph.pred)
-        pred = all_pred[inspect.getmodule(obj.python_obj).__file__]
-
-        def flatten(graph_pred) -> List[str]:
-            ret = []
-
-            for p in graph_pred:
-                ret.append(p)
-                ret.extend(flatten(all_pred[p]))
-
-            # remove duplicates
-            for p in set(ret):
-                while ret.count(p) > 1:
-                    ret.remove(p)
-
-            return ret
-
-        flat_graph = flatten(pred)
-        user_modules = self.user_modules
-
-        modules = [user_modules[m] for m in flat_graph]
-        return modules
 
     @property
     def old_module(self) -> Module:
@@ -461,7 +448,7 @@ class PartialReloader:
         ret = Module(import_from_file(self.module_obj.__file__), reloader=self, name=f"{self.module_obj.__name__}")
         return ret
 
-    def run(self) -> bool:
+    def run(self) -> List[Action]:
         """
         :return: True if succeded False i unable to reload
         """
@@ -469,5 +456,5 @@ class PartialReloader:
         old_module = self.old_module
         new_module = self.new_module
 
-        old_module.apply_actions(new_module)
-        pass
+        actions = old_module.apply_actions(new_module)
+        return actions

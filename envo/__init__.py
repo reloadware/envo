@@ -2,6 +2,13 @@ import warnings
 
 warnings.warn = lambda *args, **kwargs: None
 
+from rich.traceback import install
+from rich.console import Console
+install()
+
+console = Console()
+
+
 from . import e2e  # noqa F401
 from .logging import logger  # noqa F401
 from .devops import *  # noqa F401

@@ -2,6 +2,7 @@ import inspect
 import os
 import re
 import sys
+import traceback
 import types
 from collections import OrderedDict
 from copy import copy
@@ -22,8 +23,8 @@ from typing import (
     TypeVar,
     Union,
 )
+from envo import console
 
-import fire
 from rhei import Stopwatch
 from watchdog import events
 from watchdog.events import FileModifiedEvent
@@ -45,6 +46,7 @@ __all__ = [
     "onstderr",
     "oncreate",
     "onload",
+    "on_partial_reload",
     "onunload",
     "ondestroy",
     "boot_code",
@@ -52,7 +54,7 @@ __all__ = [
     "Source"
 ]
 
-
+from envo.partial_reloader import PartialReloader, Action, LoadError
 
 T = TypeVar("T")
 
@@ -60,7 +62,7 @@ T = TypeVar("T")
 if TYPE_CHECKING:
     Raw = Union[T]
     from envo import Plugin
-    from envo.shell import Shell
+    from envo.shell import Shell, FancyShell
     from envo.scripts import Status
 else:
 
@@ -246,6 +248,11 @@ class onunload(event):  # noqa: N801
     type: str = "onunload"
 
 
+class on_partial_reload(event):  # noqa: N801
+    type: str = "on_partial_reload"
+    expected_fun_args = ["file", "actions"]
+
+
 @dataclass
 class Hook(MagicFunction):
     cmd_regex: str = field(init=False, default=None)
@@ -298,6 +305,7 @@ magic_functions = {
     "precmd": precmd,
     "onstdout": onstdout,
     "onstderr": onstderr,
+    "on_partial_reload": on_partial_reload,
 }
 
 
@@ -312,6 +320,7 @@ class Namespace:
     precmd: Type[precmd]
     onstdout: Type[onstdout]
     onstderr: Type[onstderr]
+    on_partial_reload: Type[on_partial_reload]
 
     def __init__(self, name: str) -> None:
         self._name = name
@@ -367,9 +376,11 @@ class Source:
 class Reloader:
     @dataclass
     class Callbacks:
-        on_partial_reload: Callback
-        on_full_reload: Callback
+        on_reload_start: Callback
+        after_partial_reload: Callback
+        after_full_reload: Callback
         on_env_edit: Callback
+        on_load_error: Callback
 
     @dataclass
     class Sets:
@@ -379,6 +390,7 @@ class Reloader:
     class Links:
         env: "Env"
         status: "Status"
+        logger: "Logger"
 
     _env_watchers: List[FilesWatcher]
     _source_watchers: List[FilesWatcher]
@@ -405,12 +417,26 @@ class Reloader:
             sys.modules.pop(p)
 
     def _on_source_edit(self, event: FileModifiedEvent) -> None:
-        self._unload_modules()
-        self.calls.on_full_reload()
+        module = next((m for m in sys.modules.values() if hasattr(m, "__file__") and m.__file__ == event.src_path), None)
+
+        if not module:
+            return
+
+        reloader = PartialReloader(module)
+        self.li.logger.info(f"Detected changes in {event.src_path}")
+
+        try:
+            self.calls.on_reload_start()
+            actions = reloader.run()
+            self.calls.after_partial_reload(Path(event.src_path), actions)
+        except NotImplementedError:
+            self._unload_modules()
+            self.calls.after_full_reload()
+        except BaseException as e:
+            self.calls.on_load_error(e)
 
         for fw in self._source_watchers:
             fw.flush()
-        pass
 
     @property
     def _all_watchers(self) -> List[FilesWatcher]:
@@ -660,7 +686,7 @@ class Env(EnvoEnv):
 
     @dataclass
     class Links:
-        shell: Optional["Shell"]
+        shell: Optional["FancyShell"]
         status: "Status"
 
     @dataclass
@@ -729,6 +755,7 @@ class Env(EnvoEnv):
         self._magic_functions["onunload"]: Dict[str, MagicFunction] = {}
         self._magic_functions["boot_code"]: Dict[str, MagicFunction] = {}
         self._magic_functions["command"]: Dict[str, Command] = {}
+        self._magic_functions["on_partial_reload"]: Dict[str, MagicFunction] = {}
 
         self._collect_magic_functions()
 
@@ -745,11 +772,13 @@ class Env(EnvoEnv):
         self._reloader = None
 
         if self._se.reloader_enabled:
-            self._reloader = Reloader(li=Reloader.Links(env=self, status=self._li.status),
+            self._reloader = Reloader(li=Reloader.Links(env=self, status=self._li.status, logger=self.logger),
                                       se=Reloader.Sets(extra_watchers=se.extra_watchers),
-                                      calls=Reloader.Callbacks(on_partial_reload=Callback(self._on_partial_reload),
-                                                               on_full_reload=Callback(self._on_full_reload),
-                                                               on_env_edit=Callback(self._on_env_edit)))
+                                      calls=Reloader.Callbacks(on_reload_start=Callback(self._on_reload_start),
+                                          after_partial_reload=Callback(self._after_partial_reload),
+                                                               after_full_reload=Callback(self._after_full_reload),
+                                                               on_env_edit=Callback(self._on_env_edit),
+                                                               on_load_error=Callback(self._on_load_error)))
 
     def _add_sources_to_syspath(self) -> None:
         for p in reversed(self.meta.sources):
@@ -764,11 +793,41 @@ class Env(EnvoEnv):
         if errors:
             raise EnvoError("\n".join(errors))
 
-    def _on_partial_reload(self) -> None:
-        pass
+    def _on_reload_start(self) -> None:
+        self.logger.info("Running reload, trying partial first")
+        self._li.status.source_ready = False
 
-    def _on_full_reload(self) -> None:
+    def _after_partial_reload(self, file: Path, actions: List[Action]) -> None:
+        if not actions:
+            self.logger.info(f"No actions to apply")
+        else:
+            self.logger.debug(f"Partial reload actions: {actions}", metadata={"type": "partial_reload"})
+
+        on_reloads = self._magic_functions["on_partial_reload"]
+        for f in on_reloads.values():
+            f(file, actions)
+
+        self._li.status.source_ready = True
+
+    def _after_full_reload(self) -> None:
         self._run_boot_codes()
+        self._li.status.source_ready = True
+        self.logger.debug(f"Applied full reload")
+
+    def _on_load_error(self, error: LoadError) -> None:
+        from rich.traceback import Traceback
+        exc_type, exc_value, traceback = sys.exc_info()
+        trace = Traceback.extract(exc_type, exc_value, traceback)
+        trace.stacks[0].frames = trace.stacks[0].frames[-1:]
+        traceback_obj = Traceback(
+            trace=trace,
+            width=200,
+        )
+        # self._li.shell.prompter.app.invalidate()
+        console.print("")
+        console.print(traceback_obj)
+        self._li.shell.redraw()
+        self._li.status.source_ready = True
 
     def _get_errors(self) -> List[str]:
         """
@@ -827,6 +886,9 @@ class Env(EnvoEnv):
         Return env name
         """
         return self._name
+
+    def redraw_prompt(self) -> None:
+        self._li.shell.redraw()
 
     @classmethod
     def fields(cls, obj: Any, namespace: Optional[str] = None) -> Dict[str, Field]:

@@ -35,6 +35,7 @@ from tests.utils import change_file  # noqa F401
 from tests.utils import clean_output  # noqa F401
 from tests.utils import replace_in_code  # noqa F401
 from tests.utils import run  # noqa F401
+from tests.utils import add_on_partial_reload  # noqa F401
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
@@ -247,6 +248,35 @@ class SpawnEnvo:
                 if len(msgs) == number and re.findall(
                     path, str(msgs[-1].metadata["path"].replace("\\", "/"))
                 ):
+                    break
+
+                if passed_time >= timeout:
+                    raise ReloadTimeout
+
+            cls.wait_until_ready()
+
+        @classmethod
+        def assert_partially_reloaded(
+                cls, number: int = 1, timeout=3
+        ) -> None:
+            from time import sleep
+
+            from envo import logger, logging
+            from envo.e2e import ReloadTimeout
+
+            passed_time = 0.0
+            sleep_time = 0.05
+            while True:
+                sleep(sleep_time)
+                passed_time += sleep_time
+
+                msgs = logger.get_msgs(
+                    filter=logging.MsgFilter(metadata_re={"type": r"partial_reload"})
+                )
+                if number == 0 and len(msgs) == 0:
+                    break
+
+                if len(msgs) == number:
                     break
 
                 if passed_time >= timeout:

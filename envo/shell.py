@@ -343,6 +343,10 @@ class FancyShell(Shell, PromptToolkitShell):  # type: ignore
         self.prompter.message = self.prompt_tokens()
         self.prompter.app.invalidate()
 
+    def redraw(self) -> None:
+        self.prompter.app.renderer.erase(leave_alternate_screen=False)
+        self.prompter.app.invalidate()
+
 
 class SimpleShell(Shell, ReadlineShell):  # type: ignore
     def start(self) -> None:

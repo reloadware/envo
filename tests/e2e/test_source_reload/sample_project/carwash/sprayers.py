@@ -1,5 +1,5 @@
 import carwash.office.employees
-from .stockyard.small import capacity
+from carwash.stockyard.small import capacity
 
 
 number_of_sprayers = 10

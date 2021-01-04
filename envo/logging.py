@@ -267,6 +267,10 @@ class Logger:
         for m in self.messages:
             m.print()
 
+    def tail(self, messages_n: int) -> None:
+        for m in self.messages[-messages_n:]:
+            m.print()
+
     def save(self, file: Path) -> None:
         pass
 
