@@ -54,7 +54,7 @@ class TestFunctions(TestBase):
         )
 
         reloader = PartialReloader(module)
-        assert_actions(reloader, ['Add: Function: module.fun2', 'Update: GlobalVariable: module.global_var'])
+        assert_actions(reloader, ['Add: Function: module.fun2', 'Update: Variable: module.global_var'])
 
         reloader.run()
 
@@ -90,7 +90,7 @@ class TestFunctions(TestBase):
         module_file.write_text(dedent(new_source))
 
         reloader = PartialReloader(module)
-        assert_actions(reloader, ['Update: GlobalVariable: module.global_var', 'Update: Function: module.fun'])
+        assert_actions(reloader, ['Update: Variable: module.global_var', 'Update: Function: module.fun'])
         reloader.run()
 
         assert "fun" in module.__dict__
@@ -100,6 +100,40 @@ class TestFunctions(TestBase):
         assert module.fun("str1").endswith(str(global_var_id))
         assert id(module.fun) == fun_id_before
 
+    def test_deleted_function(self, sandbox):
+        Path("__init__.py").touch()
+        module_file = sandbox / "module.py"
+        module_file.touch()
+        module_file.write_text(dedent("""
+        def fun1():
+            return 12
+            
+        def fun2():
+            return 22
+        """))
+
+        module = load_module(module_file)
+
+        assert hasattr(module, "fun1")
+        assert hasattr(module, "fun2")
+
+        module_file.write_text(dedent("""
+                def fun1():
+                    return 12
+                """))
+
+        reloader = PartialReloader(module)
+        assert_actions(reloader,
+                       ['Delete: Function: module.fun2']
+                       )
+
+        reloader.run()
+
+        assert hasattr(module, "fun1")
+        assert not hasattr(module, "fun2")
+
+
+class TestGlobabVariable(TestBase):
     def test_added_global_var(self, sandbox):
         module_file = sandbox / "module.py"
         module_file.touch()
@@ -117,8 +151,8 @@ class TestFunctions(TestBase):
 
         reloader = PartialReloader(module)
         assert_actions(reloader,
-                       ['Add: GlobalVariable: module.global_var2',
-                        'Update: GlobalVariable: module.global_var1']
+                       ['Add: Variable: module.global_var2',
+                        'Update: Variable: module.global_var1']
                        )
         reloader.run()
 
@@ -164,10 +198,10 @@ class TestFunctions(TestBase):
 
         reloader = PartialReloader(module)
         assert_actions(reloader,
-                       ['Update: GlobalVariable: module.sprinkler_n',
+                       ['Update: Variable: module.sprinkler_n',
                         'Update: DictionaryItem: module.sample_dict.sprinkler_n_plus_1',
                         'Update: DictionaryItem: module.sample_dict.sprinkler_n_plus_2',
-                        'Update: GlobalVariable: module.Car.car_sprinkler_n']
+                        'Update: Variable: module.Car.car_sprinkler_n']
                        )
 
         reloader.run()
@@ -179,6 +213,35 @@ class TestFunctions(TestBase):
         assert module.sample_dict == {'sprinkler_n_plus_1': 3, 'sprinkler_n_plus_2': 4,
                                       "lambda_fun": module.sample_dict["lambda_fun"], "fun": module.some_fun}
 
+    def test_deleted_global_var(self, sandbox):
+        Path("__init__.py").touch()
+        module_file = sandbox / "module.py"
+        module_file.touch()
+        module_file.write_text(dedent("""
+        sprinkler_n = 1
+        cars_n = 1  
+        """))
+
+        module = load_module(module_file)
+
+        assert hasattr(module, "sprinkler_n")
+        assert hasattr(module, "cars_n")
+
+        utils.replace_in_code("sprinkler_n = 1", "", module_file)
+
+        reloader = PartialReloader(module)
+        assert_actions(reloader,
+                       ['Delete: Variable: module.sprinkler_n',
+                        'Update: Variable: module.cars_n']
+                       )
+
+        reloader.run()
+
+        assert not hasattr(module, "sprinkler_n")
+        assert hasattr(module, "cars_n")
+
+
+class TestClasses(TestBase):
     def test_modified_class_attr(self, sandbox):
         module_file = sandbox / "module.py"
         module_file.touch()
@@ -204,7 +267,6 @@ class TestFunctions(TestBase):
         module = load_module(module_file)
         print_sprinklers_id = id(module.CarwashBase.print_sprinklers)
 
-        # First edit
         module_file.write_text(dedent(
             """
             import math
@@ -224,13 +286,93 @@ class TestFunctions(TestBase):
         ))
 
         reloader = PartialReloader(module)
-        assert_actions(reloader, ['Update: GlobalVariable: module.CarwashBase.sprinklers_n',
- 'Update: GlobalVariable: module.Carwash.sprinklers_n'])
+        assert_actions(reloader, ['Update: Variable: module.CarwashBase.sprinklers_n',
+ 'Update: Variable: module.Carwash.sprinklers_n'])
         reloader.run()
 
         assert module.CarwashBase.sprinklers_n == 55
         assert module.Carwash.sprinklers_n == 77
         assert print_sprinklers_id == id(module.CarwashBase.print_sprinklers)
+
+    def test_added_class_attr(self, sandbox):
+        module_file = sandbox / "module.py"
+        module_file.touch()
+        module_file.write_text(dedent(
+            """
+            class Carwash:
+                sprinklers_n: int = 22
+ 
+                def fun(self) -> str:
+                    return 12
+            """
+
+        ))
+
+        module = load_module(module_file)
+
+        assert hasattr(module.Carwash, "sprinklers_n")
+        assert not hasattr(module.Carwash, "cars_n")
+
+        # First edit
+        module_file.write_text(dedent(
+            """
+            class Carwash:
+                sprinklers_n: int = 22
+                cars_n: int = 15
+
+                def fun(self) -> str:
+                    return 12
+            """
+
+        ))
+
+        reloader = PartialReloader(module)
+        assert_actions(reloader, ['Add: Variable: module.Carwash.cars_n',
+                                 'Update: Variable: module.Carwash.sprinklers_n'])
+        reloader.run()
+
+        assert hasattr(module.Carwash, "sprinklers_n")
+        assert hasattr(module.Carwash, "cars_n")
+
+    def test_deleted_class_attr(self, sandbox):
+        module_file = sandbox / "module.py"
+        module_file.touch()
+        module_file.write_text(dedent(
+            """
+            class Carwash:
+                sprinklers_n: int = 22
+                cars_n: int = 15
+
+                def fun(self) -> str:
+                    return 12
+            """
+
+        ))
+
+        module = load_module(module_file)
+
+        assert hasattr(module.Carwash, "sprinklers_n")
+        assert hasattr(module.Carwash, "cars_n")
+
+        # First edit
+        module_file.write_text(dedent(
+            """
+            class Carwash:
+                sprinklers_n: int = 22
+
+                def fun(self) -> str:
+                    return 12
+            """
+
+        ))
+
+        reloader = PartialReloader(module)
+        assert_actions(reloader, ['Delete: Variable: module.Carwash.cars_n',
+                                  'Update: Variable: module.Carwash.sprinklers_n'])
+        reloader.run()
+
+        assert hasattr(module.Carwash, "sprinklers_n")
+        assert not hasattr(module.Carwash, "cars_n")
 
     def test_modified_method(self, sandbox):
         module_file = sandbox / "module.py"
@@ -256,7 +398,6 @@ class TestFunctions(TestBase):
 
         print_sprinklers_id = id(module.Carwash.print_sprinklers)
 
-        # First edit
         module_file.write_text(dedent(
             """
             class Carwash:
@@ -305,3 +446,39 @@ class TestFunctions(TestBase):
         reloader.run()
 
         assert module.Carwash().print_sprinklers() == "There are 5 sprinklers."
+
+    def test_delete_method(self, sandbox):
+        module_file = sandbox / "module.py"
+        module_file.touch()
+        module_file.write_text(dedent(
+            """
+            class Carwash:
+                def fun1(self):
+                    return 2
+                    
+                def fun2(self):
+                    return 4
+            """
+
+        ))
+
+        module = load_module(module_file)
+
+        assert hasattr(module.Carwash, "fun1")
+        assert hasattr(module.Carwash, "fun2")
+
+        module_file.write_text(dedent(
+            """
+            class Carwash:
+                def fun1(self):
+                    return 2
+
+            """
+        ))
+
+        reloader = PartialReloader(module)
+        assert_actions(reloader, ['Delete: Function: module.Carwash.fun2'])
+        reloader.run()
+
+        assert hasattr(module.Carwash, "fun1")
+        assert not hasattr(module.Carwash, "fun2")

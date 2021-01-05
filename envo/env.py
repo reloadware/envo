@@ -54,7 +54,7 @@ __all__ = [
     "Source"
 ]
 
-from envo.partial_reloader import PartialReloader, Action, LoadError
+from envo.partial_reloader import PartialReloader, Action
 
 T = TypeVar("T")
 
@@ -814,7 +814,7 @@ class Env(EnvoEnv):
         self._li.status.source_ready = True
         self.logger.debug(f"Applied full reload")
 
-    def _on_load_error(self, error: LoadError) -> None:
+    def _on_load_error(self, error: Exception) -> None:
         from rich.traceback import Traceback
         exc_type, exc_value, traceback = sys.exc_info()
         trace = Traceback.extract(exc_type, exc_value, traceback)

@@ -21,27 +21,72 @@ from importlab import environment
 dataclass = dataclass(repr=False)
 
 
-class LoadError(Exception):
-    pass
+
+@dataclass
+class Action:
+    reloader: "PartialReloader"
+
+    def execute(self) -> None:
+        pass
+
+    def __eq__(self, other: "Action") -> bool:
+        raise NotImplementedError()
+
 
 
 @dataclass
 class Object:
+    @dataclass
+    class Add(Action):
+        parent: "ContainerObj"
+        object: "Object"
+
+        priority: int = 50
+
+        def __repr__(self) -> str:
+            return f"Add: {repr(self.object)}"
+
+    @dataclass
+    class Update(Action):
+        parent: Optional["ContainerObj"]
+        old_object: "Object"
+        new_object: Optional["Object"]
+
+        priority: int = 50
+
+        def __repr__(self) -> str:
+            return f"Update: {repr(self.old_object)}"
+
+    @dataclass
+    class Delete(Action):
+        parent: Optional["ContainerObj"]
+        object: "Object"
+
+        priority: int = 50
+
+        def __repr__(self) -> str:
+            return f"Delete: {repr(self.object)}"
+
+        def execute(self) -> None:
+            delattr(self.parent.python_obj, self.object.name)
+
     python_obj: Any
     reloader: "PartialReloader"
     name: str = ""
     module: Optional["Module"] = None
     parent: Optional["ContainerObj"] = None
 
-    def get_actions_for_update(self, new_object: "Object", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Object", ignore_objects: Optional[List["Object"]] = None) -> List[
+        "Action"]:
         raise NotImplementedError()
 
     @classmethod
     def get_actions_for_add(cls, reloader: "PartialReloader", parent: "Object", obj: "Object") -> List["Action"]:
         raise NotImplementedError()
 
-    def get_actions_for_delete(self) -> List["Action"]:
-        raise NotImplementedError()
+    def get_actions_for_delete(self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object") -> List[
+        "Action"]:
+        return [self.Delete(reloader=reloader, parent=parent, object=obj)]
 
     @property
     def full_name(self) -> str:
@@ -52,7 +97,8 @@ class Object:
         return {self.full_name: self}
 
     def _is_ignored(self, name: str) -> bool:
-        return name in ["__module__", "__annotations__", "__doc__", "__weakref__", "__dict__"]
+        return name in ["__module__", "__annotations__", "__doc__", "__weakref__", "__dict__", "__origin__", "None",
+                        "__dataclass_fields__"]
 
     @property
     def source(self) -> str:
@@ -73,66 +119,6 @@ class Object:
         return f"{self.__class__.__name__}: {self.full_name}"
 
 
-def compare_codes(left, right) -> bool:
-    compare_fields = ["co_argcount", "co_cellvars", "co_code", "co_consts", "co_flags", "co_freevars",
-                      "co_Kwanlyargcount", "co_lnotab", "co_name", "co_names", "co_nlocals", "co_stacksize", "co_varnames"]
-    
-    for f in compare_fields:
-        if getattr(left, f) != getattr(right, f):
-            return False
-
-    return True
-
-
-@dataclass
-class Action:
-    reloader: "PartialReloader"
-
-    def execute(self) -> None:
-        pass
-
-    def __eq__(self, other: "Action") -> bool:
-        raise NotImplementedError()
-
-
-@dataclass
-class Add(Action):
-    parent: Object
-    object: Object
-
-    priority: int = 50
-
-    def __eq__(self, other: "Add") -> bool:
-        return id(self.parent) == id(other.parent) and id(self.object) == id(other.object) and self.priority == other.priority
-
-    def __repr__(self) -> str:
-        return f"Add: {repr(self.object)}"
-
-
-@dataclass
-class Update(Action):
-    parent: Optional[Object]
-    old_object: Object
-    new_object: Optional[Object]
-
-    priority: int = 50
-
-    def __eq__(self, other: "Update") -> bool:
-        return (id(self.parent) == id(other.parent) and
-                id(self.old_object) == id(other.old_object) and
-                id(self.new_object) == id(other.new_object) and
-                self.priority == other.priority)
-
-    def __repr__(self) -> str:
-        return f"Update: {repr(self.old_object)}"
-
-
-@dataclass
-class Delete(Action):
-    object: Object
-    priority: int = 50
-
-
 @dataclass
 class FinalObj(Object):
     pass
@@ -140,43 +126,47 @@ class FinalObj(Object):
 
 @dataclass
 class Function(FinalObj):
-    class Add(Add):
+    class Add(FinalObj.Add):
+        object: "Function"
+
         def execute(self) -> None:
             setattr(self.parent.python_obj, self.object.name, self.object.python_obj)
 
-    class Update(Update):
+    class Update(FinalObj.Update):
         old_object: "Function"
         new_object: Optional["Function"]
 
         def execute(self) -> None:
-            self.old_object.get_func(self.old_object.python_obj).__code__ = self.new_object.get_func(self.new_object.python_obj).__code__
+            self.old_object.get_func(self.old_object.python_obj).__code__ = self.new_object.get_func(
+                self.new_object.python_obj).__code__
 
-    def get_actions_for_update(self, new_object: "Function", ignore_objects: Optional[List[Object]] = None) -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Function", ignore_objects: Optional[List[Object]] = None) -> List[
+        "Action"]:
         if self != new_object:
             return [self.Update(reloader=self.reloader, parent=self.parent, old_object=self, new_object=new_object)]
         else:
             return []
 
     @classmethod
-    def get_actions_for_add(cls, reloader: "PartialReloader", parent: "Object", obj: "Object") -> List["Action"]:
+    def get_actions_for_add(cls, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object") -> List["Action"]:
         return [cls.Add(reloader=reloader, parent=parent, object=obj)]
 
-    def get_actions_for_delete(self) -> List["Action"]:
-        raise NotImplementedError()
-
-    def __eq__(self, other: "ContainerObj") -> bool:
+    def __eq__(self, other: "Function") -> bool:
         if self.python_obj.__class__ is not other.python_obj.__class__:
             return False
 
-        ret = self.get_func(self.python_obj).__code__ == self.get_func(other.python_obj).__code__
-        return ret
+        compare_fields = ["co_argcount", "co_cellvars", "co_code", "co_consts", "co_flags", "co_freevars",
+                          "co_lnotab", "co_name", "co_names", "co_nlocals", "co_stacksize",
+                          "co_varnames"]
+
+        for f in compare_fields:
+            if getattr(self.python_obj.__code__, f) != getattr(other.python_obj.__code__, f):
+                return False
+
+        return True
 
     def __ne__(self, other: "Object") -> bool:
-        if self.python_obj.__class__ is not other.python_obj.__class__:
-            return True
-
-        ret = self.get_func(self.python_obj).__code__ != self.get_func(other.python_obj).__code__
-        return ret
+        return not (self == other)
 
     @property
     def source(self) -> str:
@@ -187,9 +177,13 @@ class Function(FinalObj):
             return ""
 
         if isinstance(self.parent, Dictionary) and self.python_obj.__name__ == "<lambda>":
-            ret = ret[ret.find(":")+1:]
+            ret = ret[ret.find(":") + 1:]
             ret = dedent(ret)
 
+        return ret
+
+    def is_global(self) -> bool:
+        ret = self.parent == self.module
         return ret
 
     @classmethod
@@ -208,24 +202,6 @@ class Method(Function):
 class ContainerObj(Object):
     children: Dict[str, "Object"] = field(init=False, default_factory=dict)
 
-    # def get_actions_for_update(self, new_object: "Function", ignore_objects: Optional[List[Object]] = None) -> List["Action"]:
-    #     if not ignore_objects:
-    #         ignore_objects = []
-    #
-    #     ret = []
-    #
-    #     for c in self.children.values():
-    #         if ignore_objects and c.full_name in [o.full_name for o in ignore_objects]:
-    #             continue
-    #
-    #         if isinstance(c, Import):
-    #             continue
-    #
-    #         actions = c.get_actions_for_update(c, ignore_objects=[self] + ignore_objects)
-    #         ret.extend(actions)
-    #
-    #     return ret
-
     def __post_init__(self) -> None:
         self._collect_objs()
 
@@ -235,6 +211,10 @@ class ContainerObj(Object):
     def _collect_objs(self) -> None:
         for n, o in self.get_dict().items():
             if self._is_ignored(n):
+                continue
+
+            # break recursion (todo: check deeper)
+            if self.parent and self.python_obj is self.parent.python_obj:
                 continue
 
             if hasattr(o, "__module__") and o.__module__:
@@ -255,9 +235,9 @@ class ContainerObj(Object):
             elif isinstance(self, Dictionary):
                 Cls = DictionaryItem
             else:
-                Cls = GlobalVariable
+                Cls = Variable
 
-            self.children[n] = Cls(o,parent=self, name=n, reloader=self.reloader, module=self.module)
+            self.children[n] = Cls(o, parent=self, name=n, reloader=self.reloader, module=self.module)
 
     @property
     def flat(self) -> Dict[str, Object]:
@@ -273,6 +253,10 @@ class ContainerObj(Object):
         ret = [o for o in self.children if isinstance(o, Function)]
         return ret
 
+    def get_functions_recursive(self) -> List[Function]:
+        ret = [o for o in self.flat.values() if isinstance(o, Function)]
+        return ret
+
     @property
     def source(self) -> str:
         ret = inspect.getsource(self.python_obj)
@@ -284,21 +268,23 @@ class ContainerObj(Object):
 
 @dataclass
 class Class(ContainerObj):
-    def get_actions_for_update(self, new_object: "Class", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Class", ignore_objects: Optional[List["Object"]] = None) -> List[
+        "Action"]:
         return []
 
     def get_dict(self) -> Dict[str, Any]:
-        ret = dict(self.python_obj.__dict__)
+        ret = self.python_obj.__dict__
         return ret
 
 
 @dataclass
 class Dictionary(ContainerObj):
-    class Add(Add):
+    class Add(ContainerObj.Add):
         def execute(self) -> None:
             setattr(self.parent.python_obj, self.object.name, self.object)
 
-    def get_actions_for_update(self, new_object: "Class", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Class", ignore_objects: Optional[List["Object"]] = None) -> List[
+        "Action"]:
         return []
 
     def get_dict(self) -> Dict[str, Any]:
@@ -306,65 +292,62 @@ class Dictionary(ContainerObj):
 
 
 @dataclass
-class GlobalVariable(FinalObj):
-    class Add(Add):
+class Variable(FinalObj):
+    class Add(FinalObj.Add):
         def execute(self) -> None:
-            self.parent.python_obj.__dict__[self.object.name] = copy(self.object.python_obj)
+            setattr(self.parent.python_obj, self.object.name, self.object.python_obj)
 
-    class Update(Update):
+    class Update(FinalObj.Update):
         def execute(self) -> None:
             setattr(self.old_object.parent.python_obj, self.old_object.name, self.new_object.python_obj)
 
-    def get_actions_for_update(self, new_object: "GlobalVariable", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Variable", ignore_objects: Optional[List["Object"]] = None) -> \
+    List["Action"]:
         ret = [self.Update(reloader=self.reloader, parent=self.parent, old_object=self, new_object=new_object)]
         return ret
 
     @classmethod
-    def get_actions_for_add(cls, reloader: "PartialReloader", parent: "Object", obj: "Object") -> List["Action"]:
-        return [GlobalVariable.Add(reloader=reloader, parent=parent, object=obj)]
-
-    def get_actions_for_delete(self) -> List["Action"]:
-        raise NotImplementedError()
+    def get_actions_for_add(cls, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object") -> List["Action"]:
+        return [cls.Add(reloader=reloader, parent=parent, object=obj)]
 
 
 @dataclass
 class DictionaryItem(FinalObj):
-    class Add(Add):
+    class Add(FinalObj.Add):
         def execute(self) -> None:
             self.parent.python_obj[self.object.name] = copy(self.object.python_obj)
 
-    class Update(Update):
+    class Update(FinalObj.Update):
         def execute(self) -> None:
             self.old_object.parent.python_obj[self.new_object.name] = self.new_object.python_obj
 
-    def get_actions_for_update(self, new_object: "GlobalVariable", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
-        return [DictionaryItem.Update(reloader=self.reloader, parent=self.parent, old_object=self, new_object=new_object)]
+    def get_actions_for_update(self, new_object: "Variable", ignore_objects: Optional[List["Object"]] = None) -> \
+    List["Action"]:
+        return [
+            self.Update(reloader=self.reloader, parent=self.parent, old_object=self, new_object=new_object)]
 
     @classmethod
-    def get_actions_for_add(cls, reloader: "PartialReloader", parent: "Object", obj: "Object") -> List["Action"]:
-        return [GlobalVariable.Add(reloader=reloader, parent=parent, object=obj)]
+    def get_actions_for_add(cls, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object") -> List["Action"]:
+        return [cls.Add(reloader=reloader, parent=parent, object=obj)]
 
 
 @dataclass
 class Import(FinalObj):
-    class Add(Add):
+    class Add(FinalObj.Add):
         def execute(self) -> None:
             self.parent.python_obj[self.object.name] = copy(self.object.python_obj)
 
-    def get_actions_for_update(self, new_object: "GlobalVariable", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Variable", ignore_objects: Optional[List["Object"]] = None) -> \
+    List["Action"]:
         return []
 
     @classmethod
-    def get_actions_for_add(cls, reloader: "PartialReloader", parent: "Object", obj: "Object") -> List["Action"]:
-        return [Import.Add(reloader=reloader, parent=parent, object=obj)]
+    def get_actions_for_add(cls, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object") -> List["Action"]:
+        return [cls.Add(reloader=reloader, parent=parent, object=obj)]
 
 
 @dataclass
 class Module(ContainerObj):
-    class Update(Update):
-        def execute(self) -> None:
-            pass
-
     def __post_init__(self) -> None:
         self.module = self
         super().__post_init__()
@@ -372,7 +355,8 @@ class Module(ContainerObj):
     def get_dict(self) -> Dict[str, Any]:
         return self.python_obj.__dict__
 
-    def get_actions_for_update(self, new_object: "GlobalVariable", ignore_objects: Optional[List["Object"]] = None) -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Variable", ignore_objects: Optional[List["Object"]] = None) -> \
+    List["Action"]:
         ret = []
         return ret
 
@@ -410,11 +394,17 @@ class Module(ContainerObj):
             parent = a[o.parent.full_name]
             ret.extend(o.get_actions_for_add(reloader=self.reloader, parent=parent, obj=o))
 
-        # deleted_objects_names = a.keys() - b.keys()
-        # deleted_objects = {n: a[n] for n in deleted_objects_names}
-        # ret.extend([Deleted(reloader=self.reloader) for o in deleted_objects.values()])
+        deleted_objects_names = a.keys() - b.keys()
+        deleted_objects = {n: a[n] for n in deleted_objects_names}
+        for o in deleted_objects.values():
+            parent = a[o.parent.full_name]
+            ret.extend(o.get_actions_for_delete(reloader=self.reloader, parent=parent, obj=o))
 
         for n, o in a.items():
+            # if deleted
+            if not n in b:
+                continue
+
             ret.extend(o.get_actions_for_update(new_object=b[n]))
 
         ret = sorted(ret, key=lambda x: x.priority, reverse=True)
