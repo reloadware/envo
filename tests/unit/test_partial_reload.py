@@ -17,9 +17,10 @@ def assert_actions(reloader: PartialReloader, actions_names: List[str]) -> None:
     assert actions_str == actions_names
 
 
-def load_module(path: Path) -> Any:
+def load_module(path: Path, module_name: str = "module") -> Any:
     module = import_from_file(path)
-    module.__name__ = "module"
+    module.__name__ = module_name
+    sys.modules[module.__name__] = module
     return module
 
 
@@ -131,6 +132,38 @@ class TestFunctions(TestBase):
 
         assert hasattr(module, "fun1")
         assert not hasattr(module, "fun2")
+
+    def test_renamed_function(self, sandbox):
+        module_file = sandbox / "module.py"
+        module_file.touch()
+        module_file.write_text(dedent(
+            """
+            def fun1():
+                return 12
+            """
+        ))
+
+        module = load_module(module_file)
+
+        assert hasattr(module, "fun1")
+        assert not hasattr(module, "fun_renamed")
+
+        module_file.write_text(dedent(
+            """
+            def fun_renamed():
+                return 12
+            """
+        ))
+
+        reloader = PartialReloader(module)
+        assert_actions(reloader,
+                       ['Add: Function: module.fun_renamed', 'Delete: Function: module.fun1']
+                       )
+
+        reloader.run()
+
+        assert not hasattr(module, "fun1")
+        assert hasattr(module, "fun_renamed")
 
 
 class TestGlobabVariable(TestBase):
@@ -482,3 +515,126 @@ class TestClasses(TestBase):
 
         assert hasattr(module.Carwash, "fun1")
         assert not hasattr(module.Carwash, "fun2")
+
+
+class TestModules(TestBase):
+    def test_import_relative(self, sandbox):
+        Path("__init__.py").touch()
+
+        slave_module_file = sandbox / "slave_module.py"
+        slave_module_file.touch()
+        source = """
+        slave_global_var = 2
+
+        def slave_fun(arg1: str, arg2: str) -> str:
+            return "Slave test"
+        """
+        slave_module_file.write_text(dedent(source))
+
+        master_module_file = sandbox / "module.py"
+        master_module_file.touch()
+        source = """
+        from .slave_module import slave_global_var 
+
+        global_var = 2
+
+        def fun(arg1: str, arg2: str) -> str:
+            return f"{arg1}_{arg2}_{id(global_var)}"
+        """
+        master_module_file.write_text(dedent(source))
+        module = load_module(master_module_file)
+
+        utils.replace_in_code("global_var = 2", "global_var = 5", master_module_file)
+
+        reloader = PartialReloader(module)
+        assert_actions(reloader, ['Update: Variable: module.slave_global_var',
+                                  'Update: Variable: module.global_var'])
+
+        reloader.run()
+
+        assert module.global_var == 5
+
+    def test_added_import(self, sandbox):
+        module_file = sandbox / "module.py"
+        module_file.touch()
+        module_file.write_text(dedent(
+            """
+            glob_var = 4
+            """
+        ))
+
+        module = load_module(module_file)
+
+        assert not hasattr(module, "math")
+
+        module_file.write_text(dedent(
+            """
+            import math
+            glob_var = 4
+            """
+        ))
+
+        reloader = PartialReloader(module)
+        assert_actions(reloader, ['Add: Import: module.math', 'Update: Variable: module.glob_var'])
+        reloader.run()
+
+        assert hasattr(module, "math")
+
+    def test_removed_import(self, sandbox):
+        module_file = sandbox / "module.py"
+        module_file.touch()
+        module_file.write_text(dedent(
+            """
+            import math
+            glob_var = 4
+            """
+        ))
+
+        module = load_module(module_file)
+
+        assert hasattr(module, "math")
+
+        module_file.write_text(dedent(
+            """
+            glob_var = 4
+            """
+        ))
+
+        reloader = PartialReloader(module)
+        assert_actions(reloader, ['Delete: Import: module.math', 'Update: Variable: module.glob_var'])
+        reloader.run()
+
+        assert not hasattr(module, "math")
+
+    def test_add_relative(self, sandbox):
+        Path("__init__.py").touch()
+
+        slave_module_file = sandbox / "slave_module.py"
+        slave_module_file.touch()
+        source = """
+        slave_global_var = 2
+        """
+        slave_module_file.write_text(dedent(source))
+
+        master_module_file = sandbox / "module.py"
+        master_module_file.touch()
+        source = """
+        global_var = 2
+        """
+        master_module_file.write_text(dedent(source))
+        module = load_module(master_module_file)
+
+        assert not hasattr(module, "slave_module")
+
+        source = """
+        from . import slave_module
+        global_var = 2
+        """
+        master_module_file.write_text(dedent(source))
+
+        reloader = PartialReloader(module)
+        assert_actions(reloader, ['Add: Import: module.slave_module', 'Update: Variable: module.global_var'])
+
+        reloader.run()
+
+        assert hasattr(module, "slave_module")

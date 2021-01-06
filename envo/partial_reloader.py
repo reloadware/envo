@@ -1,22 +1,13 @@
-import builtins
-import gc
 import inspect
-import os
-import re
 import sys
 from copy import copy
 from pathlib import Path
 from textwrap import dedent
-from types import ModuleType, FunctionType
 from typing import Any, List, Callable, Type, Dict, Optional, Set
 
 from dataclasses import dataclass, field
-from nose.pyversion import ClassType
 
 from envo.misc import import_from_file
-
-from importlab import graph
-from importlab import environment
 
 dataclass = dataclass(repr=False)
 
@@ -335,7 +326,8 @@ class DictionaryItem(FinalObj):
 class Import(FinalObj):
     class Add(FinalObj.Add):
         def execute(self) -> None:
-            self.parent.python_obj[self.object.name] = copy(self.object.python_obj)
+            module = sys.modules.get(self.object.name, self.object.python_obj)
+            setattr(self.parent.python_obj, self.object.name, module)
 
     def get_actions_for_update(self, new_object: "Variable", ignore_objects: Optional[List["Object"]] = None) -> \
     List["Action"]:
@@ -435,7 +427,7 @@ class PartialReloader:
 
     @property
     def new_module(self) -> Module:
-        ret = Module(import_from_file(self.module_obj.__file__), reloader=self, name=f"{self.module_obj.__name__}")
+        ret = Module(import_from_file(Path(self.module_obj.__file__)), reloader=self, name=f"{self.module_obj.__name__}")
         return ret
 
     def run(self) -> List[Action]:

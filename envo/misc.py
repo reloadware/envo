@@ -225,10 +225,44 @@ def render(template: str, output: Path, context: Dict[str, Any]) -> None:
 def render_py_file(template_path: Path, output: Path, context: Dict[str, Any]) -> None:
     render_file(template_path, output, context)
 
+################
+import importlib as imp
+import sys
+import os
+
+def load_module(pack_name, module_name, path):
+    if pack_name not in sys.modules:
+        init_file = os.path.join(os.path.dirname(path), '__init__.py')
+        if os.path.exists(init_file):
+            print('loading parent module ' + pack_name)
+            s=imp.util.spec_from_file_location(pack_name, init_file, submodule_search_locations=[])
+            m=imp.util.module_from_spec(s)
+            s.loader.exec_module(m)
+            sys.modules[s.name] = m
+
+    s=imp.util.spec_from_file_location(pack_name+'.'+module_name, path)
+    m=imp.util.module_from_spec(s)
+    s.loader.exec_module(m)
+    return m
+################
+
 
 def import_from_file(path: Path) -> Any:
+    init_file = path.parent / '__init__.py'
+
     loader = importlib.machinery.SourceFileLoader(str(path), str(path))
     spec = importlib.util.spec_from_loader(loader.name, loader)
+
+    if init_file.exists():
+        init_loader = importlib.machinery.SourceFileLoader(str(init_file), str(init_file))
+        init_spec = importlib.util.spec_from_loader(init_loader.name, init_loader)
+        init_module = importlib.util.module_from_spec(init_spec)
+        init_loader.exec_module(init_module)
+
+        sys.modules[loader.name.rstrip(".py")] = init_module
+        sys.modules[str(init_file)] = init_module
+        sys.modules[str(init_file).rstrip(".py")] = init_module
+
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
 
