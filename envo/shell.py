@@ -2,17 +2,15 @@ import builtins
 import os
 import sys
 import time
-from pathlib import Path
-
 from dataclasses import dataclass
 from enum import Enum
-from functools import partial
+from pathlib import Path
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, TextIO, Union
 
 import fire
 from prompt_toolkit.data_structures import Size
-from xonsh.base_shell import BaseShell, Tee
+from xonsh.base_shell import BaseShell
 from xonsh.execer import Execer
 from xonsh.prompt.base import DEFAULT_PROMPT
 from xonsh.ptk_shell.shell import PromptToolkitShell
@@ -20,7 +18,7 @@ from xonsh.readline_shell import ReadlineShell
 
 import envo
 from envo import logger
-from envo.misc import Callback, is_linux, is_windows
+from envo.misc import Callback, is_windows
 
 
 class PromptState(Enum):
@@ -81,7 +79,7 @@ class Shell(BaseShell):  # type: ignore
     def __init__(self, calls: Callbacks, execer: Execer) -> None:
         super().__init__(execer=execer, ctx={})
 
-        logger.debug(f"Shell __init__")
+        logger.debug("Shell __init__")
         self.shell_type = "prompt_toolkit"
 
         self.calls = calls
@@ -202,7 +200,7 @@ class Shell(BaseShell):  # type: ignore
                 "XONSH_INTERACTIVE": True,
                 "SHELL_TYPE": "prompt_toolkit",
                 "COMPLETIONS_BRACKETS": False,
-                "XONSH_DATA_DIR": data_dir
+                "XONSH_DATA_DIR": data_dir,
             }
         )
 
@@ -284,7 +282,7 @@ class Shell(BaseShell):  # type: ignore
             # W want to catch all exceptions just in case the command fails so we can handle std_err and post_cmd
             hist_line = line
             if self.calls.pre_cmd:
-                line =  self.calls.pre_cmd(line)
+                line = self.calls.pre_cmd(line)
 
             if self.calls.on_stdout:
                 out = StdOut(command=line, on_write=self.calls.on_stdout)
@@ -316,7 +314,7 @@ class FancyShell(Shell, PromptToolkitShell):  # type: ignore
 
     @classmethod
     def create(cls, calls: Callbacks, data_dir_name: str) -> "Shell":
-        logger.debug(f"Creating FancyShell")
+        logger.debug("Creating FancyShell")
         from xonsh.main import _pprint_displayhook
 
         shell = super().create(calls, data_dir_name=data_dir_name)
@@ -325,7 +323,7 @@ class FancyShell(Shell, PromptToolkitShell):  # type: ignore
         return shell
 
     def start(self) -> None:
-        logger.debug(f"Starting FancyShell")
+        logger.debug("Starting FancyShell")
 
         if envo.e2e.enabled:
             self.prompter.output.get_size = lambda: Size(50, 200)
@@ -350,7 +348,7 @@ class FancyShell(Shell, PromptToolkitShell):  # type: ignore
 
 class SimpleShell(Shell, ReadlineShell):  # type: ignore
     def start(self) -> None:
-        logger.debug(f"Starting SimpleShell")
+        logger.debug("Starting SimpleShell")
         self.cmdloop()
 
 

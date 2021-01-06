@@ -1,1 +1,1 @@
-from . import sprayers
+from . import sprayers  # noqa

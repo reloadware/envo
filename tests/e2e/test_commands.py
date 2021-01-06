@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 from subprocess import CalledProcessError
 
-import pexpect
 from pytest import raises
 
 from envo.misc import is_linux, is_windows
@@ -78,15 +77,13 @@ class TestCommands(utils.TestBase):
 
     def test_single_command_fail(self):
         with raises(CalledProcessError) as e:
-            s = utils.run(
-                """envo test -c "import sys;print('some msg');sys.exit(2)" """
-            )
+            utils.run("""envo test -c "import sys;print('some msg');sys.exit(2)" """)
         assert e.value.returncode == 2
         assert "some msg" in utils.clean_output(e.value.stdout)
         assert utils.clean_output(e.value.stderr) == ""
 
         with raises(CalledProcessError) as e:
-            s = utils.run("""envo test -c "cd /home/non_existend_file" """)
+            utils.run("""envo test -c "cd /home/non_existend_file" """)
         assert e.value.returncode == 1
         assert utils.clean_output(e.value.stdout) == "\n"
         assert "no such file or directory" in utils.clean_output(e.value.stderr)
@@ -101,7 +98,7 @@ class TestCommands(utils.TestBase):
         )
 
         with raises(CalledProcessError) as e:
-            s = utils.run("""envo test -c "flake" """)
+            utils.run("""envo test -c "flake" """)
 
         if is_linux():
             assert e.value.returncode == 127
@@ -126,7 +123,7 @@ class TestCommands(utils.TestBase):
         )
 
         with raises(CalledProcessError) as e:
-            s = utils.run("""envo test -c "some_cmd" """)
+            utils.run("""envo test -c "some_cmd" """)
 
         if is_linux():
             assert e.value.returncode == 1
@@ -139,7 +136,7 @@ class TestCommands(utils.TestBase):
 
     def test_headless_error(self):
         with raises(CalledProcessError) as e:
-            s = utils.run("""envo some_env -c "print('test')" """)
+            utils.run("""envo some_env -c "print('test')" """)
         assert e.value.returncode == 1
         assert utils.clean_output(e.value.stdout) == ""
         assert "find any env" in utils.clean_output(e.value.stderr)
@@ -241,7 +238,7 @@ class TestCommands(utils.TestBase):
 
         utils.add_namespace(namespace_name, file=env_test_file)
         utils.add_command(
-            f"""
+            """
         @test_namespace.command
         def __some_cmd(self, test_arg: str = "") -> str:
             print("from env_test!")
@@ -251,7 +248,7 @@ class TestCommands(utils.TestBase):
         )
 
         utils.add_command(
-            f"""
+            """
                 @command
                 def __some_cmd(self, test_arg: str = "") -> str:
                     print("from env_comm!")

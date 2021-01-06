@@ -23,7 +23,9 @@ class TestLogger(utils.TestBase):
         e = shell.start()
         e.prompt(utils.PromptState.MAYBE_LOADING)
 
-        logger = lambda: shell.envo.get_logger()
+        def logger():
+            return shell.envo.get_logger()
+
         assert (
             len(
                 logger().get_msgs(

@@ -1,5 +1,4 @@
 from pathlib import Path
-from time import sleep
 
 from tests.e2e import utils
 from tests.e2e.utils import PromptState

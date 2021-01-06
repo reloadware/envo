@@ -11,6 +11,7 @@ from envo import (  # noqa: F401
     VirtualEnv,
     boot_code,
     command,
+    console,
     context,
     logger,
     oncreate,
@@ -71,8 +72,9 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
 
     @command
     def black(self) -> None:
-        run("isort .")
-        run("black .")
+        with console.status("Running black and isort..."):
+            run("isort .", print_output=False)
+            run("black .", print_output=False)
 
     @command
     def ci(self) -> None:

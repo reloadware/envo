@@ -69,10 +69,10 @@ class TestEnvVariables(utils.TestBase):
                 class Version:
                     major: str
                     minor: str
-        
+
                 version: Version
                 name: str
-        
+
             python: Raw[Python]
             """
         )
@@ -182,7 +182,7 @@ class TestEnvVariables(utils.TestBase):
             @dataclass
             class Python:
                 version: Raw[str]
-                
+
             @dataclass
             class Javascript:
                 version: Raw[str]
@@ -200,7 +200,7 @@ class TestEnvVariables(utils.TestBase):
         )
 
         e = shell.start()
-        e.output(f'Variable "version" is redefined\n')
+        e.output('Variable "version" is redefined\n')
         e.prompt(utils.PromptState.EMERGENCY).eval()
 
         shell.exit()

@@ -1,29 +1,17 @@
 #!/usr/bin/env python3
-import argparse
 import hashlib
 import os
-import re
 import sys
-import traceback
 from collections import OrderedDict
-from copy import copy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from threading import Lock, Thread
-from typing import Any, Dict, List, Optional, ClassVar, Type
-
-from rhei import Stopwatch
+from typing import Any, ClassVar, Dict, List, Optional, Type
 
 import envo.e2e
 from envo import Env, const, logger, logging, misc, shell
 from envo.env import EnvBuilder
-from envo.misc import Callback, EnvoError, FilesWatcher, import_from_file
-from envo.shell import PromptBase, PromptState, Shell, FancyShell
-
-try:
-    from typing import Literal
-except ImportError:
-    from typing_extensions import Literal  # type: ignore
+from envo.misc import Callback, EnvoError, FilesWatcher
+from envo.shell import FancyShell, PromptBase, PromptState, Shell
 
 package_root = Path(os.path.realpath(__file__)).parent
 templates_dir = package_root / "templates"
@@ -51,7 +39,10 @@ class Status:
         self._source_ready = False
 
     def __repr__(self) -> str:
-        return f"Status (context_ready={self.context_ready}, reloader_ready={self._reloader_ready}, source_ready={self._source_ready})"
+        return (
+            f"Status (context_ready={self.context_ready},"
+            f" reloader_ready={self._reloader_ready}, source_ready={self._source_ready})"
+        )
 
     @property
     def context_ready(self) -> bool:
@@ -60,7 +51,7 @@ class Status:
     @context_ready.setter
     def context_ready(self, value: bool) -> None:
         self._context_ready = value
-        logger.debug(f"Context", {"ready": value})
+        logger.debug("Context", {"ready": value})
         self._on_status_change()
 
     @property
@@ -70,7 +61,7 @@ class Status:
     @source_ready.setter
     def source_ready(self, value: bool) -> None:
         self._source_ready = value
-        logger.debug(f"Source", {"ready": value})
+        logger.debug("Source", {"ready": value})
         self._on_status_change()
 
     @property
@@ -80,7 +71,7 @@ class Status:
     @reloader_ready.setter
     def reloader_ready(self, value: bool) -> None:
         self._reloader_ready = value
-        logger.debug(f"Reloader", {"ready": value})
+        logger.debug("Reloader", {"ready": value})
         self._on_status_change()
 
     @property
@@ -89,10 +80,10 @@ class Status:
 
     def _on_status_change(self) -> None:
         if self.ready:
-            logger.debug(f"Everything ready")
+            logger.debug("Everything ready")
             self.calls.on_ready()
         else:
-            logger.debug(f"Not ready {repr(self)}")
+            logger.debug("Not ready {repr(self)}")
             self.calls.on_not_ready()
 
 
@@ -149,8 +140,12 @@ class HeadlessMode:
 
         self.extra_watchers = []
 
-        self.status = Status(calls=Status.Callbacks(on_ready=Callback(self._on_ready),
-                                                    on_not_ready=Callback(self._on_not_ready)))
+        self.status = Status(
+            calls=Status.Callbacks(
+                on_ready=Callback(self._on_ready),
+                on_not_ready=Callback(self._on_not_ready),
+            )
+        )
 
         self.env = None
 
@@ -434,8 +429,10 @@ class EnvoHeadless(EnvoBase):
 
         self.mode = HeadlessMode(
             se=HeadlessMode.Sets(
-                stage=self.se.stage, restart_nr=self.restart_count, msg="",
-                env_path=self.find_env()
+                stage=self.se.stage,
+                restart_nr=self.restart_count,
+                msg="",
+                env_path=self.find_env(),
             ),
             calls=HeadlessMode.Callbacks(
                 restart=Callback(self.restart), on_error=Callback(self.on_error)
@@ -500,8 +497,10 @@ class Envo(EnvoBase):
 
             self.mode = NormalMode(
                 se=NormalMode.Sets(
-                    stage=self.se.stage, restart_nr=self.restart_count, msg="",
-                env_path=self.find_env()
+                    stage=self.se.stage,
+                    restart_nr=self.restart_count,
+                    msg="",
+                    env_path=self.find_env(),
                 ),
                 li=NormalMode.Links(shell=self.shell),
                 calls=NormalMode.Callbacks(
@@ -525,8 +524,10 @@ class Envo(EnvoBase):
 
         self.mode = EmergencyMode(
             se=EmergencyMode.Sets(
-                stage=self.se.stage, restart_nr=self.restart_count, msg=msg,
-                env_path=self.find_env()
+                stage=self.se.stage,
+                restart_nr=self.restart_count,
+                msg=msg,
+                env_path=self.find_env(),
             ),
             li=EmergencyMode.Links(shell=self.shell),
             calls=EmergencyMode.Callbacks(
@@ -546,7 +547,7 @@ class Envo(EnvoBase):
 
         self.shell = FancyShell.create(
             calls=FancyShell.Callbacks(on_ready=Callback(on_ready)),
-            data_dir_name=self.data_dir_name
+            data_dir_name=self.data_dir_name,
         )
         self.init()
 
@@ -562,7 +563,7 @@ class EnvoCreator:
         stage: str
 
     def __init__(self, se: Sets) -> None:
-        logger.debug(f"Starting EnvoCreator")
+        logger.debug("Starting EnvoCreator")
         self.se = se
 
     def _create_from_templ(self, stage: str, parent: str = "") -> None:
@@ -630,27 +631,21 @@ class BaseOption:
 @dataclass
 class Command(BaseOption):
     def run(self) -> None:
-        envo.e2e.envo = env_headless = EnvoHeadless(
-            EnvoHeadless.Sets(stage=self.stage)
-        )
+        envo.e2e.envo = env_headless = EnvoHeadless(EnvoHeadless.Sets(stage=self.stage))
         env_headless.single_command(self.flesh)
 
 
 @dataclass
 class DryRun(BaseOption):
     def run(self) -> None:
-        envo.e2e.envo = env_headless = EnvoHeadless(
-            EnvoHeadless.Sets(stage=self.stage)
-        )
+        envo.e2e.envo = env_headless = EnvoHeadless(EnvoHeadless.Sets(stage=self.stage))
         env_headless.dry_run()
 
 
 @dataclass
 class Dump(BaseOption):
     def run(self) -> None:
-        envo.e2e.envo = env_headless = EnvoHeadless(
-            EnvoHeadless.Sets(stage=self.stage)
-        )
+        envo.e2e.envo = env_headless = EnvoHeadless(EnvoHeadless.Sets(stage=self.stage))
         env_headless.dump()
 
 
@@ -658,6 +653,7 @@ class Dump(BaseOption):
 class Version(BaseOption):
     def run(self) -> None:
         from envo.__version__ import __version__
+
         print(__version__)
 
 
@@ -676,7 +672,6 @@ class Start(BaseOption):
         e.spawn_shell()
 
 
-
 option_name_to_option: Dict[str, Type[BaseOption]] = {
     "-c": Command,
     "run": Command,
@@ -689,7 +684,7 @@ option_name_to_option: Dict[str, Type[BaseOption]] = {
 
 
 def _main() -> None:
-    logger.debug(f"Starting")
+    logger.debug("Starting")
 
     argv = sys.argv[1:]
     keywords = ["init", "dry-run", "version", "dump", "run"]

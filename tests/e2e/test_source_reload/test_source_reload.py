@@ -14,7 +14,10 @@ class TestBase:
 
 class TestSourceReload(TestBase):
     def test_importing(self, shell):
-        utils.replace_in_code("sources: List[Source] = []", "sources: List[Source] = [Source(root / 'sample_project')]")
+        utils.replace_in_code(
+            "sources: List[Source] = []",
+            "sources: List[Source] = [Source(root / 'sample_project')]",
+        )
         utils.add_boot(["import carwash"])
 
         e = shell.start()
@@ -28,7 +31,10 @@ class TestSourceReload(TestBase):
         e.exit().eval()
 
     def test_change_variable(self, shell):
-        utils.replace_in_code("sources: List[Source] = []", "sources: List[Source] = [Source(root / 'sample_project')]")
+        utils.replace_in_code(
+            "sources: List[Source] = []",
+            "sources: List[Source] = [Source(root / 'sample_project')]",
+        )
         utils.add_boot(["import carwash"])
 
         e = shell.start()
@@ -38,8 +44,11 @@ class TestSourceReload(TestBase):
         e.output("10\n")
         e.prompt().eval()
 
-        utils.replace_in_code("number_of_sprayers = 10", "number_of_sprayers = 15",
-                              self.sample_project / "carwash/sprayers.py")
+        utils.replace_in_code(
+            "number_of_sprayers = 10",
+            "number_of_sprayers = 15",
+            self.sample_project / "carwash/sprayers.py",
+        )
 
         shell.envo.wait_until_ready()
         shell.envo.assert_partially_reloaded(1)
@@ -52,13 +61,19 @@ class TestSourceReload(TestBase):
         e.exit().eval()
 
     def test_change_variable_not_imported(self, shell):
-        utils.replace_in_code("sources: List[Source] = []", "sources: List[Source] = [Source(root / 'sample_project')]")
+        utils.replace_in_code(
+            "sources: List[Source] = []",
+            "sources: List[Source] = [Source(root / 'sample_project')]",
+        )
 
         e = shell.start()
         e.prompt().eval()
 
-        utils.replace_in_code("number_of_sprayers = 10", "number_of_sprayers = 15",
-                              self.sample_project / "carwash/sprayers.py")
+        utils.replace_in_code(
+            "number_of_sprayers = 10",
+            "number_of_sprayers = 15",
+            self.sample_project / "carwash/sprayers.py",
+        )
 
         shell.envo.wait_until_ready()
         shell.envo.assert_partially_reloaded(0)
@@ -67,7 +82,10 @@ class TestSourceReload(TestBase):
         e.exit().eval()
 
     def test_on_partial_reload(self, shell):
-        utils.replace_in_code("sources: List[Source] = []", "sources: List[Source] = [Source(root / 'sample_project')]")
+        utils.replace_in_code(
+            "sources: List[Source] = []",
+            "sources: List[Source] = [Source(root / 'sample_project')]",
+        )
         utils.add_boot(["import carwash"])
         utils.add_on_partial_reload(
             """
@@ -75,13 +93,17 @@ class TestSourceReload(TestBase):
             def _on_partial_reload(self, file: Path, actions):
                 print("Reloaded!")
                 self.redraw_prompt()
-            """)
+            """
+        )
 
         e = shell.start()
         e.prompt(utils.PromptState.MAYBE_LOADING).eval()
 
-        utils.replace_in_code("number_of_sprayers = 10", "number_of_sprayers = 15",
-                              self.sample_project / "carwash/sprayers.py")
+        utils.replace_in_code(
+            "number_of_sprayers = 10",
+            "number_of_sprayers = 15",
+            self.sample_project / "carwash/sprayers.py",
+        )
 
         shell.envo.wait_until_ready()
         shell.envo.assert_partially_reloaded(1)

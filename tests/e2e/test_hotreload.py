@@ -277,16 +277,16 @@ class TestHotReload(utils.TestBase):
 
     def test_if_reproductible(self, shell):
         if is_linux():
-            os.environ["PATH"] = f"/already_existing_path:" + os.environ["PATH"]
+            os.environ["PATH"] = "/already_existing_path:" + os.environ["PATH"]
             utils.add_definition(
-                f"""
+                """
                 self.path = "/some_path:" + self.path
                 """
             )
         if is_windows():
-            os.environ["PATH"] = f"\\already_existing_path;" + os.environ["PATH"]
+            os.environ["PATH"] = "\\already_existing_path;" + os.environ["PATH"]
             utils.add_definition(
-                f"""
+                """
                 self.path = "\\\\some_path;" + self.path
                 """
             )
@@ -302,9 +302,9 @@ class TestHotReload(utils.TestBase):
         sleep(0.5)
 
         if is_linux():
-            e.output(rf"\['/some_path', .*'/already_existing_path'.*\]\n")
+            e.output(r"\['/some_path', .*'/already_existing_path'.*\]\n")
         if is_windows():
-            e.output(rf"\['\\\\some_path', .*'\\\\already_existing_path'.*\]\n")
+            e.output(r"\['\\\\some_path', .*'\\\\already_existing_path'.*\]\n")
 
         e.prompt().eval()
 

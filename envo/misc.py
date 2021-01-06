@@ -1,24 +1,17 @@
 import errno
 import importlib.machinery
 import importlib.util
-import inspect
 import os
 import re
 import sys
-import time
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
-from threading import Thread
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 from globmatch_temp import glob_match
-from watchdog.events import (
-    FileModifiedEvent,
-    FileSystemEventHandler,
-    PatternMatchingEventHandler,
-)
+from watchdog.events import FileModifiedEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 __all__ = [
@@ -225,36 +218,17 @@ def render(template: str, output: Path, context: Dict[str, Any]) -> None:
 def render_py_file(template_path: Path, output: Path, context: Dict[str, Any]) -> None:
     render_file(template_path, output, context)
 
-################
-import importlib as imp
-import sys
-import os
-
-def load_module(pack_name, module_name, path):
-    if pack_name not in sys.modules:
-        init_file = os.path.join(os.path.dirname(path), '__init__.py')
-        if os.path.exists(init_file):
-            print('loading parent module ' + pack_name)
-            s=imp.util.spec_from_file_location(pack_name, init_file, submodule_search_locations=[])
-            m=imp.util.module_from_spec(s)
-            s.loader.exec_module(m)
-            sys.modules[s.name] = m
-
-    s=imp.util.spec_from_file_location(pack_name+'.'+module_name, path)
-    m=imp.util.module_from_spec(s)
-    s.loader.exec_module(m)
-    return m
-################
-
 
 def import_from_file(path: Path) -> Any:
-    init_file = path.parent / '__init__.py'
+    init_file = path.parent / "__init__.py"
 
     loader = importlib.machinery.SourceFileLoader(str(path), str(path))
     spec = importlib.util.spec_from_loader(loader.name, loader)
 
     if init_file.exists():
-        init_loader = importlib.machinery.SourceFileLoader(str(init_file), str(init_file))
+        init_loader = importlib.machinery.SourceFileLoader(
+            str(init_file), str(init_file)
+        )
         init_spec = importlib.util.spec_from_loader(init_loader.name, init_loader)
         init_module = importlib.util.module_from_spec(init_spec)
         init_loader.exec_module(init_module)
@@ -353,15 +327,13 @@ class EnvParser:
         class {self.class_name}(envo.env.Env, {class_name}, {",".join(parents)} {"," if parents else ""} {",".join(self.plugins)}):
             def __init__(self):
                 pass
-        """
+        """  # noqa: E501
         )
 
         ret = parents_src + src + melted
 
         return ret
 
-
-import sys
 
 PLATFORM_WINDOWS = "windows"
 PLATFORM_LINUX = "linux"

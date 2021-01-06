@@ -1,6 +1,3 @@
-from time import sleep
-
-from envo import logging
 from tests.e2e import utils
 
 UP_KEY = "\033[A"

@@ -4,7 +4,6 @@ from pathlib import Path
 from time import sleep
 
 import pytest
-from rhei import Stopwatch
 
 from envo.misc import is_linux, is_windows
 from tests.e2e import utils

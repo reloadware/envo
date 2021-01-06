@@ -8,7 +8,7 @@ from pathlib import Path
 from subprocess import Popen
 from threading import Thread
 from time import sleep
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Type
+from typing import Any, Dict, List, Optional, Type
 
 import pyte
 import pyte.modes
@@ -17,7 +17,7 @@ import requests
 from rhei import Stopwatch
 from stickybeak import Injector
 
-from envo import Env, const
+from envo import const
 from envo.e2e import STICKYBEAK_PORT
 from envo.logging import Logger
 from envo.shell import PromptBase
@@ -30,22 +30,18 @@ from tests.utils import add_flake_cmd  # noqa F401
 from tests.utils import add_hook  # noqa F401
 from tests.utils import add_mypy_cmd  # noqa F401
 from tests.utils import add_namespace  # noqa F401
+from tests.utils import add_on_partial_reload  # noqa F401
 from tests.utils import add_plugins  # noqa F401
 from tests.utils import change_file  # noqa F401
 from tests.utils import clean_output  # noqa F401
 from tests.utils import replace_in_code  # noqa F401
 from tests.utils import run  # noqa F401
-from tests.utils import add_on_partial_reload  # noqa F401
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
 
 
 injector = Injector(address=f"http://localhost:{STICKYBEAK_PORT}")
-
-
-if TYPE_CHECKING:
-    from envo.scripts import EnvoBase
 
 
 class PromptState(Enum):
@@ -163,7 +159,8 @@ class Expecter:
                 AssertInTime(condition, timeout)
             except AssertInTime.TIMEOUT:
                 raise AssertInTime.TIMEOUT(
-                    f"Process has not exit on time with proper exit code (last exit code = {self._spawn.process.poll()})"
+                    f"Process has not exit on time with proper"
+                    f" exit code (last exit code = {self._spawn.process.poll()})"
                 )
 
 
@@ -256,9 +253,7 @@ class SpawnEnvo:
             cls.wait_until_ready()
 
         @classmethod
-        def assert_partially_reloaded(
-                cls, number: int = 1, timeout=3
-        ) -> None:
+        def assert_partially_reloaded(cls, number: int = 1, timeout=3) -> None:
             from time import sleep
 
             from envo import logger, logging
@@ -436,7 +431,7 @@ def single_command(command: str) -> str:
     return run(f'envo test -c "{command}"')
 
 
-def envo_run(command: str, stage: str ="") -> str:
+def envo_run(command: str, stage: str = "") -> str:
     return run(f"envo {stage} run {command}")
 
 

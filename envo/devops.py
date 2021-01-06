@@ -1,10 +1,7 @@
 import re
 import subprocess
 import sys
-import time
 from subprocess import Popen
-from threading import Thread
-from typing import List
 
 __all__ = ["CommandError", "run"]
 
@@ -27,10 +24,10 @@ def run(
         command = command.strip()
         command = command.replace("\r", "")
         command = command.replace("\n", " & ")
-        popen_cmd = [f"cmd.exe", "/c", command]
+        popen_cmd = ["cmd.exe", "/c", command]
     elif is_linux():
         command = "set -uoe pipefail\n" + command
-        popen_cmd = [f"/bin/bash", "--rcfile", "/dev/null", "-c", command]
+        popen_cmd = ["/bin/bash", "--rcfile", "/dev/null", "-c", command]
     else:
         raise NotImplementedError()
 
@@ -38,31 +35,24 @@ def run(
 
     buffer = []
 
-    def std_out_reader():
-        while True:
-            c = proc.stdout.read(1)
-            if not c or c == b"\xf0":
-                break
-
-            if print_output:
-                try:
-                    sys.stdout.buffer.write(c)
-                    sys.stdout.flush()
-                except ValueError:
-                    return
-            buffer.append(c)
-
-    Thread(target=std_out_reader).start()
-
     while True:
-        ret_code = proc.poll()
-        if ret_code is None:
-            time.sleep(0.05)
-            continue
+        c = proc.stdout.read(1)
+        if not c or c == b"\xf0":
+            break
 
-        if ret_code != 0 and not ignore_errors:
-            sys.exit(ret_code)
-        else:
-            ret = b"".join(buffer)
-            ret = ret.decode("utf-8")
-            return ret
+        if print_output:
+            try:
+                sys.stdout.buffer.write(c)
+                sys.stdout.flush()
+            except ValueError:
+                break
+        buffer.append(c)
+
+    ret_code = proc.wait()
+
+    if ret_code != 0 and not ignore_errors:
+        sys.exit(ret_code)
+    else:
+        ret = b"".join(buffer)
+        ret = ret.decode("utf-8")
+        return ret

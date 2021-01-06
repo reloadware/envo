@@ -2,11 +2,9 @@ import inspect
 import os
 import re
 import sys
-import traceback
-import types
 from collections import OrderedDict
 from copy import copy
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field, is_dataclass
 from pathlib import Path
 from threading import Lock, Thread
 from time import sleep
@@ -23,13 +21,12 @@ from typing import (
     TypeVar,
     Union,
 )
-from envo import console
 
 from rhei import Stopwatch
 from watchdog import events
 from watchdog.events import FileModifiedEvent
 
-from envo import logger
+from envo import console, logger
 from envo.logging import Logger
 from envo.misc import Callback, EnvoError, FilesWatcher, import_from_file
 
@@ -51,10 +48,10 @@ __all__ = [
     "ondestroy",
     "boot_code",
     "Namespace",
-    "Source"
+    "Source",
 ]
 
-from envo.partial_reloader import PartialReloader, Action
+from envo.partial_reloader import Action, PartialReloader
 
 T = TypeVar("T")
 
@@ -62,8 +59,8 @@ T = TypeVar("T")
 if TYPE_CHECKING:
     Raw = Union[T]
     from envo import Plugin
-    from envo.shell import Shell, FancyShell
     from envo.scripts import Status
+    from envo.shell import FancyShell
 else:
 
     class Raw(Generic[T]):
@@ -417,7 +414,14 @@ class Reloader:
             sys.modules.pop(p)
 
     def _on_source_edit(self, event: FileModifiedEvent) -> None:
-        module = next((m for m in sys.modules.values() if hasattr(m, "__file__") and m.__file__ == event.src_path), None)
+        module = next(
+            (
+                m
+                for m in sys.modules.values()
+                if hasattr(m, "__file__") and m.__file__ == event.src_path
+            ),
+            None,
+        )
 
         if not module:
             return
@@ -772,13 +776,17 @@ class Env(EnvoEnv):
         self._reloader = None
 
         if self._se.reloader_enabled:
-            self._reloader = Reloader(li=Reloader.Links(env=self, status=self._li.status, logger=self.logger),
-                                      se=Reloader.Sets(extra_watchers=se.extra_watchers),
-                                      calls=Reloader.Callbacks(on_reload_start=Callback(self._on_reload_start),
-                                          after_partial_reload=Callback(self._after_partial_reload),
-                                                               after_full_reload=Callback(self._after_full_reload),
-                                                               on_env_edit=Callback(self._on_env_edit),
-                                                               on_load_error=Callback(self._on_load_error)))
+            self._reloader = Reloader(
+                li=Reloader.Links(env=self, status=self._li.status, logger=self.logger),
+                se=Reloader.Sets(extra_watchers=se.extra_watchers),
+                calls=Reloader.Callbacks(
+                    on_reload_start=Callback(self._on_reload_start),
+                    after_partial_reload=Callback(self._after_partial_reload),
+                    after_full_reload=Callback(self._after_full_reload),
+                    on_env_edit=Callback(self._on_env_edit),
+                    on_load_error=Callback(self._on_load_error),
+                ),
+            )
 
     def _add_sources_to_syspath(self) -> None:
         for p in reversed(self.meta.sources):
@@ -799,9 +807,12 @@ class Env(EnvoEnv):
 
     def _after_partial_reload(self, file: Path, actions: List[Action]) -> None:
         if not actions:
-            self.logger.info(f"No actions to apply")
+            self.logger.info("No actions to apply")
         else:
-            self.logger.debug(f"Partial reload actions: {actions}", metadata={"type": "partial_reload"})
+            self.logger.debug(
+                f"Partial reload actions: {actions}",
+                metadata={"type": "partial_reload"},
+            )
 
         on_reloads = self._magic_functions["on_partial_reload"]
         for f in on_reloads.values():
@@ -812,10 +823,11 @@ class Env(EnvoEnv):
     def _after_full_reload(self) -> None:
         self._run_boot_codes()
         self._li.status.source_ready = True
-        self.logger.debug(f"Applied full reload")
+        self.logger.debug("Applied full reload")
 
     def _on_load_error(self, error: Exception) -> None:
         from rich.traceback import Traceback
+
         exc_type, exc_value, traceback = sys.exc_info()
         trace = Traceback.extract(exc_type, exc_value, traceback)
         trace.stacks[0].frames = trace.stacks[0].frames[-1:]
@@ -934,11 +946,11 @@ class Env(EnvoEnv):
         :param owner_name:
         """
         envs = {}
-        for name, field in self.fields(self, self._name).items():
-            if field.namespaced_name in envs:
-                raise EnvoError(f'Variable "{field.namespaced_name}" is redefined')
+        for name, f in self.fields(self, self._name).items():
+            if f.namespaced_name in envs:
+                raise EnvoError(f'Variable "{f.namespaced_name}" is redefined')
 
-            envs[field.namespaced_name] = str(field.value)
+            envs[f.namespaced_name] = str(f.value)
 
         envs = {k.upper(): v for k, v in envs.items()}
 

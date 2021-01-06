@@ -9,7 +9,7 @@ import loguru
 from loguru._colorizer import Colorizer
 from pygments.styles import get_style_by_name
 from rhei import Stopwatch
-from xonsh.pyghooks import CompoundColorMap, XonshConsoleLexer, pygments_style_by_name
+from xonsh.pyghooks import XonshConsoleLexer
 
 
 class Level(Enum):

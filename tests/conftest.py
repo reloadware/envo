@@ -3,7 +3,6 @@ import shutil
 import sys
 from pathlib import Path
 
-from loguru_caplog import loguru_caplog as caplog  # noqa: ignore F401
 from pytest import fixture
 
 test_root = Path(os.path.realpath(__file__)).parent
@@ -14,7 +13,7 @@ envo_root = test_root.parent
 def sandbox() -> Path:
     pwd = Path(os.environ["PWD"])
 
-    test_dir = Path(os.getenv('PYTEST_CURRENT_TEST').split("::")[0]).parent
+    test_dir = Path(os.getenv("PYTEST_CURRENT_TEST").split("::")[0]).parent
 
     sandbox_dir = pwd / test_dir / "sandbox"
     if sandbox_dir.exists():
@@ -64,4 +63,3 @@ def is_linux():
     from envo.misc import is_linux
 
     return is_linux()
-

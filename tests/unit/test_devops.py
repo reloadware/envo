@@ -1,5 +1,3 @@
-import os
-
 import pytest
 
 from envo import run
@@ -67,7 +65,7 @@ class TestLinuxRun:
 
     def test_pipefail(self):
         with pytest.raises(SystemExit) as e:
-            result = run("""non_existend_command | grep command""")
+            run("""non_existend_command | grep command""")
 
         assert e.value.code == 1
 

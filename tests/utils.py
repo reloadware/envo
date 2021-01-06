@@ -24,7 +24,7 @@ __all__ = [
     "add_boot",
     "clean_output",
     "run",
-    "add_function"
+    "add_function",
 ]
 
 
@@ -195,9 +195,7 @@ def add_boot(
     )
 
 
-def add_on_partial_reload(
-    code: str, file=Path("env_test.py")
-) -> None:
+def add_on_partial_reload(code: str, file=Path("env_test.py")) -> None:
     add_command(code, file)
 
 
@@ -215,4 +213,3 @@ def add_function(code: str, file=Path("env_comm.py")) -> None:
 def add_imports(code: str, file=Path("env_comm.py")) -> None:
     cleaned_code = textwrap.dedent(code)
     file.write_text(cleaned_code + file.read_text())
-
