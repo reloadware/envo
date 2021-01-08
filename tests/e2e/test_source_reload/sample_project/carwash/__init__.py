@@ -1,1 +1,1 @@
-from . import sprayers  # noqa
+from carwash import sprayers  # noqa
