@@ -18,3 +18,6 @@ from envo.devops import *
 from envo.env import *
 from envo.plugins import *
 from envo.misc import EnvoError
+from envo import dependency_watcher
+
+dependency_watcher.enable()

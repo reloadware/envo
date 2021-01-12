@@ -219,27 +219,39 @@ def render_py_file(template_path: Path, output: Path, context: Dict[str, Any]) -
     render_file(template_path, output, context)
 
 
-def import_from_file(path: Path) -> Any:
-    init_file = path.parent / "__init__.py"
+def path_to_module_name(path: Path, package_root: Path) -> str:
+    rel_path = path.absolute().relative_to(package_root.absolute().parent)
+    ret = str(rel_path).replace(".py", "").replace("/", ".").replace("\\", ".")
+    ret = ret.replace(".__init__", "")
+    return ret
 
-    loader = importlib.machinery.SourceFileLoader(str(path), str(path))
-    spec = importlib.util.spec_from_loader(loader.name, loader)
 
-    if init_file.exists():
-        init_loader = importlib.machinery.SourceFileLoader(
-            str(init_file), str(init_file)
-        )
-        init_spec = importlib.util.spec_from_loader(init_loader.name, init_loader)
-        init_module = importlib.util.module_from_spec(init_spec)
-        init_loader.exec_module(init_module)
-
-        sys.modules[loader.name.rstrip(".py")] = init_module
-        sys.modules[str(init_file)] = init_module
-        sys.modules[str(init_file).rstrip(".py")] = init_module
+def import_from_file(path: Path, package_root: Path) -> Any:
+    module_name = path_to_module_name(path, package_root)
+    spec = importlib.util.spec_from_file_location(module_name, str(path.absolute()))
 
     module = importlib.util.module_from_spec(spec)
-    loader.exec_module(module)
+    spec.loader.exec_module(module)
+    return module
 
+
+def get_module_from_full_name(full_name: str) -> Optional[str]:
+    parts = full_name.split(".")
+
+    while True:
+        module_name = ".".join(parts)
+        if module_name in sys.modules:
+            return module_name
+        parts.pop(0)
+        if not parts:
+            return None
+
+
+def import_from_file_raw(path: Path) -> Any:
+    loader = importlib.machinery.SourceFileLoader(str(path), str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
     return module
 
 

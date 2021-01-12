@@ -22,6 +22,7 @@ from typing import (
     Union,
 )
 
+from globmatch_temp import glob_match
 from rhei import Stopwatch
 from watchdog import events
 from watchdog.events import FileModifiedEvent
@@ -55,10 +56,9 @@ from envo.partial_reloader import Action, PartialReloader
 
 T = TypeVar("T")
 
-
 if TYPE_CHECKING:
     Raw = Union[T]
-    from envo import Plugin
+    from envo import Plugin, misc
     from envo.scripts import Status
     from envo.shell import FancyShell
 else:
@@ -370,18 +370,17 @@ class Source:
     ignore_files: List[str] = field(default_factory=list)
 
 
-class Reloader:
+class SourceReloader:
     @dataclass
     class Callbacks:
         on_reload_start: Callback
         after_partial_reload: Callback
         after_full_reload: Callback
-        on_env_edit: Callback
-        on_load_error: Callback
+        on_reload_error: Callback
 
     @dataclass
     class Sets:
-        extra_watchers: List[FilesWatcher]
+        source: Source
 
     @dataclass
     class Links:
@@ -389,35 +388,29 @@ class Reloader:
         status: "Status"
         logger: "Logger"
 
-    _env_watchers: List[FilesWatcher]
-    _source_watchers: List[FilesWatcher]
     _default_watch_files = ["**/*.py"]
     _default_ignore_files = [r"**/.*", r"**/*~", r"**/__pycache__"]
-    _modules_before: Dict[str, Any]
+    _watcher: FilesWatcher
 
     def __init__(self, li: Links, se: Sets, calls: Callbacks) -> None:
         self.li = li
         self.se = se
         self.calls = calls
-
-        self._env_watchers = []
-        self._source_watchers = []
-
-        self._collect_env_watchers()
-        self._collect_source_watchers()
-
-        self._modules_before = sys.modules.copy()
-
-    def _unload_modules(self) -> None:
-        to_pop = set(sys.modules.keys()) - set(self._modules_before.keys())
-        for p in to_pop:
-            sys.modules.pop(p)
+        self._watcher = FilesWatcher(
+            FilesWatcher.Sets(
+                root=self.se.source.root,
+                include=self.se.source.watch_files + self._default_watch_files,
+                exclude=self.se.source.ignore_files + self._default_ignore_files,
+                name=str(self.se.source.root),
+            ),
+            calls=FilesWatcher.Callbacks(on_event=Callback(self._on_source_edit)),
+        )
 
     def _on_source_edit(self, event: FileModifiedEvent) -> None:
         module = next(
             (
                 m
-                for m in sys.modules.values()
+                for m in reversed(list(sys.modules.values()))
                 if hasattr(m, "__file__") and m.__file__ == event.src_path
             ),
             None,
@@ -426,38 +419,101 @@ class Reloader:
         if not module:
             return
 
-        reloader = PartialReloader(module)
+        reloader = PartialReloader(module, self.se.source.root)
         self.li.logger.info(f"Detected changes in {event.src_path}")
 
         try:
             self.calls.on_reload_start()
             actions = reloader.run()
             self.calls.after_partial_reload(Path(event.src_path), actions)
-        except NotImplementedError:
-            self._unload_modules()
-            self.calls.after_full_reload()
+        except SyntaxError as e:
+            self.calls.on_reload_error(e)
         except BaseException as e:
-            self.calls.on_load_error(e)
+            self.full_reload()
+            self.calls.after_full_reload()
 
-        for fw in self._source_watchers:
-            fw.flush()
+        self._watcher.flush()
 
     @property
-    def _all_watchers(self) -> List[FilesWatcher]:
-        return [*self._env_watchers, *self._source_watchers]
+    def source_files(self) -> List[Path]:
+        exclude = self.se.source.ignore_files + self._default_ignore_files
+        ret = []
+        for p in self.se.source.root.glob("**/*.py"):
+            if glob_match(p, exclude):
+                continue
 
-    def _collect_source_watchers(self) -> None:
-        for s in self.li.env.meta.sources:
-            watcher = FilesWatcher(
-                FilesWatcher.Sets(
-                    root=s.root,
-                    include=s.watch_files + self._default_watch_files,
-                    exclude=s.ignore_files + self._default_ignore_files,
-                    name=str(s.root),
-                ),
-                calls=FilesWatcher.Callbacks(on_event=Callback(self._on_source_edit)),
-            )
-            self._source_watchers.append(watcher)
+            ret.append(p.absolute())
+        return ret
+
+    @property
+    def modules(self) -> List[Any]:
+        ret = []
+        source_files = self.source_files
+
+        potential_module_names = []
+        for p in source_files:
+            module_name = misc.path_to_module_name(p, self.se.source.root)
+            potential_module_names.append(module_name)
+
+        for n in potential_module_names:
+            m = misc.get_module_from_full_name(n)
+            if not m:
+                continue
+
+            if not hasattr(m, "__file__"):
+                continue
+
+            if not self.se.source.root in Path(m.__file__).parents:
+                continue
+
+            ret .append(m)
+        return ret
+
+    def start(self) -> None:
+        self._watcher.start()
+        self.li.status.reloader_ready = True
+
+    def stop(self):
+        def fun():
+            self._watcher.flush()
+            self._watcher.stop()
+
+        Thread(target=fun).start()
+
+
+class EnvReloader:
+    @dataclass
+    class Callbacks:
+        on_env_edit: Callback
+
+    @dataclass
+    class Sets:
+        extra_watchers: List[FilesWatcher]
+        watch_files: List[str]
+        ignore_files: List[str]
+
+    @dataclass
+    class Links:
+        env: "Env"
+        status: "Status"
+        logger: "Logger"
+
+    _env_watchers: List[FilesWatcher]
+    _modules_before: Dict[str, Any]
+
+    def __init__(self, li: Links, se: Sets, calls: Callbacks) -> None:
+        self.li = li
+        self.se = se
+        self.calls = calls
+
+        self._env_watchers = []
+
+        self._collect_env_watchers()
+
+    def _unload_modules(self) -> None:
+        to_pop = set(sys.modules.keys()) - set(self._modules_before.keys())
+        for p in to_pop:
+            sys.modules.pop(p)
 
     def _collect_env_watchers(self) -> None:
         constituents = self.li.env.get_user_envs()
@@ -471,8 +527,8 @@ class Reloader:
             watcher = FilesWatcher(
                 FilesWatcher.Sets(
                     root=p.Meta.root,
-                    include=self.li.env.meta.watch_files + ["env_*.py"],
-                    exclude=self.li.env.meta.ignore_files + self._default_ignore_files,
+                    include=self.se.watch_files + ["env_*.py"],
+                    exclude=self.se.ignore_files + [r"**/.*", r"**/*~", r"**/__pycache__"],
                     name=p.__name__,
                 ),
                 calls=FilesWatcher.Callbacks(on_event=self.calls.on_env_edit),
@@ -480,14 +536,15 @@ class Reloader:
             self._env_watchers.append(watcher)
 
     def start(self) -> None:
-        for w in self._all_watchers:
+        for w in self._env_watchers:
             w.start()
 
         self.li.status.reloader_ready = True
 
     def stop(self):
         def fun():
-            for w in self._all_watchers:
+            for w in self._env_watchers:
+                w.flush()
                 w.stop()
 
         Thread(target=fun).start()
@@ -547,17 +604,17 @@ class BaseEnv:
     @classmethod
     def is_user_env(cls) -> bool:
         return (
-            issubclass(cls, UserEnv)
-            and cls is not UserEnv
-            and "InheritedEnv" not in str(cls)
+                issubclass(cls, UserEnv)
+                and cls is not UserEnv
+                and "InheritedEnv" not in str(cls)
         )
 
     @classmethod
     def is_envo_env(cls) -> bool:
         return (
-            issubclass(cls, EnvoEnv)
-            and cls is not EnvoEnv
-            and "InheritedEnv" not in str(cls)
+                issubclass(cls, EnvoEnv)
+                and cls is not EnvoEnv
+                and "InheritedEnv" not in str(cls)
         )
 
     @classmethod
@@ -565,9 +622,9 @@ class BaseEnv:
         from envo import Plugin
 
         return (
-            issubclass(cls, Plugin)
-            and cls is not Plugin
-            and "InheritedEnv" not in str(cls)
+                issubclass(cls, Plugin)
+                and cls is not Plugin
+                and "InheritedEnv" not in str(cls)
         )
 
     @classmethod
@@ -589,7 +646,7 @@ class BaseEnv:
     def _get_parents_env(cls, env: Type["BaseEnv"]) -> List[Type["BaseEnv"]]:
         parents = []
         for p in env.Meta.parents:
-            parent = import_from_file(Path(str(env.Meta.root / p))).Env
+            parent = import_from_file(Path(str(env.Meta.root / p)), env.Meta.root).Env
             parents.append(parent)
             parents.extend(cls._get_parents_env(parent))
         return parents
@@ -605,7 +662,7 @@ class BaseEnv:
 
     @classmethod
     def get_env_path(cls) -> Path:
-        return Path(cls.get_user_envs()[0].__module__)
+        return cls.Meta.root / f"env_{cls.Meta.stage}.py"
 
 
 class EnvoEnv(BaseEnv):
@@ -666,7 +723,7 @@ class EnvBuilder:
 
     @classmethod
     def build_shell_env_from_file(cls, file: Path) -> Type["Env"]:
-        env = import_from_file(file).Env  # type: ignore
+        env = import_from_file(file, file.parent).Env  # type: ignore
         return cls.build_shell_env(env)
 
 
@@ -700,7 +757,8 @@ class Env(EnvoEnv):
         blocking: bool = False
 
     _parents: List[Type["Env"]]
-    _reloader: Reloader
+    _env_reloader: EnvReloader
+    _source_reloaders: List[SourceReloader]
 
     def __new__(cls, *args, **kwargs) -> "Env":
         env = BaseEnv.__new__(cls)
@@ -773,20 +831,31 @@ class Env(EnvoEnv):
         self.genstub()
 
         self.init_parts()
-        self._reloader = None
+        self._env_reloader = None
 
         if self._se.reloader_enabled:
-            self._reloader = Reloader(
-                li=Reloader.Links(env=self, status=self._li.status, logger=self.logger),
-                se=Reloader.Sets(extra_watchers=se.extra_watchers),
-                calls=Reloader.Callbacks(
-                    on_reload_start=Callback(self._on_reload_start),
-                    after_partial_reload=Callback(self._after_partial_reload),
-                    after_full_reload=Callback(self._after_full_reload),
+            self._env_reloader = EnvReloader(
+                li=EnvReloader.Links(env=self, status=self._li.status, logger=self.logger),
+                se=EnvReloader.Sets(extra_watchers=se.extra_watchers, watch_files=self.meta.watch_files,
+                                    ignore_files=self.meta.ignore_files),
+                calls=EnvReloader.Callbacks(
                     on_env_edit=Callback(self._on_env_edit),
-                    on_load_error=Callback(self._on_load_error),
                 ),
             )
+            self._source_reloaders = []
+
+            for s in self.meta.sources:
+                reloader = SourceReloader(
+                    li=SourceReloader.Links(env=self, status=self._li.status, logger=self.logger),
+                    se=SourceReloader.Sets(source=s),
+                    calls=SourceReloader.Callbacks(
+                        on_reload_start=Callback(self._on_reload_start),
+                        after_partial_reload=Callback(self._after_partial_reload),
+                        after_full_reload=Callback(self._after_full_reload),
+                        on_reload_error=Callback(self._on_reload_error)
+                    ),
+                )
+                self._source_reloaders.append(reloader)
 
     def _add_sources_to_syspath(self) -> None:
         for p in reversed(self.meta.sources):
@@ -825,7 +894,7 @@ class Env(EnvoEnv):
         self._li.status.source_ready = True
         self.logger.debug("Applied full reload")
 
-    def _on_load_error(self, error: Exception) -> None:
+    def _on_reload_error(self, error: Exception) -> None:
         from rich.traceback import Traceback
 
         exc_type, exc_value, traceback = sys.exc_info()
@@ -840,6 +909,22 @@ class Env(EnvoEnv):
         console.print(traceback_obj)
         self._li.shell.redraw()
         self._li.status.source_ready = True
+
+    def _start_reloaders(self) -> None:
+        if not self._se.reloader_enabled:
+            return
+
+        self._env_reloader.start()
+        for r in self._source_reloaders:
+            r.start()
+
+    def _stop_reloaders(self) -> None:
+        if not self._se.reloader_enabled:
+            return
+
+        self._env_reloader.stop()
+        for r in self._source_reloaders:
+            r.stop()
 
     def _get_errors(self) -> List[str]:
         """
@@ -863,18 +948,18 @@ class Env(EnvoEnv):
         for f in dir(self):
             # skip properties
             if hasattr(self.__class__, f) and inspect.isdatadescriptor(
-                getattr(self.__class__, f)
+                    getattr(self.__class__, f)
             ):
                 continue
 
             attr: Any = getattr(self, f)
 
             if (
-                inspect.ismethod(attr)
-                or f.startswith("_")
-                or inspect.isclass(attr)
-                or f in _internal_objs
-                or isinstance(attr, MagicFunction)
+                    inspect.ismethod(attr)
+                    or f.startswith("_")
+                    or inspect.isclass(attr)
+                    or f in _internal_objs
+                    or isinstance(attr, MagicFunction)
             ):
                 continue
 
@@ -980,8 +1065,7 @@ class Env(EnvoEnv):
             sw.start()
             functions = self._magic_functions["onload"].values()
 
-            if self._reloader:
-                self._reloader.start()
+            self._start_reloaders()
 
             for h in functions:
                 try:
@@ -1052,8 +1136,7 @@ class Env(EnvoEnv):
         ]
 
         if any([s in event.event_type for s in subscribe_events]):
-            if self._se.reloader_enabled:
-                self._reloader.stop()
+            self._stop_reloaders()
 
             self.logger.info(
                 "Reloading",
@@ -1071,8 +1154,7 @@ class Env(EnvoEnv):
 
     def _exit(self) -> None:
         self.logger.info("Exiting env")
-        if self._reloader:
-            self._reloader.stop()
+        self._stop_reloaders()
 
     def activate(self) -> None:
         """
@@ -1126,7 +1208,7 @@ class Env(EnvoEnv):
         """
         for f in dir(self):
             if hasattr(self.__class__, f) and inspect.isdatadescriptor(
-                getattr(self.__class__, f)
+                    getattr(self.__class__, f)
             ):
                 continue
 
@@ -1229,7 +1311,7 @@ class Env(EnvoEnv):
         return out
 
     def _on_postcmd(
-        self, command: str, stdout: List[bytes], stderr: List[bytes]
+            self, command: str, stdout: List[bytes], stderr: List[bytes]
     ) -> None:
         functions = self._magic_functions["postcmd"]
         for f in functions.values():
