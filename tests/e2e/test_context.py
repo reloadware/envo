@@ -1,31 +1,34 @@
 from pathlib import Path
 from time import sleep
 
-import pytest
-
 from tests.e2e import utils
 
 
 class TestContext(utils.TestBase):
-    def test_simple_context(self):
+    def test_simple_context(self, shell):
         context = {
             "str_var": "str test value",
             "int_var": 8,
             "dict_var": {"nested_var": "some nested value"},
         }
         utils.add_context(context)
-        s = utils.shell()
+        e = shell.start()
 
-        s.sendline("print(str_var)")
-        s.expect(r"str test value")
+        e.prompt().eval()
 
-        s.sendline("print(int_var)")
-        s.expect(r"8")
+        shell.sendline("print(str_var)")
+        e.output(r"str test value\n").prompt().eval()
 
-        s.sendline('print(dict_var["nested_var"])')
-        s.expect(r"some nested value")
+        shell.sendline("print(int_var)")
+        e.output(r"8\n").prompt().eval()
 
-    def test_multiple_contexts(self):
+        shell.sendline('print(dict_var["nested_var"])')
+        e.output(r"some nested value\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_multiple_contexts(self, shell):
         context1 = {
             "str_var1": "str test1 value",
             "int_var1": 8,
@@ -37,21 +40,27 @@ class TestContext(utils.TestBase):
             "int_var2": 28,
         }
         utils.add_context(context2, name="context2")
-        s = utils.shell()
 
-        s.sendline("print(str_var1)")
-        s.expect(r"str test1 value")
+        e = shell.start()
 
-        s.sendline("print(int_var1)")
-        s.expect(r"8")
+        e.prompt().eval()
 
-        s.sendline("print(str_var2)")
-        s.expect(r"str test2 value")
+        shell.sendline("print(str_var1)")
+        e.output(r"str test1 value\n").prompt().eval()
 
-        s.sendline("print(int_var2)")
-        s.expect(r"28")
+        shell.sendline("print(int_var1)")
+        e.output(r"8\n").prompt().eval()
 
-    def test_contexts_inheritance(self):
+        shell.sendline("print(str_var2)")
+        e.output(r"str test2 value\n").prompt().eval()
+
+        shell.sendline("print(int_var2)")
+        e.output(r"28\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_contexts_inheritance(self, shell):
         context1 = {
             "str_var1": "str test1 value",
             "int_var1": 8,
@@ -65,46 +74,54 @@ class TestContext(utils.TestBase):
             "int_var2": 28,
         }
         utils.add_context(context2, name="context2", file=Path("env_test.py"))
-        s = utils.shell()
+        e = shell.start()
 
-        s.sendline("print(str_var1)")
-        s.expect(r"str test1 new value")
+        e.prompt().eval()
 
-        s.sendline("print(int_var1)")
-        s.expect(r"8")
+        shell.sendline("print(str_var1)")
+        e.output(r"str test1 new value\n").prompt().eval()
 
-        s.sendline("print(str_var2)")
-        s.expect(r"str test2 value")
+        shell.sendline("print(int_var1)")
+        e.output(r"8\n").prompt().eval()
 
-        s.sendline("print(int_var2)")
-        s.expect(r"28")
+        shell.sendline("print(str_var2)")
+        e.output(r"str test2 value\n").prompt().eval()
 
-        s.sendline("print(other_var)")
-        s.expect(r"other var value")
+        shell.sendline("print(int_var2)")
+        e.output(r"28\n").prompt().eval()
 
-    def test_slow_context(self, envo_prompt):
+        shell.sendline("print(other_var)")
+        e.output(r"other var value\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_slow_context(self, shell):
         utils.add_command(
             """
             @context
             def some_context(self) -> Dict[str, Any]:
                 from time import sleep
-                sleep(1)
+                sleep(4.0)
                 return {"slow_var": "slow var value"}
             """
         )
-        s = utils.shell("⏳".encode("utf-8") + envo_prompt)
+        shell.start(False)
+        e = shell.expecter
 
-        s.sendline("print(slow_var)")
-        s.expect(r"is not defined")
+        e.prompt(utils.PromptState.LOADING)
 
-        sleep(1)
+        shell.sendline("print(slow_var)")
+        e.output(r"NameError: name 'slow_var' is not defined\n")
+        e.prompt(utils.PromptState.MAYBE_LOADING).eval()
 
-        s.sendline("print(slow_var)")
-        s.expect(r"slow var value")
+        sleep(0.0)
 
-        from pexpect import TIMEOUT
+        e.expected.pop()
+        e.prompt().eval()
 
-        with pytest.raises(TIMEOUT):
-            s.expect("⏳".encode("utf-8") + envo_prompt, timeout=0.1)
+        shell.sendline("print(slow_var)")
+        e.output(r"slow var value\n").prompt().eval()
 
-        s.expect(envo_prompt)
+        shell.exit()
+        e.exit().eval()

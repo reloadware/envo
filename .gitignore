@@ -95,3 +95,6 @@ __version__.py
 sandbox
 
 pip-wheel-metadata
+
+.env_*
+*.pyi

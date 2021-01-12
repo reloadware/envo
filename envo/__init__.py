@@ -1,8 +1,23 @@
+# flake8: noqa E402, F401
+
 import warnings
 
 warnings.warn = lambda *args, **kwargs: None
 
-from .devops import run  # noqa F401
-from .env import *  # noqa F401
-from .scripts import *  # noqa F401
-from .misc import EnvoError  # noqa F401
+from rich.traceback import install
+from rich.console import Console
+
+install()
+
+console = Console()
+console._force_terminal = True
+
+from envo import e2e
+from envo.logging import logger
+from envo.devops import *
+from envo.env import *
+from envo.plugins import *
+from envo.misc import EnvoError
+from envo import dependency_watcher
+
+dependency_watcher.enable()

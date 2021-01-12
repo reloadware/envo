@@ -1,21 +1,27 @@
+import errno
 import importlib.machinery
 import importlib.util
-import inspect
+import os
+import re
 import sys
+import traceback
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-import inotify.adapters
-import inotify.constants
-from globmatch_temp import glob_match
+from textwrap import dedent
+from typing import Any, Callable, Dict, List, Optional
 
+from globmatch_temp import glob_match
+from watchdog.events import FileModifiedEvent, FileSystemEventHandler
+from watchdog.observers import Observer
 
 __all__ = [
     "dir_name_to_class_name",
-    "setup_logger",
     "render_py_file",
     "render_file",
     "import_from_file",
     "EnvoError",
+    "Callback",
+    "FilesWatcher",
 ]
 
 
@@ -23,93 +29,150 @@ class EnvoError(Exception):
     pass
 
 
-class Inotify:
-    def __init__(self, root: Path):
-        self.device = inotify.adapters.Inotify()
-        self.root = root
-        self.include: List[str] = []
-        self.exclude: List[str] = []
-        self._pause = False
-        self._pause_exemption: Optional[Path] = None
-        self.stop = False
+class Callback:
+    def __init__(self, func: Optional[Callable[..., Any]] = None) -> None:
+        self.func = func
 
-    def event_gen(self) -> Any:
-        for event in self.device.event_gen(yield_nones=False):
-            if self.stop:
-                return
-
-            (_, type_names, path, filename) = event
-            full_path = Path(path) / Path(filename)
-
-            relative_path = full_path.relative_to(self.root)
-            relative_path_str = str(relative_path)
-            if relative_path.is_dir():
-                relative_path_str += "/"
-
-            if self._pause and full_path != self._pause_exemption:
-                continue
-
-            if glob_match(relative_path_str, self.exclude):
-                continue
-
-            if glob_match(relative_path_str, self.include):
-                yield event
-
-    def remove_watches(self) -> None:
-        self.device._Inotify__watches = {}
-        self.device._Inotify__watches_r = {}
-
-    def remove_watch(self, path: Path) -> None:
-        if str(path) not in self.device._Inotify__watches:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        if not self.func:
             return
+        return self.func(*args, **kwargs)
 
-        self.device.remove_watch(str(path))
+    def __bool__(self) -> bool:
+        return self.func is not None
 
-    def pause(self, exempt: Optional[Path] = None) -> None:
-        self._pause = True
-        self._pause_exemption = exempt
 
-    def resume(self) -> None:
-        self._pause = False
+class InotifyPath:
+    def __init__(self, raw_path: Path, root: Path) -> None:
+        self.absolute = raw_path.absolute()
+        self.relative = self.absolute.relative_to(root)
+        self.relative_str = str(self.relative)
 
-    def add_watch(self, path: Path) -> None:
-        if self.stop:
-            return
+        if self.relative.is_dir():
+            self.relative_str += "/"
 
-        if path.is_absolute():
-            relative = path.relative_to(self.root)
-        else:
-            relative = path
+    def match(self, include: List[str], exclude: List[str]) -> bool:
+        return not glob_match(self.relative_str, exclude) and glob_match(
+            self.relative_str, include
+        )
 
-        relative_str = str(relative)
+    def is_dir(self) -> bool:
+        return self.absolute.is_dir()
 
-        absolute_path = path.absolute()
 
-        if relative.is_dir():
-            relative_str += "/"
+class FilesWatcher(FileSystemEventHandler):
+    @dataclass
+    class Sets:
+        include: List[str]
+        exclude: List[str]
+        root: Path
+        name: str = "Anonymous"
 
-        if path.is_dir():
-            if relative == Path("."):
-                self.device.add_watch(str(absolute_path))
-            else:
-                if glob_match(relative_str, self.exclude):
-                    return
-                if not glob_match(relative_str, self.include):
-                    return
-                self.device.add_watch(str(absolute_path))
+    @dataclass
+    class Callbacks:
+        on_event: Callback
 
-            for p in relative.iterdir():
-                self.add_watch(p.absolute())
+    def __init__(self, se: Sets, calls: Callbacks):
+        from envo import logger
 
-        if glob_match(relative_str, self.exclude):
-            return
-        if not glob_match(relative_str, self.include):
-            return
+        self.include = [p.lstrip("./") for p in se.include]
+        self.exclude = [p.lstrip("./") for p in se.exclude]
+        self.root = se.root
 
-        if str(absolute_path) not in self.device._Inotify__watches:
-            self.device.add_watch(str(absolute_path))
+        super().__init__()
+        self.se = se
+        self.calls = calls
 
-        return
+        self.logger = logger.create_child(
+            f"{self.se.name} Inotify", descriptor=f"{self.se.name} Inotify"
+        )
+
+        self.logger.debug("Starting Inotify")
+        self.observer = Observer()
+
+        self.observer.schedule(self, str(self.se.root), recursive=True)
+
+    def on_any_event(self, event: FileModifiedEvent):
+        self.calls.on_event(event)
+
+    def flush(self) -> None:
+        self.observer.event_queue.queue.clear()
+
+    def match(self, path: str, include: List[str], exclude: List[str]) -> bool:
+        return not glob_match(path, exclude) and glob_match(path, include)
+
+    def walk_dirs(self, on_match: Callable) -> None:
+        def walk(path: Path):
+            for p in path.iterdir():
+                if glob_match(path, self.exclude):
+                    continue
+                on_match(str(p).encode("utf-8"))
+                if p.is_dir():
+                    walk(p)
+
+        walk(self.root)
+
+    def start(self) -> None:
+        self.logger.debug("Starting observer")
+
+        if is_linux():
+
+            def _add_dir_watch(self2, path, recursive, mask):
+                """
+                Adds a watch (optionally recursively) for the given directory path
+                to monitor events specified by the mask.
+
+                :param path:
+                    Path to monitor
+                :param recursive:
+                    ``True`` to monitor recursively.
+                :param mask:
+                    Event bit mask.
+                """
+                if not os.path.isdir(path):
+                    raise OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), path)
+                self2._add_watch(path, mask)
+                if recursive:
+                    self.walk_dirs(on_match=lambda p: self2._add_watch(p, mask))
+
+            from watchdog.observers.inotify_c import Inotify
+
+            Inotify._add_dir_watch = _add_dir_watch
+
+        self.observer.start()
+        self.logger.debug("Observer started")
+
+    def clone(self) -> "FilesWatcher":
+        return FilesWatcher(se=self.se, calls=self.calls)
+
+    def stop(self) -> None:
+        self.observer.stop()
+
+    def dispatch(self, event: FileModifiedEvent):
+        """Dispatches events to the appropriate methods.
+
+        :param event:
+            The event object representing the file system event.
+        :type event:
+            :class:`FileSystemEvent`
+        """
+        from watchdog.utils import has_attribute, unicode_paths
+
+        paths = []
+        if has_attribute(event, "dest_path"):
+            paths.append(unicode_paths.decode(event.dest_path))
+        if event.src_path:
+            paths.append(unicode_paths.decode(event.src_path))
+
+        if any(
+            self.match(
+                str(Path(p).relative_to(self.root)),
+                include=self.include,
+                exclude=self.exclude,
+            )
+            for p in paths
+        ):
+            super().dispatch(event)
 
 
 def dir_name_to_class_name(dir_name: str) -> str:
@@ -138,63 +201,186 @@ def is_valid_module_name(module: str) -> bool:
     return module.isidentifier() and not iskeyword(module)
 
 
-def setup_logger() -> None:
-    from loguru import logger
-
-    logger.remove()
-
-    logger.add(
-        sys.stdout,
-        format="<blue>{message}</blue>",
-        level="DEBUG",
-        filter=lambda x: x["level"].name == "DEBUG",
-    )
-    logger.add(
-        sys.stdout,
-        format="<bold>{message}</bold>",
-        level="INFO",
-        filter=lambda x: x["level"].name == "INFO",
-    )
-    logger.add(
-        sys.stderr,
-        format="<bold><yellow>{message}</yellow></bold>",
-        level="WARNING",
-        filter=lambda x: x["level"].name == "WARNING",
-    )
-    logger.add(
-        sys.stderr,
-        format="<bold><red>{message}</red></bold>",
-        level="ERROR",
-        filter=lambda x: x["level"].name == "ERROR",
-    )
-
-
 def render_file(template_path: Path, output: Path, context: Dict[str, Any]) -> None:
     from jinja2 import StrictUndefined, Template
 
-    template = Template(template_path.read_text(), undefined=StrictUndefined)
-    output.write_text(template.render(**context))
+    template = Template(template_path.read_text("utf-8"), undefined=StrictUndefined)
+    output.write_text(template.render(**context), "utf-8")
+
+
+def render(template: str, output: Path, context: Dict[str, Any]) -> None:
+    from jinja2 import StrictUndefined, Template
+
+    template = Template(template, undefined=StrictUndefined)
+    output.write_text(template.render(**context), "utf-8")
 
 
 def render_py_file(template_path: Path, output: Path, context: Dict[str, Any]) -> None:
-    import black
-
     render_file(template_path, output, context)
-    try:
-        black.main([str(output), "-q"])
-    except SystemExit:
-        pass
 
 
-def import_from_file(path: Path) -> Any:
-    if not path.is_absolute():
-        frame = inspect.stack()[1]
-        caller_path_dir = Path(frame[1]).parent
-        path = caller_path_dir / path
+def path_to_module_name(path: Path, package_root: Path) -> str:
+    rel_path = path.absolute().relative_to(package_root.absolute().parent)
+    ret = str(rel_path).replace(".py", "").replace("/", ".").replace("\\", ".")
+    ret = ret.replace(".__init__", "")
+    return ret
 
+
+def import_from_file(path: Path, package_root: Path) -> Any:
+    module_name = path_to_module_name(path, package_root)
+    spec = importlib.util.spec_from_file_location(module_name, str(path.absolute()))
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def get_module_from_full_name(full_name: str) -> Optional[str]:
+    parts = full_name.split(".")
+
+    while True:
+        module_name = ".".join(parts)
+        if module_name in sys.modules:
+            return module_name
+        parts.pop(0)
+        if not parts:
+            return None
+
+
+def import_from_file_raw(path: Path) -> Any:
     loader = importlib.machinery.SourceFileLoader(str(path), str(path))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
-
     return module
+
+
+def get_envo_relevant_traceback(exc: BaseException) -> List[str]:
+    if isinstance(exc, EnvoError):
+        msg = str(exc).splitlines(keepends=True)
+        return msg
+
+    msg = []
+    msg.extend(traceback.format_stack())
+    msg.extend(traceback.format_exception(*sys.exc_info())[1:])
+    msg_relevant = ["Traceback (Envo relevant):\n"]
+    relevant = False
+    for m in msg:
+        if re.search(r"env_.*\.py", m):
+            relevant = True
+        if relevant:
+            msg_relevant.append(m)
+
+    if relevant:
+        msg = msg_relevant
+
+    return msg
+
+
+@dataclass
+class EnvParser:
+    path: Path
+
+    def __post_init__(self):
+        self.parents = self._get_parents()
+
+    @property
+    def source(self) -> str:
+        return self.path.read_text("utf-8")
+
+    @property
+    def class_name(self) -> str:
+        return re.search(r"\nclass (.*)\(UserEnv\):", self.source)[1]
+
+    @property
+    def plugins(self) -> List[str]:
+        raw_search = re.search(r"plugins.*=.*\[(.*)]", self.source)[1]
+        if not raw_search:
+            return []
+
+        ret = raw_search.split(",")
+        return ret
+
+    def _get_parents(self) -> List["EnvParser"]:
+        parents_str = re.search(r"parents.*=.*\[(.*)]", self.source)[1]
+        if not parents_str:
+            return []
+        parents_paths_relative = (
+            parents_str.replace("'", "").replace('"', "").split(",")
+        )
+        parents_paths_relative = [p.strip() for p in parents_paths_relative]
+
+        parents_paths = [
+            Path(self.path.parent / p).resolve() for p in parents_paths_relative
+        ]
+        ret = [EnvParser(p) for p in parents_paths]
+        return ret
+
+    def get_stub(self) -> str:
+        # remove duplicates
+        parents_src = ""
+        for p in self.parents:
+            parents_src += p.get_stub() + "\n"
+
+        parents = [f"__{p.class_name}" for p in self.parents]
+
+        class_name = f"__{self.class_name}"
+
+        src = self.source.replace(self.class_name, class_name)
+        # Remove method bodies
+        src = re.sub(r"(def.*\(.*\).*?:)\n(?:(?:\n* {8,}.*?\n)+)", r"\1 ...", src)
+        # Remove Env declaration
+        src = re.sub(r"Env *?=.*?\n", r"", src)
+        # Leave only variable declarations
+        src = re.sub(r"((?:    )+\S*:.*)=.*\n", r"\1\n", src)
+
+        melted = dedent(
+            f"""\n
+        class {self.class_name}(envo.env.Env, {class_name}, {",".join(parents)} {"," if parents else ""} {",".join(self.plugins)}):
+            def __init__(self):
+                pass
+        """  # noqa: E501
+        )
+
+        ret = parents_src + src + melted
+
+        return ret
+
+
+PLATFORM_WINDOWS = "windows"
+PLATFORM_LINUX = "linux"
+PLATFORM_BSD = "bsd"
+PLATFORM_DARWIN = "darwin"
+PLATFORM_UNKNOWN = "unknown"
+
+
+def get_platform_name():
+    if sys.platform.startswith("win"):
+        return PLATFORM_WINDOWS
+    elif sys.platform.startswith("darwin"):
+        return PLATFORM_DARWIN
+    elif sys.platform.startswith("linux"):
+        return PLATFORM_LINUX
+    elif sys.platform.startswith(("dragonfly", "freebsd", "netbsd", "openbsd", "bsd")):
+        return PLATFORM_BSD
+    else:
+        return PLATFORM_UNKNOWN
+
+
+__platform__ = get_platform_name()
+
+
+def is_linux():
+    return __platform__ == PLATFORM_LINUX
+
+
+def is_bsd():
+    return __platform__ == PLATFORM_BSD
+
+
+def is_darwin():
+    return __platform__ == PLATFORM_DARWIN
+
+
+def is_windows():
+    return __platform__ == PLATFORM_WINDOWS

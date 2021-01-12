@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-
-ROOT="$(dirname($(dirname "${BASH_SOURCE[0]}")))"  # get the directory name
-ROOT="$(realpath "${DIR}")"    # resolve its full path if need be
-
-cd "$ROOT"
-
-circleci config process .circleci/config.yml

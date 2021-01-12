@@ -108,22 +108,23 @@ Example usage:
 TODO:
 Major:
 * Refactor start_in
-* restore wordking dir
 * Add file hooks
 * Add bootstrap (versioning etc)
-* Fix git log bug
-* Add reload command
-* magic function args validator
+* add error line number
 
 Minor:
 * Shell should highlight envo commands on green
-* Unnecessary prompt rendered again aftet Ctr-d
+* Unnecessary prompt rendered again aftet Ctr-d (only on xonsh?)
 * work on public/private fields and methods
 * add examples
 * print hooks for repr
+* Add reload command
 
 Bugs:
+* AttributeError on exit from emergency mode
+* Name error in context no emergency mode
+* .venv issue
+* nothing is being printed after running envo --init with existing envo
 
 Improvements:
 * type checking ?
-* .venv issue

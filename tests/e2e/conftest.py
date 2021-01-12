@@ -1,8 +1,6 @@
 import os
 from pathlib import Path
 
-import pexpect
-from pexpect import run
 from pytest import fixture
 
 from tests.e2e import utils
@@ -13,8 +11,14 @@ envo_root = test_root.parent / "envo"
 
 @fixture
 def init() -> None:
-    result = run("envo test --init")
-    assert result == b"\x1b[1mCreated test environment \xf0\x9f\x8d\xb0!\x1b[0m\r\n"
+    result = utils.run("envo test init")
+    assert "Created test environment" in result
+
+
+@fixture
+def init_bare() -> None:
+    result = utils.run("envo init")
+    assert "Created test environment" in result
 
 
 @fixture
@@ -33,21 +37,37 @@ def init_2_same_childs() -> None:
 
 
 @fixture
-def shell() -> pexpect.spawn:
+def shell() -> utils.SpawnEnvo:
     from tests.e2e.utils import shell
 
-    return shell()
+    s = shell()
+    yield s
+    s.on_exit()
 
 
 @fixture
-def envo_prompt() -> bytes:
-    from tests.e2e.utils import envo_prompt
+def comm_shell() -> utils.SpawnEnvo:
+    from tests.e2e.utils import comm_shell
 
-    return envo_prompt
+    s = comm_shell()
+    yield s
+    s.on_exit()
 
 
 @fixture
-def prompt() -> bytes:
-    from tests.e2e.utils import prompt
+def default_shell() -> utils.SpawnEnvo:
+    from tests.e2e.utils import default_shell
 
-    return prompt
+    s = default_shell()
+    yield s
+    s.on_exit()
+
+
+@fixture
+def env_test_file() -> Path:
+    return Path("env_test.py")
+
+
+@fixture
+def env_comm_file() -> Path:
+    return Path("env_comm.py")

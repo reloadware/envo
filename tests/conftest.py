@@ -1,9 +1,8 @@
 import os
 import shutil
+import sys
 from pathlib import Path
-from typing import Generator
 
-from loguru_caplog import loguru_caplog as caplog  # noqa: ignore F401
 from pytest import fixture
 
 test_root = Path(os.path.realpath(__file__)).parent
@@ -11,17 +10,22 @@ envo_root = test_root.parent
 
 
 @fixture
-def sandbox() -> Generator:
-    sandbox_dir = test_root / "sandbox"
+def sandbox() -> Path:
+    pwd = Path(os.environ["PWD"])
+
+    test_dir = Path(os.getenv("PYTEST_CURRENT_TEST").split("::")[0]).parent
+
+    sandbox_dir = pwd / test_dir / "sandbox"
     if sandbox_dir.exists():
         shutil.rmtree(str(sandbox_dir), ignore_errors=True)
 
-    sandbox_dir.mkdir()
+    sys.path.insert(0, str(sandbox_dir))
+
+    if not sandbox_dir.exists():
+        sandbox_dir.mkdir()
     os.chdir(str(sandbox_dir))
 
-    yield
-    if sandbox_dir.exists():
-        shutil.rmtree(str(sandbox_dir), ignore_errors=True)
+    return sandbox_dir
 
 
 @fixture
@@ -42,6 +46,21 @@ def mock_threading(mocker) -> None:
 
 @fixture
 def flake_cmd() -> None:
-    from tests.utils import flake_cmd
+    from tests.utils import add_flake_cmd
 
-    flake_cmd()
+    add_flake_cmd()
+
+
+@fixture
+def is_windows():
+    from envo.misc import is_windows
+
+    return is_windows()
+
+
+@fixture
+def is_linux():
+    from envo.misc import is_linux
+
+    return is_linux()
+

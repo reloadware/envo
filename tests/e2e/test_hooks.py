@@ -1,13 +1,10 @@
-from pathlib import Path
-
-import pytest
-from pexpect import EOF, TIMEOUT
-
+from envo.misc import is_linux, is_windows
 from tests.e2e import utils
+from tests.e2e.utils import PromptState
 
 
 class TestHooks(utils.TestBase):
-    def test_precmd_print_and_modify(self):
+    def test_precmd_print_and_modify(self, shell):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"print\(.*\)")
@@ -18,13 +15,20 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell()
-        s.sendline('print("pancake");')
-        s.expect(r"pre\r\n")
-        s.expect(r"pancake\r\n")
-        s.expect(r"pancake\r\n")
+        e = shell.start()
 
-    def test_fun_args_validation(self, envo_prompt):
+        e.prompt().eval()
+
+        shell.sendline('print("pancake");')
+        e.output(r"pre\n")
+        e.output(r"pancake\n")
+        e.output(r"pancake\n")
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_fun_args_validation(self, shell):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"print\(.*\)")
@@ -34,17 +38,22 @@ class TestHooks(utils.TestBase):
                 return command * 2
             """
         )
-        utils.shell(
-            envo_prompt.replace(
-                r"🛠\(sandbox\)".encode("utf-8"),
+        e = shell.start()
+
+        e.output(
+            (
                 r"Unexpected magic function args \['cmd'\], should be \['command'\].*"
                 r"pre_print\(cmd: str\) -> str.*"
                 r'In file ".*".*'
-                r"Line number: \d\d.*.*❌".encode("utf-8"),
+                r"Line number: \d\d\n"
             )
         )
+        e.prompt(utils.PromptState.EMERGENCY).eval()
 
-    def test_fun_args_validation_missing_arg(self, envo_prompt):
+        shell.exit()
+        e.exit().eval()
+
+    def test_fun_args_validation_missing_arg(self, shell):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"print\(.*\)")
@@ -53,17 +62,23 @@ class TestHooks(utils.TestBase):
                 return "cmd"
             """
         )
-        utils.shell(
-            envo_prompt.replace(
-                r"🛠\(sandbox\)".encode("utf-8"),
+        e = shell.start()
+
+        e.output(
+            (
                 r"Missing magic function args \['command'\].*"
                 r"pre_print\(\) -> str.*"
                 r'In file ".*".*'
-                r"Line number: \d\d.*.*❌".encode("utf-8"),
+                r"Line number: \d\d\n"
             )
         )
 
-    def test_precmd_not_matching_not_run(self):
+        e.prompt(utils.PromptState.EMERGENCY).eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_precmd_not_matching_not_run(self, shell):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"some_cmd\(.*\)")
@@ -73,15 +88,17 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell()
+        e = shell.start()
 
-        s.sendline('print("pancake");')
-        with pytest.raises(TIMEOUT):
-            s.expect(r"pre\r\n", timeout=0.5)
+        e.prompt().eval()
 
-        s.expect(r"pancake\r\n")
+        shell.sendline('print("pancake");')
+        e.output(r"pancake\n").prompt().eval()
 
-    def test_precmd_access_env_vars(self):
+        shell.exit()
+        e.exit().eval()
+
+    def test_precmd_access_env_vars(self, shell):
         utils.add_hook(
             r"""
             @precmd(cmd_regex=r"print\(.*\)")
@@ -91,12 +108,17 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell()
-        s.sendline('print("pancake");')
-        s.expect(r"test\r\n")
-        s.expect(r"pancake\r\n")
+        e = shell.start()
 
-    def test_onstdout(self):
+        e.prompt().eval()
+
+        shell.sendline('print("pancake");')
+        e.output(r"test\npancake\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_onstdout(self, shell):
         utils.add_hook(
             r"""
             @onstdout(cmd_regex=r"print\(.*\)")
@@ -106,12 +128,22 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell()
-        s.sendline('print("pancake");print("banana")')
-        s.expect(r" sweet pancake sweet \r\n")
-        s.expect(r" sweet banana sweet \r\n")
+        e = shell.start()
 
-    def test_onstderr(self):
+        e.prompt().eval()
+
+        shell.sendline('print("pancake");print("banana")')
+        if is_linux():
+            e.output(r" sweet pancake sweet\n sweet banana sweet\n").prompt().eval()
+        if is_windows():
+            e.output(
+                r" sweet pancake sweet\n sweet banana sweet\n sweet\n sweet "
+            ).prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_onstderr(self, shell):
         utils.add_hook(
             r"""
             @onstderr(cmd_regex=r"print\(.*\)")
@@ -121,36 +153,47 @@ class TestHooks(utils.TestBase):
             @postcmd(cmd_regex=r"print\(.*\)")
             def post_print(self, command: str, stdout: List[str], stderr: List[str]) -> None:
                 assert "ZeroDivisionError: division by zero\n" in stderr
-                assert stdout == ['not good :/', '\n', 'not good :/', '\n']
+                assert "not good :/" in stdout
                 print("post command test")
             """
         )
 
-        s = utils.shell()
-        s.sendline("print(1/0)")
-        s.expect(r"not good :/")
-        s.expect(r"ZeroDivisionError: division by zero")
-        s.expect(r"post command test")
+        shell.start()
+        e = shell.expecter
 
-    def test_post_hook_print(self):
+        e.prompt().eval()
+
+        shell.sendline("print(1/0)")
+        e.output(
+            r"not good :/\nZeroDivisionError: division by zero\npost command test\n"
+        ).prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_post_hook_print(self, shell):
         utils.add_hook(
             r"""
             @postcmd(cmd_regex=r"print\(.*\)")
             def post_print(self, command: str, stdout: List[str], stderr: List[str]) -> None:
                 assert command == 'print("pancake");print("banana")'
                 assert stderr == []
-                assert stdout == ["pancake", "\n", "banana", "\n"]
+                assert "pancake" in stdout and "banana" in stdout
                 print("post")
             """
         )
 
-        s = utils.shell()
-        s.sendline('print("pancake");print("banana")')
-        s.expect(r"pancake\r\n")
-        s.expect(r"banana\r\n")
-        s.expect(r"post\r\n")
+        e = shell.start()
 
-    def test_onload_onunload_hook(self, envo_prompt):
+        e.prompt().eval()
+
+        shell.sendline('print("pancake");print("banana")')
+        e.output(r"pancake\nbanana\npost\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_onload_onunload_hook(self, shell):
         utils.add_hook(
             r"""
             @oncreate
@@ -168,28 +211,59 @@ class TestHooks(utils.TestBase):
             """
         )
 
-        s = utils.shell(rb"on create.*on load.*" + envo_prompt)
-        s.sendline("exit")
-        s.expect(r"on unload")
-        s.expect(r"on destroy")
-        s.expect(EOF)
+        e = shell.start()
 
-    def test_onload_onunload_reload(self, envo_prompt):
+        e.output(r"on create\n")
+
+        # sometimes there's an extra prompt being printed out when printing to stdout. Not sure why
+        e.prompt(PromptState.MAYBE_LOADING)
+        e.expected[-1] = rf"({e.expected[-1]})?"
+
+        e.output(r"on load\n")
+
+        e.prompt().eval()
+
+        e.output(r"\non destroy\n")
+        e.output(r"on unload")
+
+        shell.exit()
+
+        e.eval()
+        e.exit().eval()
+
+    def test_onload_onunload_reload(self, shell):
         utils.add_hook(
             r"""
             @onload
             def init_sth(self) -> None:
-                print("on load")
+                print("\non load")
             @onunload
             def deinit_sth(self) -> None:
-                print("on unload")
+                print("\non unload")
             """
         )
 
-        s = utils.shell(rb"on load.*" + envo_prompt)
-        Path("env_comm.py").write_text(Path("env_comm.py").read_text())
-        s.expect(r"on unload")
-        s.expect(r"on load")
-        s.sendline("exit")
-        s.expect(r"on unload")
-        s.expect(EOF)
+        e = shell.start()
+
+        e.prompt(PromptState.MAYBE_LOADING)
+        e.expected[-1] = rf"({e.expected[-1]}\n)?"
+
+        e.output(r"on load\n")
+        e.prompt(PromptState.MAYBE_LOADING).eval()
+
+        shell.trigger_reload()
+        shell.envo.assert_reloaded(1)
+
+        e.output(r"\non unload\n")
+
+        # sometimes there's an extra prompt being printed out when printing to stdout. Not sure why
+        e.prompt(PromptState.MAYBE_LOADING)
+        e.expected[-1] = rf"({e.expected[-1]}\n)?"
+
+        e.output(r"on load\n")
+        e.prompt(PromptState.MAYBE_LOADING).eval()
+
+        shell.exit()
+
+        e.output(r"\non unload").eval()
+        e.exit().eval()

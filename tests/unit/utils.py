@@ -4,17 +4,20 @@ from importlib import import_module, reload
 from pathlib import Path
 from typing import List
 
-import pexpect as pexpect
 import pytest
 
-from envo import Env
+from envo import Env, UserEnv
 from tests.utils import add_command  # noqa F401
 from tests.utils import add_declaration  # noqa F401
 from tests.utils import add_definition  # noqa F401
+from tests.utils import add_flake_cmd  # noqa F401
+from tests.utils import add_function  # noqa F401
+from tests.utils import add_imports  # noqa F401
+from tests.utils import add_mypy_cmd  # noqa F401
 from tests.utils import change_file  # noqa F401
-from tests.utils import flake_cmd  # noqa F401
-from tests.utils import mypy_cmd  # noqa F401
+from tests.utils import clean_output  # noqa F401
 from tests.utils import replace_in_code  # noqa F401
+from tests.utils import run  # noqa F401
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
@@ -22,8 +25,6 @@ envo_root = test_root.parent
 
 __all__ = [
     "TestBase",
-    "spawn",
-    "shell",
     "flake8",
     "mypy",
 ]
@@ -76,7 +77,7 @@ def init() -> None:
     if env_local_file.exists():
         env_local_file.unlink()
 
-    command("test --init")
+    command("test init")
 
 
 def env(env_dir: Path = Path(".")) -> Env:
@@ -91,7 +92,7 @@ def env(env_dir: Path = Path(".")) -> Env:
     return env
 
 
-def shell() -> None:
+def shell_unit() -> None:
     command("test")
 
 
@@ -100,35 +101,27 @@ def init_child_env(child_dir: Path) -> None:
     child_dir.mkdir()
 
     os.chdir(str(child_dir))
-    command("test --init")
+    command("test init")
 
     replace_in_code("parent: Optional[str] = None", 'parent: Optional[str] = ".."')
 
     os.chdir(str(cwd))
 
 
-def spawn(command: str) -> pexpect.spawn:
-    s = pexpect.spawn(command, echo=False, timeout=4)
-    s.logfile = sys.stdout.buffer
-    return s
-
-
 def flake8() -> None:
-    p = pexpect.run("flake8", echo=False)
-    assert p == b""
+    p = run("flake8", pipe_stderr=False)
+    assert p == ""
 
 
 def mypy() -> None:
-    from pexpect import run
-
     original_dir = Path(".").absolute()
     package_name = original_dir.name
     Path("__init__.py").touch()
     os.chdir("..")
     environ = {"MYPYPATH": str(original_dir), "PYTHONPATH": str(original_dir)}
     environ.update(os.environ)
-    p = run(f"mypy {package_name}", env=environ, echo=False)
-    assert b"Success: no issues found" in p
+    p = run(f"mypy {package_name}", env=environ)
+    assert "Success: no issues found" in p
     os.chdir(str(original_dir))
     Path("__init__.py").unlink()
 
@@ -139,3 +132,12 @@ def strs_in_regex(strings: List[str]) -> str:
     """
     ret = "".join([rf"(?=.*{s})" for s in strings])
     return ret
+
+
+def get_env_class() -> UserEnv:
+    Path("__init__.py").touch()
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+    env_class = reload(import_module("env_test")).Env
+    return env_class()
