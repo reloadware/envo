@@ -24,7 +24,7 @@ class TestBootCode(utils.TestBase):
 
         boot = ["1/0"]
         utils.add_boot(boot)
-        e = shell.start()
+        e = shell.start(wait_until_ready=False)
 
         e.output(r".*File.*ZeroDivisionError: division by zero\n")
         e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()

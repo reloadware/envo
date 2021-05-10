@@ -41,43 +41,17 @@ class EnvoCommEnv(UserEnv):  # type: ignore
         ignore_files: List[str] = []
 
     poetry_ver: str
-    some_var: str
 
     def __init__(self) -> None:
         self.poetry_ver = "1.0.5"
-        self.some_var = "test"
-
-    @command
-    def fun(self) -> None:
-        run(
-            """
-            echo "reading"
-            read varname
-            echo $varname
-            """
-        )
-
-    def fun2(self) -> None:
-        print("test")
 
     @command
     def bootstrap(self):
-        run(f"pip install poetry=={self.poetry_ver}")
-        run("poetry install")
-
-    @onload
-    def __on_load(self) -> None:
-        print("LOAD")
-        return
-
-    @oncreate
-    def __on_create(self) -> None:
-        print("MOTD")
+        pass
 
     @boot_code
     def __boot(self) -> List[str]:
         return [
-            "import math",
         ]
 
 

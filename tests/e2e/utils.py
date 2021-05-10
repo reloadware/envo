@@ -243,7 +243,7 @@ class SpawnEnvo:
                     break
 
                 if len(msgs) == number and re.findall(
-                    path, str(msgs[-1].metadata["path"].replace("\\", "/"))
+                    path, str(msgs[-1].metadata["path"]).replace("\\", "/")
                 ):
                     break
 

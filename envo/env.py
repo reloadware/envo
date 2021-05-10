@@ -4,6 +4,8 @@ import re
 import sys
 from collections import OrderedDict
 from copy import copy
+from types import ModuleType
+
 from dataclasses import dataclass, field, is_dataclass
 from pathlib import Path
 from threading import Lock, Thread
@@ -22,12 +24,11 @@ from typing import (
     Union,
 )
 
-from globmatch_temp import glob_match
 from rhei import Stopwatch
 from watchdog import events
 from watchdog.events import FileModifiedEvent
 
-from envo import console, logger
+from envo import logger
 from envo.logging import Logger
 from envo.misc import Callback, EnvoError, FilesWatcher, import_from_file
 
@@ -52,7 +53,6 @@ __all__ = [
     "Source",
 ]
 
-from envo.partial_reloader import Action, PartialReloader
 
 T = TypeVar("T")
 
@@ -102,7 +102,15 @@ class MagicFunction:
             args = (self.env, *args)  # type: ignore
         else:
             kwargs["self"] = self.env  # type: ignore
-        return self.func(*args, **kwargs)
+
+        try:
+            return self.func(*args, **kwargs)
+        except SystemExit as e:
+            logger.traceback()
+            self.env._li.shell.history.last_cmd_rtn = e.code
+        except BaseException as e:
+            logger.traceback()
+            self.env._li.shell.history.last_cmd_rtn = 1
 
     def render(self) -> str:
         kwargs_str = ", ".join([f"{k}={repr(v)}" for k, v in self.kwargs.items()])
@@ -148,7 +156,11 @@ class Command(MagicFunction):
         cwd = Path(".").absolute()
         os.chdir(str(self.env.root))
 
-        ret = self.func(self=self.env)
+        try:
+            ret = self.func(self=self.env)
+        except BaseException as e:
+            logger.traceback()
+            sys.exit(1)
 
         os.chdir(str(cwd))
         if ret is not None:
@@ -171,7 +183,7 @@ class magic_function:  # noqa: N801
     type: str
     namespace: str = ""
 
-    def __call__(self, func: Callable) -> Callable:
+    def __call__(self, func: Callable):
         kwargs = self.default_kwargs.copy()
         kwargs.update(self.kwargs)
 
@@ -184,7 +196,7 @@ class magic_function:  # noqa: N801
             namespace=self.namespace,
         )
 
-    def __new__(cls, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
+    def __new__(cls, *args: Tuple[Any], **kwargs: Dict[str, Any]):
         # handle case when command decorator is used without arguments and ()
         if not kwargs and args and callable(args[0]):
             kwargs = cls.default_kwargs.copy()
@@ -216,6 +228,12 @@ class command(magic_function):  # noqa: N801
     type: str = "command"
 
 
+# Just to satistfy pycharm
+if False:
+    def command(*args, **kwargs):
+        return MagicFunction()
+
+
 # decorators
 class boot_code(magic_function):  # noqa: N801
     type: str = "boot_code"
@@ -223,31 +241,70 @@ class boot_code(magic_function):  # noqa: N801
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
+# Just to satistfy pycharm
+if False:
+    def boot_code(*args, **kwargs):
+        return MagicFunction()
+
 
 class event(magic_function):  # noqa: N801
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+
+# Just to satistfy pycharm
+if False:
+    def event(*args, **kwargs):
+        return MagicFunction()
 
 
 class onload(event):  # noqa: N801
     type: str = "onload"
 
 
+# Just to satistfy pycharm
+if False:
+    def onload(*args, **kwargs):
+        return MagicFunction()
+
+
 class oncreate(event):  # noqa: N801
     type: str = "oncreate"
 
 
+# Just to satistfy pycharm
+if False:
+    def oncreate(*args, **kwargs):
+        return MagicFunction()
+
 class ondestroy(event):  # noqa: N801
     type: str = "ondestroy"
+
+
+# Just to satistfy pycharm
+if False:
+    def ondestroy(*args, **kwargs):
+        return MagicFunction()
 
 
 class onunload(event):  # noqa: N801
     type: str = "onunload"
 
 
+# Just to satistfy pycharm
+if False:
+    def onunload(*args, **kwargs):
+        return MagicFunction()
+
+
 class on_partial_reload(event):  # noqa: N801
     type: str = "on_partial_reload"
     expected_fun_args = ["file", "actions"]
+
+
+# Just to satistfy pycharm
+if False:
+    def on_partial_reload(*args, **kwargs):
+        return MagicFunction()
 
 
 @dataclass
@@ -264,9 +321,20 @@ class cmd_hook(magic_function):  # noqa: N801
         super().__init__(cmd_regex=cmd_regex)  # type: ignore
 
 
+# Just to satistfy pycharm
+if False:
+    def cmd_hook(*args, **kwargs):
+        return MagicFunction()
+
+
 class precmd(cmd_hook):  # noqa: N801
     type: str = "precmd"
     expected_fun_args = ["command"]
+
+# Just to satistfy pycharm
+if False:
+    def precmd(*args, **kwargs):
+        return MagicFunction()
 
 
 class onstdout(cmd_hook):  # noqa: N801
@@ -274,9 +342,21 @@ class onstdout(cmd_hook):  # noqa: N801
     expected_fun_args = ["command", "out"]
 
 
+# Just to satistfy pycharm
+if False:
+    def onstdout(*args, **kwargs):
+        return MagicFunction()
+
+
 class onstderr(cmd_hook):  # noqa: N801
     type: str = "onstderr"
     expected_fun_args = ["command", "out"]
+
+
+# Just to satistfy pycharm
+if False:
+    def onstderr(*args, **kwargs):
+        return MagicFunction()
 
 
 class postcmd(cmd_hook):  # noqa: N801
@@ -284,11 +364,23 @@ class postcmd(cmd_hook):  # noqa: N801
     expected_fun_args = ["command", "stdout", "stderr"]
 
 
+# Just to satistfy pycharm
+if False:
+    def postcmd(*args, **kwargs):
+        return MagicFunction()
+
+
 class context(magic_function):  # noqa: N801
     type: str = "context"
 
     def __init__(self) -> None:
         super().__init__()
+
+
+# Just to satistfy pycharm
+if False:
+    def context(*args, **kwargs):
+        return MagicFunction()
 
 
 magic_functions = {
@@ -369,116 +461,8 @@ class Source:
     watch_files: List[str] = field(default_factory=list)
     ignore_files: List[str] = field(default_factory=list)
 
-
-class SourceReloader:
-    @dataclass
-    class Callbacks:
-        on_reload_start: Callback
-        after_partial_reload: Callback
-        after_full_reload: Callback
-        on_reload_error: Callback
-
-    @dataclass
-    class Sets:
-        source: Source
-
-    @dataclass
-    class Links:
-        env: "Env"
-        status: "Status"
-        logger: "Logger"
-
-    _default_watch_files = ["**/*.py"]
-    _default_ignore_files = [r"**/.*", r"**/*~", r"**/__pycache__"]
-    _watcher: FilesWatcher
-
-    def __init__(self, li: Links, se: Sets, calls: Callbacks) -> None:
-        self.li = li
-        self.se = se
-        self.calls = calls
-        self._watcher = FilesWatcher(
-            FilesWatcher.Sets(
-                root=self.se.source.root,
-                include=self.se.source.watch_files + self._default_watch_files,
-                exclude=self.se.source.ignore_files + self._default_ignore_files,
-                name=str(self.se.source.root),
-            ),
-            calls=FilesWatcher.Callbacks(on_event=Callback(self._on_source_edit)),
-        )
-
-    def _on_source_edit(self, event: FileModifiedEvent) -> None:
-        module = next(
-            (
-                m
-                for m in reversed(list(sys.modules.values()))
-                if hasattr(m, "__file__") and m.__file__ == event.src_path
-            ),
-            None,
-        )
-
-        if not module:
-            return
-
-        reloader = PartialReloader(module, self.se.source.root)
-        self.li.logger.info(f"Detected changes in {event.src_path}")
-
-        try:
-            self.calls.on_reload_start()
-            actions = reloader.run()
-            self.calls.after_partial_reload(Path(event.src_path), actions)
-        except SyntaxError as e:
-            self.calls.on_reload_error(e)
-        except BaseException as e:
-            self.full_reload()
-            self.calls.after_full_reload()
-
-        self._watcher.flush()
-
-    @property
-    def source_files(self) -> List[Path]:
-        exclude = self.se.source.ignore_files + self._default_ignore_files
-        ret = []
-        for p in self.se.source.root.glob("**/*.py"):
-            if glob_match(p, exclude):
-                continue
-
-            ret.append(p.absolute())
-        return ret
-
-    @property
-    def modules(self) -> List[Any]:
-        ret = []
-        source_files = self.source_files
-
-        potential_module_names = []
-        for p in source_files:
-            module_name = misc.path_to_module_name(p, self.se.source.root)
-            potential_module_names.append(module_name)
-
-        for n in potential_module_names:
-            m = misc.get_module_from_full_name(n)
-            if not m:
-                continue
-
-            if not hasattr(m, "__file__"):
-                continue
-
-            if not self.se.source.root in Path(m.__file__).parents:
-                continue
-
-            ret .append(m)
-        return ret
-
-    def start(self) -> None:
-        self._watcher.start()
-        self.li.status.reloader_ready = True
-
-    def stop(self):
-        def fun():
-            self._watcher.flush()
-            self._watcher.stop()
-
-        Thread(target=fun).start()
+    def __post_init__(self) -> None:
+        self.root = self.root.resolve()
 
 
 class EnvReloader:
@@ -646,7 +630,7 @@ class BaseEnv:
     def _get_parents_env(cls, env: Type["BaseEnv"]) -> List[Type["BaseEnv"]]:
         parents = []
         for p in env.Meta.parents:
-            parent = import_from_file(Path(str(env.Meta.root / p)), env.Meta.root).Env
+            parent = import_from_file(Path(str(env.Meta.root / p))).Env
             parents.append(parent)
             parents.extend(cls._get_parents_env(parent))
         return parents
@@ -723,7 +707,7 @@ class EnvBuilder:
 
     @classmethod
     def build_shell_env_from_file(cls, file: Path) -> Type["Env"]:
-        env = import_from_file(file, file.parent).Env  # type: ignore
+        env = import_from_file(file).Env  # type: ignore
         return cls.build_shell_env(env)
 
 
@@ -758,7 +742,7 @@ class Env(EnvoEnv):
 
     _parents: List[Type["Env"]]
     _env_reloader: EnvReloader
-    _source_reloaders: List[SourceReloader]
+    _sys_modules_snapshot: Dict[str, ModuleType] = OrderedDict()
 
     def __new__(cls, *args, **kwargs) -> "Env":
         env = BaseEnv.__new__(cls)
@@ -842,20 +826,9 @@ class Env(EnvoEnv):
                     on_env_edit=Callback(self._on_env_edit),
                 ),
             )
-            self._source_reloaders = []
 
-            for s in self.meta.sources:
-                reloader = SourceReloader(
-                    li=SourceReloader.Links(env=self, status=self._li.status, logger=self.logger),
-                    se=SourceReloader.Sets(source=s),
-                    calls=SourceReloader.Callbacks(
-                        on_reload_start=Callback(self._on_reload_start),
-                        after_partial_reload=Callback(self._after_partial_reload),
-                        after_full_reload=Callback(self._after_full_reload),
-                        on_reload_error=Callback(self._on_reload_error)
-                    ),
-                )
-                self._source_reloaders.append(reloader)
+        if not self._sys_modules_snapshot:
+            self._sys_modules_snapshot = OrderedDict(sys.modules.copy())
 
     def _add_sources_to_syspath(self) -> None:
         for p in reversed(self.meta.sources):
@@ -874,39 +847,9 @@ class Env(EnvoEnv):
         self.logger.info("Running reload, trying partial first")
         self._li.status.source_ready = False
 
-    def _after_partial_reload(self, file: Path, actions: List[Action]) -> None:
-        if not actions:
-            self.logger.info("No actions to apply")
-        else:
-            self.logger.debug(
-                f"Partial reload actions: {actions}",
-                metadata={"type": "partial_reload"},
-            )
-
-        on_reloads = self._magic_functions["on_partial_reload"]
-        for f in on_reloads.values():
-            f(file, actions)
-
-        self._li.status.source_ready = True
-
-    def _after_full_reload(self) -> None:
-        self._run_boot_codes()
-        self._li.status.source_ready = True
-        self.logger.debug("Applied full reload")
-
     def _on_reload_error(self, error: Exception) -> None:
-        from rich.traceback import Traceback
+        logger.traceback()
 
-        exc_type, exc_value, traceback = sys.exc_info()
-        trace = Traceback.extract(exc_type, exc_value, traceback)
-        trace.stacks[0].frames = trace.stacks[0].frames[-1:]
-        traceback_obj = Traceback(
-            trace=trace,
-            width=200,
-        )
-        # self._li.shell.prompter.app.invalidate()
-        console.print("")
-        console.print(traceback_obj)
         self._li.shell.redraw()
         self._li.status.source_ready = True
 
@@ -915,16 +858,12 @@ class Env(EnvoEnv):
             return
 
         self._env_reloader.start()
-        for r in self._source_reloaders:
-            r.start()
 
     def _stop_reloaders(self) -> None:
         if not self._se.reloader_enabled:
             return
 
         self._env_reloader.stop()
-        for r in self._source_reloaders:
-            r.stop()
 
     def _get_errors(self) -> List[str]:
         """
@@ -1120,14 +1059,6 @@ class Env(EnvoEnv):
         self._exit()
 
     def _on_env_edit(self, event: FileModifiedEvent) -> None:
-        while self._executing_cmd:
-            sleep(0.2)
-        self._reload_lock.acquire()
-
-        if self._exiting:
-            self._reload_lock.release()
-            return
-
         subscribe_events = [
             events.EVENT_TYPE_MOVED,
             events.EVENT_TYPE_MODIFIED,
@@ -1136,19 +1067,37 @@ class Env(EnvoEnv):
         ]
 
         if any([s in event.event_type for s in subscribe_events]):
-            self._stop_reloaders()
+            self.request_reload(metadata={"event": event.event_type,
+                    "path": event.src_path})
 
-            self.logger.info(
-                "Reloading",
-                metadata={
-                    "type": "reload",
-                    "event": event.event_type,
-                    "path": event.src_path,
-                },
-            )
+    def request_reload(self, exc: Optional[Exception] = None, metadata: Optional[Dict] = None) -> None:
+        if not metadata:
+            metadata = {}
 
+        while self._executing_cmd:
+            sleep(0.2)
+        self._reload_lock.acquire()
+
+        if self._exiting:
+            self._reload_lock.release()
+            return
+
+        self._stop_reloaders()
+
+        self.logger.info(
+            "Reloading",
+            metadata={
+                "type": "reload",
+                **metadata
+            },
+        )
+
+        if exc:
+            self._calls.on_error(exc)
+        else:
             self._calls.restart()
-            self._exiting = True
+
+        self._exiting = True
 
         self._reload_lock.release()
 
@@ -1263,6 +1212,22 @@ class Env(EnvoEnv):
 
         StubGen(self).generate()
 
+    @command
+    def source_reload(self) -> None:
+        to_remove = list(sys.modules.keys() - self._sys_modules_snapshot.keys())
+
+        for n in reversed(to_remove):
+            m = sys.modules[n]
+            if not hasattr(m, "__file__"):
+                continue
+
+            sys.modules.pop(n)
+
+        for n in to_remove:
+            __import__(n)
+
+        self.logger.info(f"Full reload")
+
     def _run_boot_codes(self) -> None:
         self._li.status.source_ready = False
         boot_codes_f = self._magic_functions["boot_code"]
@@ -1277,11 +1242,12 @@ class Env(EnvoEnv):
                 self._li.shell.run_code(c)
             except Exception as e:
                 # TODO: make nice traceback?
-                raise e from None
+                self.request_reload(e)
+
         self._li.status.source_ready = True
 
     @onload
-    def _on_load(self) -> None:
+    def __envo_on_load(self) -> None:
         self._run_boot_codes()
 
     def _on_precmd(self, command: str) -> Tuple[Optional[str], Optional[str]]:

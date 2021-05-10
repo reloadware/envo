@@ -450,7 +450,7 @@ class EnvoHeadless(EnvoBase):
         except SystemExit as e:
             sys.exit(e.code)
         else:
-            sys.exit(self.shell.history[-1].rtn)
+            sys.exit(self.shell.last_return_code)
         finally:
             self.mode.unload()
 

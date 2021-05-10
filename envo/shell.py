@@ -2,6 +2,8 @@ import builtins
 import os
 import sys
 import time
+from copy import copy
+
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -89,6 +91,7 @@ class Shell(BaseShell):  # type: ignore
         self.context: Dict[str, Any] = {}
 
         self.cmd_lock = Lock()
+        self.last_return_code = 0
 
         self.bootload()
 
@@ -231,21 +234,23 @@ class Shell(BaseShell):  # type: ignore
         self.environ["XONSH_SHOW_TRACEBACK"] = enabled
 
     def execute(self, line: str, history_line: str) -> Any:
-        self.append_history = self._append_history
-        BaseShell._append_history = lambda self, inp, ts, tee_out: None
+        self.append_history = BaseShell._append_history
+        BaseShell._append_history = lambda self, inp, ts, spc, tee_out: None
 
         ts0 = time.time()
 
         if history_line:
-            self.append_history(inp=history_line, ts=[ts0, ts0], tee_out="")
+            self.append_history(self, inp=history_line, ts=[ts0, ts0], spc=self.src_starts_with_space, tee_out="")
 
         BaseShell.default(self, line)
 
+        BaseShell._append_history = self.append_history
+
         if self.history and self.history.buffer:
-            self.history.buffer[-1]["rtn"] = self.history.last_cmd_rtn
+            self.last_return_code = self.history.last_cmd_rtn
             self.history.flush()
 
-    def default(self, line: str) -> Any:
+    def default(self, line: str, raw_line=None) -> Any:
         logger.info("Executing command", {"command": line})
         self.cmd_lock.acquire()
 

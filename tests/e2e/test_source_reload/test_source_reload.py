@@ -1,6 +1,6 @@
 import shutil
 
-from pytest import fixture
+from pytest import fixture, mark
 
 from tests.e2e import utils
 
@@ -12,6 +12,7 @@ class TestBase:
         shutil.copytree(sandbox / "../sample_project", self.sample_project)
 
 
+@mark.skip
 class TestSourceReload(TestBase):
     def test_importing(self, shell):
         utils.replace_in_code(
@@ -91,6 +92,8 @@ class TestSourceReload(TestBase):
             """
             @on_partial_reload
             def _on_partial_reload(self, file: Path, actions):
+                assert [str(a) for a in actions] == ["Update: Variable: carwash.sprayers.number_of_sprayers"]
+                assert str(file).endswith("/sandbox/sample_project/carwash/sprayers.py")
                 print("Reloaded!")
                 self.redraw_prompt()
             """
