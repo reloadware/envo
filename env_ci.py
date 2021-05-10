@@ -92,7 +92,7 @@ class EnvoCiEnv(UserEnv):  # type: ignore
         config = toml.load(str(self.root / "pyproject.toml"))
         version: str = config["tool"]["poetry"]["version"]
 
-        version_file = self.root / "stickybeak/__version__.py"
+        version_file = self.root / "envo/__version__.py"
         Path(version_file).touch()
 
         version_file.write_text(f'__version__ = "{version}"\n')

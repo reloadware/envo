@@ -143,17 +143,17 @@ jobs:
       - *restore_cache
       - *bootstrap
       - run:
-          name: Recreate stubs
-          command: poetry run ./.bin/recreate_stubs
-      - run:
           name: Generate version
-          command: poetry run ./.bin/generate_version
+          command: generate_version
+          shell: poetry run envo ci
       - run:
           name: Build
-          command: poetry build
+          command: build
+          shell: poetry run envo ci
       - run:
           name: publish
-          command: poetry publish --username $PYPI_USERNAME --password $PYPI_PASSWORD
+          command: publish
+          shell: poetry run envo ci
 
   upload-codecov:
     <<: *defaults
