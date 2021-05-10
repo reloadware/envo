@@ -11,7 +11,7 @@ from textwrap import dedent
 from typing import Any, Callable, Dict, List, Optional
 
 from globmatch_temp import glob_match
-from watchdog.events import FileModifiedEvent, FileSystemEventHandler
+from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 __all__ = [
@@ -92,7 +92,13 @@ class FilesWatcher(FileSystemEventHandler):
 
         self.observer.schedule(self, str(self.se.root), recursive=True)
 
-    def on_any_event(self, event: FileModifiedEvent):
+    def on_any_event(self, event: FileSystemEvent):
+        kwargs = event.__dict__
+
+        for k in kwargs.keys():
+            kwargs[k.lstrip("_")] = Path(kwargs.pop(k)).resolve()
+
+        event = event.__class__(**kwargs)
         self.calls.on_event(event)
 
     def flush(self) -> None:
@@ -148,7 +154,7 @@ class FilesWatcher(FileSystemEventHandler):
     def stop(self) -> None:
         self.observer.stop()
 
-    def dispatch(self, event: FileModifiedEvent):
+    def dispatch(self, event: FileSystemEvent):
         """Dispatches events to the appropriate methods.
 
         :param event:
@@ -220,18 +226,20 @@ def render_py_file(template_path: Path, output: Path, context: Dict[str, Any]) -
 
 
 def path_to_module_name(path: Path, package_root: Path) -> str:
-    rel_path = path.absolute().relative_to(package_root.absolute().parent)
+    rel_path = path.resolve().absolute().relative_to(package_root.resolve())
     ret = str(rel_path).replace(".py", "").replace("/", ".").replace("\\", ".")
     ret = ret.replace(".__init__", "")
     return ret
 
 
-def import_from_file(path: Path, package_root: Path) -> Any:
-    module_name = path_to_module_name(path, package_root)
-    spec = importlib.util.spec_from_file_location(module_name, str(path.absolute()))
-
+def import_from_file(path: Path) -> Any:
+    path = path.resolve()
+    module_name = path_to_module_name(path, path.parent)
+    loader = importlib.machinery.SourceFileLoader(module_name, str(path))
+    spec = importlib.util.spec_from_loader(module_name, loader)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    loader.exec_module(module)
+
     return module
 
 
@@ -264,7 +272,8 @@ def get_envo_relevant_traceback(exc: BaseException) -> List[str]:
     msg.extend(traceback.format_stack())
     msg.extend(traceback.format_exception(*sys.exc_info())[1:])
     msg_relevant = ["Traceback (Envo relevant):\n"]
-    relevant = False
+    # TODO: Fix this
+    relevant = True
     for m in msg:
         if re.search(r"env_.*\.py", m):
             relevant = True

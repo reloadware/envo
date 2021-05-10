@@ -45,7 +45,7 @@ def mock_threading(mocker) -> None:
 
 
 @fixture
-def flake_cmd() -> None:
+def flake_cmd(arg) -> None:
     from tests.utils import add_flake_cmd
 
     add_flake_cmd()

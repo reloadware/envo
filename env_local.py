@@ -57,7 +57,7 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
 
     @command
     def test(self) -> None:
-        logger.info("Running tests")
+        logger.info("Running tests", print_msg=True)
         run("pytest tests -v")
 
     @command

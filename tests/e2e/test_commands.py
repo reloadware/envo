@@ -14,7 +14,6 @@ class TestCommands(utils.TestBase):
         utils.add_mypy_cmd()
 
         e = shell.start()
-
         e.prompt().eval()
 
         shell.sendline("my_flake")
@@ -52,6 +51,24 @@ class TestCommands(utils.TestBase):
 
         shell.sendline("flake")
         e.output(r"flake good\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_command_fail(self, shell):
+        utils.add_command(
+            """
+            @command
+            def failing_cmd(self) -> None:
+                return 1/0
+            """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("failing_cmd")
+        e.output(r".*Traceback.*return 1/0.*division by zero\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()
@@ -110,7 +127,7 @@ class TestCommands(utils.TestBase):
                 in utils.clean_output(e.value.stdout)
             )
 
-        assert utils.clean_output(e.value.stderr) == ""
+        assert "SystemExit" in utils.clean_output(e.value.stderr)
 
     def test_single_command_command_fail_traceback(self):
         utils.add_command(
@@ -125,13 +142,7 @@ class TestCommands(utils.TestBase):
         with raises(CalledProcessError) as e:
             utils.run("""envo test -c "some_cmd" """)
 
-        if is_linux():
-            assert e.value.returncode == 1
-            assert utils.clean_output(e.value.stdout) == ""
-        if is_windows():
-            assert e.value.returncode == 1
-            assert utils.clean_output(e.value.stdout) == "\n"
-
+        assert e.value.returncode == 1
         assert "ZeroDivisionError" in utils.clean_output(e.value.stderr)
 
     def test_headless_error(self):

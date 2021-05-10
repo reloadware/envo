@@ -52,7 +52,10 @@ save_cache: &save_cache
 bootstrap: &bootstrap
   run:
     name: Bootstrap
-    command: pip install envo==0.9.1.9b && envo run bootstrap
+    command: |
+      pip install poetry==1.0.5
+      poetry install
+      poetry run envo ci run bootstrap
 
 
 jobs:
@@ -82,6 +85,8 @@ jobs:
 
   test-3-6:
     <<: *defaults
+    environment:
+      CRYPTOGRAPHY_DONT_BUILD_RUST: 1
     docker:
       - image: circleci/python:3.6
 
@@ -126,10 +131,10 @@ jobs:
           destination: artifacts
       - store_test_results:
           path: workspace
-      - persist_to_workspace:
-          root: workspace
-          paths:
-            - cov.xml
+#      - persist_to_workspace:
+#          root: workspace
+#          paths:
+#            - cov.xml
 
   publish:
     <<: *defaults

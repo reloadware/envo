@@ -44,10 +44,10 @@ def run(command: str, env: Optional[Dict[str, Any]] = None, pipe_stderr=True) ->
     if env:
         kwargs["env"] = env
 
-    if not pipe_stderr:
-        kwargs["stderr"] = subprocess.STDOUT
-    else:
+    if pipe_stderr:
         kwargs["stderr"] = subprocess.PIPE
+    else:
+        kwargs["stderr"] = subprocess.STDOUT
 
     ret = subprocess.check_output(command, shell=True, **kwargs).decode("utf-8")
     ret = clean_output(ret)
