@@ -162,13 +162,11 @@ class FilesWatcher(FileSystemEventHandler):
         :type event:
             :class:`FileSystemEvent`
         """
-        from watchdog.utils import has_attribute, unicode_paths
-
         paths = []
-        if has_attribute(event, "dest_path"):
-            paths.append(unicode_paths.decode(event.dest_path))
+        if hasattr(event, "dest_path"):
+            paths.append(str(event.dest_path))
         if event.src_path:
-            paths.append(unicode_paths.decode(event.src_path))
+            paths.append(str(event.src_path))
 
         if any(
             self.match(
