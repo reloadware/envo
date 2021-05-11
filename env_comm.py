@@ -34,7 +34,7 @@ class EnvoCommEnv(UserEnv):  # type: ignore
         stage: str = "comm"
         emoji: str = "👌"
         parents: List[str] = []
-        plugins: List[Plugin] = []
+        plugins: List[Plugin] = [VirtualEnv]
         name: str = "env"
         version: str = "0.1.0"
         watch_files: List[str] = []
@@ -51,10 +51,7 @@ class EnvoCommEnv(UserEnv):  # type: ignore
 
     @boot_code
     def __boot(self) -> List[str]:
-        return [
-        ]
+        return []
 
 
 Env = EnvoCommEnv
-
-

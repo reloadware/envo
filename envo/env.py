@@ -4,12 +4,11 @@ import re
 import sys
 from collections import OrderedDict
 from copy import copy
-from types import ModuleType
-
 from dataclasses import dataclass, field, is_dataclass
 from pathlib import Path
 from threading import Lock, Thread
 from time import sleep
+from types import ModuleType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -230,6 +229,7 @@ class command(magic_function):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def command(*args, **kwargs):
         return MagicFunction()
 
@@ -241,8 +241,10 @@ class boot_code(magic_function):  # noqa: N801
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
+
 # Just to satistfy pycharm
 if False:
+
     def boot_code(*args, **kwargs):
         return MagicFunction()
 
@@ -251,8 +253,10 @@ class event(magic_function):  # noqa: N801
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
+
 # Just to satistfy pycharm
 if False:
+
     def event(*args, **kwargs):
         return MagicFunction()
 
@@ -263,6 +267,7 @@ class onload(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def onload(*args, **kwargs):
         return MagicFunction()
 
@@ -273,8 +278,10 @@ class oncreate(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def oncreate(*args, **kwargs):
         return MagicFunction()
+
 
 class ondestroy(event):  # noqa: N801
     type: str = "ondestroy"
@@ -282,6 +289,7 @@ class ondestroy(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def ondestroy(*args, **kwargs):
         return MagicFunction()
 
@@ -292,6 +300,7 @@ class onunload(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def onunload(*args, **kwargs):
         return MagicFunction()
 
@@ -303,6 +312,7 @@ class on_partial_reload(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def on_partial_reload(*args, **kwargs):
         return MagicFunction()
 
@@ -323,6 +333,7 @@ class cmd_hook(magic_function):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def cmd_hook(*args, **kwargs):
         return MagicFunction()
 
@@ -331,8 +342,10 @@ class precmd(cmd_hook):  # noqa: N801
     type: str = "precmd"
     expected_fun_args = ["command"]
 
+
 # Just to satistfy pycharm
 if False:
+
     def precmd(*args, **kwargs):
         return MagicFunction()
 
@@ -344,6 +357,7 @@ class onstdout(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def onstdout(*args, **kwargs):
         return MagicFunction()
 
@@ -355,6 +369,7 @@ class onstderr(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def onstderr(*args, **kwargs):
         return MagicFunction()
 
@@ -366,6 +381,7 @@ class postcmd(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def postcmd(*args, **kwargs):
         return MagicFunction()
 
@@ -379,6 +395,7 @@ class context(magic_function):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def context(*args, **kwargs):
         return MagicFunction()
 
@@ -512,7 +529,8 @@ class EnvReloader:
                 FilesWatcher.Sets(
                     root=p.Meta.root,
                     include=self.se.watch_files + ["env_*.py"],
-                    exclude=self.se.ignore_files + [r"**/.*", r"**/*~", r"**/__pycache__"],
+                    exclude=self.se.ignore_files
+                    + [r"**/.*", r"**/*~", r"**/__pycache__"],
                     name=p.__name__,
                 ),
                 calls=FilesWatcher.Callbacks(on_event=self.calls.on_env_edit),
@@ -588,17 +606,17 @@ class BaseEnv:
     @classmethod
     def is_user_env(cls) -> bool:
         return (
-                issubclass(cls, UserEnv)
-                and cls is not UserEnv
-                and "InheritedEnv" not in str(cls)
+            issubclass(cls, UserEnv)
+            and cls is not UserEnv
+            and "InheritedEnv" not in str(cls)
         )
 
     @classmethod
     def is_envo_env(cls) -> bool:
         return (
-                issubclass(cls, EnvoEnv)
-                and cls is not EnvoEnv
-                and "InheritedEnv" not in str(cls)
+            issubclass(cls, EnvoEnv)
+            and cls is not EnvoEnv
+            and "InheritedEnv" not in str(cls)
         )
 
     @classmethod
@@ -606,9 +624,9 @@ class BaseEnv:
         from envo import Plugin
 
         return (
-                issubclass(cls, Plugin)
-                and cls is not Plugin
-                and "InheritedEnv" not in str(cls)
+            issubclass(cls, Plugin)
+            and cls is not Plugin
+            and "InheritedEnv" not in str(cls)
         )
 
     @classmethod
@@ -819,9 +837,14 @@ class Env(EnvoEnv):
 
         if self._se.reloader_enabled:
             self._env_reloader = EnvReloader(
-                li=EnvReloader.Links(env=self, status=self._li.status, logger=self.logger),
-                se=EnvReloader.Sets(extra_watchers=se.extra_watchers, watch_files=self.meta.watch_files,
-                                    ignore_files=self.meta.ignore_files),
+                li=EnvReloader.Links(
+                    env=self, status=self._li.status, logger=self.logger
+                ),
+                se=EnvReloader.Sets(
+                    extra_watchers=se.extra_watchers,
+                    watch_files=self.meta.watch_files,
+                    ignore_files=self.meta.ignore_files,
+                ),
                 calls=EnvReloader.Callbacks(
                     on_env_edit=Callback(self._on_env_edit),
                 ),
@@ -887,18 +910,18 @@ class Env(EnvoEnv):
         for f in dir(self):
             # skip properties
             if hasattr(self.__class__, f) and inspect.isdatadescriptor(
-                    getattr(self.__class__, f)
+                getattr(self.__class__, f)
             ):
                 continue
 
             attr: Any = getattr(self, f)
 
             if (
-                    inspect.ismethod(attr)
-                    or f.startswith("_")
-                    or inspect.isclass(attr)
-                    or f in _internal_objs
-                    or isinstance(attr, MagicFunction)
+                inspect.ismethod(attr)
+                or f.startswith("_")
+                or inspect.isclass(attr)
+                or f in _internal_objs
+                or isinstance(attr, MagicFunction)
             ):
                 continue
 
@@ -1067,10 +1090,13 @@ class Env(EnvoEnv):
         ]
 
         if any([s in event.event_type for s in subscribe_events]):
-            self.request_reload(metadata={"event": event.event_type,
-                    "path": event.src_path})
+            self.request_reload(
+                metadata={"event": event.event_type, "path": event.src_path}
+            )
 
-    def request_reload(self, exc: Optional[Exception] = None, metadata: Optional[Dict] = None) -> None:
+    def request_reload(
+        self, exc: Optional[Exception] = None, metadata: Optional[Dict] = None
+    ) -> None:
         if not metadata:
             metadata = {}
 
@@ -1086,10 +1112,7 @@ class Env(EnvoEnv):
 
         self.logger.info(
             "Reloading",
-            metadata={
-                "type": "reload",
-                **metadata
-            },
+            metadata={"type": "reload", **metadata},
         )
 
         if exc:
@@ -1157,13 +1180,21 @@ class Env(EnvoEnv):
         """
         for f in dir(self):
             if hasattr(self.__class__, f) and inspect.isdatadescriptor(
-                    getattr(self.__class__, f)
+                getattr(self.__class__, f)
             ):
                 continue
 
             attr = getattr(self, f)
 
             if isinstance(attr, MagicFunction):
+                # inject env into super funtions
+                for c in self.__class__.__mro__:
+                    try:
+                        attr_super = getattr(c, f)
+                        attr_super.env = self
+                    except AttributeError:
+                        pass
+
                 attr.env = self
                 self._magic_functions[attr.type][attr.namespaced_name] = attr
 
@@ -1277,7 +1308,7 @@ class Env(EnvoEnv):
         return out
 
     def _on_postcmd(
-            self, command: str, stdout: List[bytes], stderr: List[bytes]
+        self, command: str, stdout: List[bytes], stderr: List[bytes]
     ) -> None:
         functions = self._magic_functions["postcmd"]
         for f in functions.values():

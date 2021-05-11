@@ -34,7 +34,6 @@ class EnvoCiEnv(UserEnv):  # type: ignore
         stage: str = "ci"
         emoji: str = "🧪"
         parents: List[str] = ["env_comm.py"]
-        plugins: List[Plugin] = []
         name: str = "env"
         version: str = "0.1.0"
         watch_files: List[str] = []

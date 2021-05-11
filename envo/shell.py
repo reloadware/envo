@@ -3,7 +3,6 @@ import os
 import sys
 import time
 from copy import copy
-
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -12,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional, TextIO, Union
 
 import fire
 from prompt_toolkit.data_structures import Size
-from xonsh.base_shell import BaseShell
+from xonsh.base_shell import BaseShell, _TeeStd
 from xonsh.execer import Execer
 from xonsh.prompt.base import DEFAULT_PROMPT
 from xonsh.ptk_shell.shell import PromptToolkitShell
@@ -240,7 +239,13 @@ class Shell(BaseShell):  # type: ignore
         ts0 = time.time()
 
         if history_line:
-            self.append_history(self, inp=history_line, ts=[ts0, ts0], spc=self.src_starts_with_space, tee_out="")
+            self.append_history(
+                self,
+                inp=history_line,
+                ts=[ts0, ts0],
+                spc=self.src_starts_with_space,
+                tee_out="",
+            )
 
         BaseShell.default(self, line)
 
@@ -254,58 +259,48 @@ class Shell(BaseShell):  # type: ignore
         logger.info("Executing command", {"command": line})
         self.cmd_lock.acquire()
 
-        class Stream:
-            device: TextIO
+        orig_std_out_write = sys.stdout.write
+        orig_std_err_write = sys.stderr.write
 
-            def __init__(self, command: str, on_write: Callable) -> None:
-                self.command = command
-                self.on_write = on_write
-                self.output: List[bytes] = []
-
-            def write(self, text: Union[bytes, str]) -> None:
-                text = self.on_write(command=self.command, out=text)
-                self.output.append(text)
-
-                if isinstance(text, str):
-                    self.device.write(text)
-                else:
-                    self.device.buffer.write(text)
-
-            def flush(self) -> None:
-                self.device.flush()
-
-        class StdOut(Stream):
-            device = sys.__stdout__
-
-        class StdErr(Stream):
-            device = sys.__stderr__
+        std_out_content = []
+        std_err_content = []
 
         try:
-            out = None
-            err = None
-
             # W want to catch all exceptions just in case the command fails so we can handle std_err and post_cmd
             hist_line = line
             if self.calls.pre_cmd:
                 line = self.calls.pre_cmd(line)
 
             if self.calls.on_stdout:
-                out = StdOut(command=line, on_write=self.calls.on_stdout)
-                sys.stdout = out  # type: ignore
+
+                def stdout_write(text: Union[bytes, str]) -> None:
+                    text = self.calls.on_stdout(command=line, out=text)
+                    orig_std_out_write(text)
+                    std_out_content.append(text)
+
+                sys.stdout.write = stdout_write
 
             if self.calls.on_stderr:
-                err = StdErr(command=line, on_write=self.calls.on_stderr)
-                sys.stderr = err  # type: ignore
+
+                def stderr_write(text: Union[bytes, str]) -> None:
+                    text = self.calls.on_stderr(command=line, out=text)
+                    orig_std_err_write(text)
+                    std_err_content.append(text)
+
+                sys.stderr.write = stderr_write
+
             ret = self.execute(line, hist_line)
         finally:
             if self.calls.on_stdout:
-                sys.stdout = sys.__stdout__
+                sys.stdout.write = orig_std_out_write
 
             if self.calls.on_stderr:
-                sys.stderr = sys.__stderr__
+                sys.stderr.write = orig_std_err_write
 
-            if self.calls.post_cmd and out and err:
-                self.calls.post_cmd(command=line, stdout=out.output, stderr=err.output)
+            if self.calls.post_cmd:
+                self.calls.post_cmd(
+                    command=line, stdout=std_out_content, stderr=std_err_content
+                )
 
             self.cmd_lock.release()
 

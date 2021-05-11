@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "envo"
-version = "0.9.4.15b"
+version = "0.9.4.16b"
 description = "Smart Environments handling - Define command hooks, file hooks and env variables in python and activate hot reloaded shells."
 authors = ["Damian Krystkiewicz <damian.krystkiewicz@gmail.com>"]
 classifiers = [
@@ -37,7 +37,7 @@ watchdog = "^2.1.0"
 rich = "^9.6.1"
 fire = "^0.4.0"
 jinja2 = "^2"
-loguru = "^0.5.3"
+loguru = "^0.5"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.4.1"

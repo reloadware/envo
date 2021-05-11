@@ -300,6 +300,7 @@ class SpawnEnvo:
             environ["ENVO_E2E_STICKYBEAK"] = "True"
         environ["ENVO_E2E_TEST"] = "True"
         environ["PYTHONUNBUFFERED"] = "True"
+        environ["XONSH_SHOW_TRACEBACK"] = "True"
 
         self.process = Popen(
             self.command,

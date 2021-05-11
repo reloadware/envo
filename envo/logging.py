@@ -1,7 +1,6 @@
 import re
 import sys
 import traceback
-
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -256,6 +255,7 @@ class Logger:
         self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False
     ) -> None:
         self.log(message, Level.ERROR, metadata, print_msg)
+
     #
     # def get_user_code_exception(root: Path) -> str:
     #     lines = traceback.format_exception(*sys.exc_info())
