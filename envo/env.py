@@ -95,18 +95,23 @@ class MagicFunction:
         for k, v in self.kwargs.items():
             setattr(self, k, v)
 
+    def call(self, *args, **kwargs) -> str:
+        ret = self.func(*args, **kwargs)
+        return ret
+
     def __call__(self, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
         logger.debug(f'Running magic function (name="{self.name}", type={self.type})')
         if args:
             args = (self.env, *args)  # type: ignore
         else:
-            kwargs["self"] = self.env  # type: ignore
+            args = (self.env,)  # type: ignore
 
         try:
-            return self.func(*args, **kwargs)
+            return self.call(*args, **kwargs)
         except SystemExit as e:
             logger.traceback()
             self.env._li.shell.history.last_cmd_rtn = e.code
+            sys.exit(e.code)
         except BaseException as e:
             logger.traceback()
             self.env._li.shell.history.last_cmd_rtn = 1
@@ -150,22 +155,21 @@ class MagicFunction:
 
 @dataclass
 class Command(MagicFunction):
-    def call(self) -> str:
+    def call(self, *args, **kwargs) -> str:
         assert self.env is not None
         cwd = Path(".").absolute()
-        os.chdir(str(self.env.root))
+
+        if self.kwargs["in_root"]:
+            os.chdir(str(self.env.root))
 
         try:
-            ret = self.func(self=self.env)
-        except BaseException as e:
-            logger.traceback()
-            sys.exit(1)
+            ret = self.func(*args, **kwargs)
+        finally:
+            if self.kwargs["cd_back"]:
+                os.chdir(str(cwd))
 
-        os.chdir(str(cwd))
         if ret is not None:
             return str(ret)
-        else:
-            return ""
 
     def _validate_fun_args(self) -> None:
         """
@@ -225,12 +229,12 @@ class command(magic_function):  # noqa: N801
 
     klass = Command
     type: str = "command"
+    default_kwargs = {"cd_back": "True", "in_root": "True"}
 
 
 # Just to satistfy pycharm
 if False:
-
-    def command(*args, **kwargs):
+    def command(cd_back: bool = True, in_root: bool = True):
         return MagicFunction()
 
 
@@ -244,8 +248,7 @@ class boot_code(magic_function):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-
-    def boot_code(*args, **kwargs):
+    def boot_code():
         return MagicFunction()
 
 
@@ -256,8 +259,7 @@ class event(magic_function):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-
-    def event(*args, **kwargs):
+    def event():
         return MagicFunction()
 
 
@@ -267,8 +269,7 @@ class onload(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-
-    def onload(*args, **kwargs):
+    def onload():
         return MagicFunction()
 
 
@@ -278,8 +279,7 @@ class oncreate(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-
-    def oncreate(*args, **kwargs):
+    def oncreate():
         return MagicFunction()
 
 
@@ -289,8 +289,7 @@ class ondestroy(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-
-    def ondestroy(*args, **kwargs):
+    def ondestroy():
         return MagicFunction()
 
 
@@ -300,8 +299,7 @@ class onunload(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-
-    def onunload(*args, **kwargs):
+    def onunload():
         return MagicFunction()
 
 
@@ -313,7 +311,7 @@ class on_partial_reload(event):  # noqa: N801
 # Just to satistfy pycharm
 if False:
 
-    def on_partial_reload(*args, **kwargs):
+    def on_partial_reload():
         return MagicFunction()
 
 
@@ -331,13 +329,6 @@ class cmd_hook(magic_function):  # noqa: N801
         super().__init__(cmd_regex=cmd_regex)  # type: ignore
 
 
-# Just to satistfy pycharm
-if False:
-
-    def cmd_hook(*args, **kwargs):
-        return MagicFunction()
-
-
 class precmd(cmd_hook):  # noqa: N801
     type: str = "precmd"
     expected_fun_args = ["command"]
@@ -345,8 +336,7 @@ class precmd(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-
-    def precmd(*args, **kwargs):
+    def precmd(cmd_regex: str = ".*"):
         return MagicFunction()
 
 
@@ -357,8 +347,7 @@ class onstdout(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-
-    def onstdout(*args, **kwargs):
+    def onstdout():
         return MagicFunction()
 
 
@@ -369,8 +358,7 @@ class onstderr(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-
-    def onstderr(*args, **kwargs):
+    def onstderr():
         return MagicFunction()
 
 
@@ -381,8 +369,7 @@ class postcmd(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-
-    def postcmd(*args, **kwargs):
+    def postcmd():
         return MagicFunction()
 
 
@@ -395,8 +382,7 @@ class context(magic_function):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-
-    def context(*args, **kwargs):
+    def context():
         return MagicFunction()
 
 

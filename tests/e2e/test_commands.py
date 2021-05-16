@@ -286,3 +286,126 @@ class TestCommands(utils.TestBase):
 
         shell.exit()
         e.exit().eval()
+
+    def test_run_with_wilcard(self, shell):
+        Path("file.py").touch()
+
+        utils.add_command(
+            """
+        @command
+        def cmd(self, test_arg: str = "") -> str:
+            run(f"find ./**/*.py")
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("cmd")
+
+        e.output(r"./env_comm.py\n./env_test.py\n./file.py\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_cd_back_false(self, shell):
+        Path("dir").mkdir()
+        Path("dir/file.py").touch()
+
+        utils.add_command(
+            """
+        @command(cd_back=False)
+        def cmd(self) -> str:
+            os.chdir("dir")
+            run(f"ls")
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("cmd")
+
+        e.output(r"file.py\n").prompt().eval()
+
+        shell.sendline("pwd")
+
+        e.output(r".*/sandbox/dir\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_cd_back_true(self, shell):
+        Path("dir").mkdir()
+        Path("dir/file.py").touch()
+
+        utils.add_command(
+            """
+        @command(cd_back=True)
+        def cmd(self) -> str:
+            os.chdir("dir")
+            run(f"ls")
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("cmd")
+
+        e.output(r"file.py\n").prompt().eval()
+
+        shell.sendline("pwd")
+
+        e.output(r".*/sandbox\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_in_root_true(self, shell):
+        Path("dir").mkdir()
+        Path("dir/file.py").touch()
+
+        utils.add_command(
+            """
+        @command(in_root=True)
+        def cmd(self) -> str:
+            run(f"ls")
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("cd dir")
+        e.prompt()
+        shell.sendline("cmd")
+
+        e.output(r"dir\nenv_comm.py\nenv_comm.pyi\nenv_test.py\nenv_test.pyi\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_in_root_false(self, shell):
+        Path("dir").mkdir()
+        Path("dir/file.py").touch()
+
+        utils.add_command(
+            """
+        @command(in_root=False)
+        def cmd(self) -> str:
+            run(f"ls")
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("cd dir")
+        e.prompt()
+        shell.sendline("cmd")
+
+        e.output(r"file.py\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()

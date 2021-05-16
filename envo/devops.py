@@ -26,7 +26,8 @@ def run(
         command = command.replace("\n", " & ")
         popen_cmd = ["cmd.exe", "/c", command]
     elif is_linux():
-        command = "set -uoe pipefail\n" + command
+        options = ["set -uoe pipefail", "shopt -s globstar"]
+        command = "\n".join(options) + "\n" + command
         popen_cmd = ["/bin/bash", "--rcfile", "/dev/null", "-c", command]
     else:
         raise NotImplementedError()

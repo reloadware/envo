@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
+import os
 
 import envo  # noqa: F401
 from envo import (  # noqa: F401
@@ -38,6 +39,7 @@ class EnvoCiEnv(UserEnv):  # type: ignore
         version: str = "0.1.0"
         watch_files: List[str] = []
         ignore_files: List[str] = []
+        plugins: List[Plugin] = []
 
     def __init__(self) -> None:
         super().__init__()
@@ -50,6 +52,7 @@ class EnvoCiEnv(UserEnv):  # type: ignore
 
     @command
     def test(self) -> None:
+        os.chdir(self.root)
         logger.info("Running tests", print_msg=True)
         pass
         # run(

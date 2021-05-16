@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
 
@@ -44,12 +45,9 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
         ignore_files: List[str] = []
 
     # Declare your variables here
-    local_var: str
 
     def __init__(self) -> None:
-        self.local_var = "fdsf"
-
-        # Define your variables here
+        pass
 
     @onload
     def _dump_env(self) -> None:
@@ -57,6 +55,7 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
 
     @command
     def test(self) -> None:
+        os.chdir(self.root)
         logger.info("Running tests", print_msg=True)
         run("pytest tests -v")
 

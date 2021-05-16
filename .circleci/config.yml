@@ -5,17 +5,17 @@ workflows:
   test:
     jobs:
       - test-3-6
-      - test-3-7
-      - test-3-8
-      - flake8
-      - mypy
+#      - test-3-7
+#      - test-3-8
+#      - flake8
+#      - mypy
       - publish:
           requires:
-            - flake8
-            - mypy
+#            - flake8
+#            - mypy
             - test-3-6
-            - test-3-7
-            - test-3-8
+#            - test-3-7
+#            - test-3-8
           filters:
             branches:
               only: master
@@ -32,7 +32,9 @@ workflows:
 
 defaults: &defaults
   docker:
-    - image: circleci/python:3.8.2
+    - image: circleci/python:3.6
+  environment:
+    CRYPTOGRAPHY_DONT_BUILD_RUST: 1
 
 cache-key: &cache-key
   deps-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "poetry.lock" }}
@@ -85,8 +87,7 @@ jobs:
 
   test-3-6:
     <<: *defaults
-    environment:
-      CRYPTOGRAPHY_DONT_BUILD_RUST: 1
+
     docker:
       - image: circleci/python:3.6
 

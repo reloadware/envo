@@ -43,6 +43,8 @@ envo_root = test_root.parent
 
 injector = Injector(address=f"http://localhost:{STICKYBEAK_PORT}")
 
+ASSERT_TIMEOUT = 10
+
 
 class PromptState(Enum):
     LOADING = 0
@@ -86,17 +88,22 @@ class AssertInTime:
     class TIMEOUT(Exception):
         pass
 
-    def __init__(self, condition: Callable, timeout=3):
+    def __init__(self, condition: Callable, timeout=ASSERT_TIMEOUT):
         self.condition = condition
         self.sw = Stopwatch()
         self.sw.start()
 
         while True:
-            if condition():
-                break
+            try:
+                condition()
+            except AssertionError:
+                if self.sw.value <= timeout:
+                    pass
+                else:
+                    raise
+            else:
+                return
 
-            if self.sw.value >= timeout:
-                raise self.TIMEOUT(self)
             sleep(0.05)
 
 
@@ -140,9 +147,9 @@ class Expecter:
     def pop(self) -> None:
         self.expected.pop()
 
-    def eval(self, timeout: int = 4) -> None:
+    def eval(self, timeout: int = ASSERT_TIMEOUT) -> None:
         def condition():
-            return re.fullmatch(
+            assert re.fullmatch(
                 self.expected_regex, self._spawn.get_cleaned_display(), re.DOTALL
             )
 
@@ -153,15 +160,9 @@ class Expecter:
 
             # check if has exited
             def condition():
-                return self._spawn.process.poll() == self._return_code
+                assert self._spawn.process.poll() == self._return_code
 
-            try:
-                AssertInTime(condition, timeout)
-            except AssertInTime.TIMEOUT:
-                raise AssertInTime.TIMEOUT(
-                    f"Process has not exit on time with proper"
-                    f" exit code (last exit code = {self._spawn.process.poll()})"
-                )
+            AssertInTime(condition, timeout)
 
 
 class SpawnEnvo:
@@ -300,7 +301,6 @@ class SpawnEnvo:
             environ["ENVO_E2E_STICKYBEAK"] = "True"
         environ["ENVO_E2E_TEST"] = "True"
         environ["PYTHONUNBUFFERED"] = "True"
-        environ["XONSH_SHOW_TRACEBACK"] = "True"
 
         self.process = Popen(
             self.command,

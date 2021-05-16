@@ -40,14 +40,20 @@ class EnvoCommEnv(UserEnv):  # type: ignore
         watch_files: List[str] = []
         ignore_files: List[str] = []
 
+    pip_ver: str
     poetry_ver: str
 
     def __init__(self) -> None:
-        self.poetry_ver = "1.0.5"
+        self.pip_ver = "21.0.1"
+        self.poetry_ver = "1.0.10"
 
     @command
     def bootstrap(self):
-        pass
+        run(f"pip install pip=={self.pip_ver}")
+        run(f"pip install poetry=={self.poetry_ver}")
+        run("poetry config virtualenvs.create true")
+        run("poetry config virtualenvs.in-project true")
+        run("poetry install")
 
     @boot_code
     def __boot(self) -> List[str]:
