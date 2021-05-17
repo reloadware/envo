@@ -2,7 +2,7 @@ import os
 import sys
 from importlib import import_module, reload
 from pathlib import Path
-from typing import List
+from typing import List, Type
 
 import pytest
 
@@ -134,10 +134,9 @@ def strs_in_regex(strings: List[str]) -> str:
     return ret
 
 
-def get_env_class() -> UserEnv:
-    Path("__init__.py").touch()
+def get_env_class(module_name = "env_test") -> Type[UserEnv]:
     cwd = os.getcwd()
     if cwd not in sys.path:
         sys.path.insert(0, cwd)
     env_class = reload(import_module("env_test")).Env
-    return env_class()
+    return env_class

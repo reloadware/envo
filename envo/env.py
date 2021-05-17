@@ -658,6 +658,9 @@ class EnvoEnv(BaseEnv):
 
 
 class ImportedEnv(BaseEnv):
+    """
+    Simple version of Env
+    """
     def __init__(self):
         self.meta = self.Meta()
         self._name = self.meta.name
@@ -716,10 +719,15 @@ class EnvBuilder:
 
 
 class UserEnv(BaseEnv):
-    def __new__(cls) -> "UserEnv":
-        env_class = EnvBuilder.build_imported_env(cls)
+    def __new__(cls, stage: Optional[str] = None) -> "UserEnv":
+        if stage:
+            env_class = EnvBuilder.build_imported_env(import_from_file(Path(f"env_{stage}.py")).Env)
+        else:
+            env_class = EnvBuilder.build_imported_env(cls)
+
         obj = ImportedEnv.__new__(env_class)
-        obj.__init__()
+        ImportedEnv.__init__(obj)
+        obj.init_parts()
         return obj
 
 

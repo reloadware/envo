@@ -42,5 +42,11 @@ class TestMisc(utils.TestBase):
         utils.command("test")
 
     def test_importing(self):
-        env = utils.get_env_class()
+        env = utils.get_env_class()()
         assert env.stage == "test"
+
+    def test_importing_stage(self, init):
+        comm_env_class = utils.get_env_class()
+        test_env = comm_env_class(stage="test")
+        assert test_env.stage == "test"
+
