@@ -6,6 +6,8 @@ from subprocess import Popen
 
 __all__ = ["CommandError", "run"]
 
+from typing import Optional
+
 from envo.misc import is_linux, is_windows
 from envo import console
 
@@ -18,8 +20,9 @@ def run(
     command: str,
     ignore_errors = False,
     print_output = True,
-    verbose = False
-) -> str:
+    verbose = False,
+    background=False
+) -> Optional[str]:
     # join multilines
     verbose = verbose or os.environ.get("ENVO_VERBOSE_RUN")
 
@@ -41,6 +44,9 @@ def run(
         console.rule(f"[bold rgb(225,221,0)]{command}", align="center", style="rgb(255,0,255)")
 
     proc = Popen(popen_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+    if background:
+        return None
 
     buffer = []
 

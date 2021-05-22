@@ -121,10 +121,7 @@ Minor:
 * Add reload command
 
 Bugs:
-* AttributeError on exit from emergency mode
-* Name error in context no emergency mode
-* .venv issue
-* nothing is being printed after running envo --init with existing envo
+* exiting while env loading yields Attribute Error
 
 Improvements:
 * type checking ?
