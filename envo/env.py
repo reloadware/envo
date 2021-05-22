@@ -543,7 +543,6 @@ class BaseEnv:
         """
         Environment metadata.
         """
-
         root: Path
         name: Optional[str] = None
         version: str = "0.1.0"
@@ -554,6 +553,7 @@ class BaseEnv:
         stage: str = "comm"
         watch_files: List[str] = []
         ignore_files: List[str] = []
+        verbose_run: bool = False
 
     root: Path
     path: Raw[str]
@@ -600,8 +600,8 @@ class BaseEnv:
     @classmethod
     def is_envo_env(cls) -> bool:
         return (
-            issubclass(cls, EnvoEnv)
-            and cls is not EnvoEnv
+            issubclass(cls, BaseEnv)
+            and cls is not BaseEnv
             and "InheritedEnv" not in str(cls)
         )
 
@@ -651,10 +651,6 @@ class BaseEnv:
     @classmethod
     def get_env_path(cls) -> Path:
         return cls.Meta.root / f"env_{cls.Meta.stage}.py"
-
-
-class EnvoEnv(BaseEnv):
-    pass
 
 
 class ImportedEnv(BaseEnv):
@@ -731,7 +727,7 @@ class UserEnv(BaseEnv):
         return obj
 
 
-class Env(EnvoEnv):
+class Env(BaseEnv):
     """
     Defines environment.
     """
@@ -766,6 +762,12 @@ class Env(EnvoEnv):
         self._li = li
 
         self.meta = self.Meta()
+
+        if self.meta.verbose_run:
+            os.environ["ENVO_VERBOSE_RUN"] = "True"
+        elif os.environ.get("ENVO_VERBOSE_RUN"):
+            os.environ.pop("ENVO_VERBOSE_RUN")
+
         self._name = self.meta.name
 
         self.root = self.meta.root

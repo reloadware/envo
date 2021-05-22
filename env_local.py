@@ -30,7 +30,7 @@ from envo import (  # noqa: F401
 # like this:
 
 localci = Namespace(name="localci")
-
+e = Namespace(name="e")
 
 class EnvoLocalEnv(UserEnv):  # type: ignore
     class Meta(UserEnv.Meta):  # type: ignore
@@ -43,8 +43,7 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
         version: str = "0.1.0"
         watch_files: List[str] = []
         ignore_files: List[str] = []
-
-    # Declare your variables here
+        verbose_run = True
 
     def __init__(self) -> None:
         pass
@@ -58,6 +57,12 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
         os.chdir(self.root)
         logger.info("Running tests", print_msg=True)
         run("pytest tests -v")
+
+    @e.command
+    def verbose_test(self) -> None:
+        run("echo verbose cmd")
+        print("Output")
+        run("echo verbose hihi")
 
     @command
     def flake(self) -> None:

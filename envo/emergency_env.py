@@ -23,8 +23,8 @@ from envo import (  # noqa: F401
 )
 
 
-class EnvoCommEnv(envo.env.EnvoEnv):  # type: ignore
-    class Meta(envo.env.EnvoEnv.Meta):  # type: ignore
+class EnvoCommEnv(envo.env.BaseEnv):  # type: ignore
+    class Meta(envo.env.BaseEnv.Meta):  # type: ignore
         root = Path(__file__).parent.absolute()
         stage: str = "emergency"
         emoji: str = const.emojis["emergency"]

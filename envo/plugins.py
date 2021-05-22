@@ -15,7 +15,7 @@ from envo.logging import Logger
 from envo.misc import is_windows
 
 
-class Plugin(envo.env.EnvoEnv):
+class Plugin(envo.env.BaseEnv):
     @classmethod
     def init(cls, *args, **kwargs):
         cls.__init__(*args, **kwargs)
