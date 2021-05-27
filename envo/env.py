@@ -564,6 +564,41 @@ class BaseEnv:
 
     __initialised__ = False
 
+    def __init__(self):
+        self.meta = self.Meta()
+        self._name = self.meta.name
+
+        self.root = self.meta.root
+        self.stage = self.meta.stage
+        self.envo_stage = self.stage
+
+        self.path = os.environ["PATH"]
+
+        if "PYTHONPATH" not in os.environ:
+            self.pythonpath = ""
+        else:
+            self.pythonpath = os.environ["PYTHONPATH"]
+        self.pythonpath = str(self.root) + ":" + self.pythonpath
+
+        self._magic_functions: Dict[str, Any] = {}
+
+        self._magic_functions["context"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["precmd"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["onstdout"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["onstderr"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["postcmd"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["onload"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["oncreate"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["ondestroy"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["onunload"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["boot_code"]: Dict[str, MagicFunction] = {}
+        self._magic_functions["command"]: Dict[str, Command] = {}
+        self._magic_functions["on_partial_reload"]: Dict[str, MagicFunction] = {}
+
+        self._collect_magic_functions()
+
+        self.init_parts()
+
     def init_parts(self) -> None:
         def decorated_init(klass, fun):
             def init(*args, **kwargs):
@@ -653,28 +688,29 @@ class BaseEnv:
     def get_env_path(cls) -> Path:
         return cls.Meta.root / f"env_{cls.Meta.stage}.py"
 
+    def _collect_magic_functions(self) -> None:
+        """
+        Go through fields and transform decorated functions to commands.
+        """
+        for f in dir(self):
+            if hasattr(self.__class__, f) and inspect.isdatadescriptor(
+                getattr(self.__class__, f)
+            ):
+                continue
 
-class ImportedEnv:
-    """
-    Simple version of Env
-    """
-    def __init__(self):
-        self.meta = self.Meta()
-        self._name = self.meta.name
+            attr = getattr(self, f)
 
-        self.root = self.meta.root
-        self.stage = self.meta.stage
-        self.envo_stage = self.stage
+            if isinstance(attr, MagicFunction):
+                # inject env into super funtions
+                for c in self.__class__.__mro__:
+                    try:
+                        attr_super = getattr(c, f)
+                        attr_super.env = self
+                    except AttributeError:
+                        pass
 
-        self.path = os.environ["PATH"]
-
-        if "PYTHONPATH" not in os.environ:
-            self.pythonpath = ""
-        else:
-            self.pythonpath = os.environ["PYTHONPATH"]
-        self.pythonpath = str(self.root) + ":" + self.pythonpath
-
-        self.init_parts()
+                attr.env = self
+                self._magic_functions[attr.type][attr.namespaced_name] = attr
 
 
 class EnvBuilder:
@@ -706,30 +742,25 @@ class EnvBuilder:
         return cls.build_shell_env(env)
 
     @classmethod
-    def build_imported_env(cls, env: Type[BaseEnv]) -> Type["ImportedEnv"]:
+    def build_base_env(cls, env: Type[BaseEnv]) -> Type["BaseEnv"]:
         user_env = cls.build_env(env)
-
-        class InheritedEnv(user_env, ImportedEnv):
-            pass
-
-        return InheritedEnv
+        return user_env
 
     @classmethod
-    def build_imported_env_from_file(cls, file: Path) -> Type["ImportedEnv"]:
+    def build_base_env_from_file(cls, file: Path) -> Type["BaseEnv"]:
         env = import_from_file(file).Env  # type: ignore
-        return cls.build_imported_env(env)
+        return cls.build_env(env)
 
 
 class UserEnv(BaseEnv):
     def __new__(cls, stage: Optional[str] = None) -> "UserEnv":
         if stage:
-            env_class = EnvBuilder.build_imported_env(import_from_file(Path(f"env_{stage}.py")).Env)
+            env_class = EnvBuilder.build_env(import_from_file(Path(f"env_{stage}.py")).Env)
         else:
-            env_class = EnvBuilder.build_imported_env(cls)
+            env_class = EnvBuilder.build_env(cls)
 
-        obj = ImportedEnv.__new__(env_class)
-        ImportedEnv.__init__(obj)
-        obj.init_parts()
+        obj = BaseEnv.__new__(env_class)
+        BaseEnv.__init__(obj)
         return obj
 
 
@@ -760,31 +791,20 @@ class Env(BaseEnv):
 
     def __new__(cls, *args, **kwargs) -> "Env":
         env = BaseEnv.__new__(cls)
+        env.__init__(*args, **kwargs)
         return env
 
     def __init__(self, calls: Callbacks, se: Sets, li: Links) -> None:
+        BaseEnv.__init__(self)
+
         self._calls = calls
         self._se = se
         self._li = li
-
-        self.meta = self.Meta()
 
         if self.meta.verbose_run:
             os.environ["ENVO_VERBOSE_RUN"] = "True"
         elif os.environ.get("ENVO_VERBOSE_RUN"):
             os.environ.pop("ENVO_VERBOSE_RUN")
-
-        self._name = self.meta.name
-
-        self.root = self.meta.root
-        self.stage = self.meta.stage
-        self.envo_stage = self.stage
-
-        self.path = os.environ["PATH"]
-        if "PYTHONPATH" not in os.environ:
-            self.pythonpath = ""
-        else:
-            self.pythonpath = os.environ["PYTHONPATH"]
 
         self._add_sources_to_syspath()
 
@@ -808,21 +828,6 @@ class Env(BaseEnv):
             "Starting env", metadata={"root": self.root, "stage": self.stage}
         )
 
-        self._magic_functions: Dict[str, Any] = {}
-
-        self._magic_functions["context"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["precmd"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["onstdout"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["onstderr"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["postcmd"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["onload"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["oncreate"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["ondestroy"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["onunload"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["boot_code"]: Dict[str, MagicFunction] = {}
-        self._magic_functions["command"]: Dict[str, Command] = {}
-        self._magic_functions["on_partial_reload"]: Dict[str, MagicFunction] = {}
-
         self._collect_magic_functions()
 
         self._li.shell.calls.pre_cmd = Callback(self._on_precmd)
@@ -834,7 +839,6 @@ class Env(BaseEnv):
 
         self.genstub()
 
-        self.init_parts()
         self._env_reloader = None
 
         if self._se.reloader_enabled:
@@ -1176,59 +1180,17 @@ class Env(BaseEnv):
         path.write_text(content, "utf-8")
         return path
 
-    def get_env(self, directory: Union[Path, str]) -> "Env":
+    def get_env(self, directory: Union[Path, str]) -> "BaseEnv":
         directory = Path(directory)
         env_file = directory / f"env_{self.stage}.py"
 
         if not env_file.exists():
             raise EnvoError(f"{env_file} does not exit")
 
-        env_class = EnvBuilder.build_shell_env_from_file(env_file)
-        status = Status(
-            calls=Status.Callbacks(
-                on_ready=Callback(lambda: None),
-                on_not_ready=Callback(lambda: None),
-            )
-        )
-
-        env = env_class(
-            li=Env.Links(self._li.shell, status=status),
-            calls=Env.Callbacks(
-                restart=Callback(lambda: None),
-                on_error=Callback(lambda: None),
-            ),
-            se=Env.Sets(
-                reloader_enabled=False,
-                blocking=True,
-                extra_watchers=[],
-            ),
-        )
+        env_class = EnvBuilder.build_base_env_from_file(env_file)
+        env = env_class()
 
         return env
-
-    def _collect_magic_functions(self) -> None:
-        """
-        Go through fields and transform decorated functions to commands.
-        """
-        for f in dir(self):
-            if hasattr(self.__class__, f) and inspect.isdatadescriptor(
-                getattr(self.__class__, f)
-            ):
-                continue
-
-            attr = getattr(self, f)
-
-            if isinstance(attr, MagicFunction):
-                # inject env into super funtions
-                for c in self.__class__.__mro__:
-                    try:
-                        attr_super = getattr(c, f)
-                        attr_super.env = self
-                    except AttributeError:
-                        pass
-
-                attr.env = self
-                self._magic_functions[attr.type][attr.namespaced_name] = attr
 
     def get_repr(self) -> str:
         ret = []
