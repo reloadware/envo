@@ -1,3 +1,5 @@
+from time import sleep
+
 from tests.e2e import utils
 
 UP_KEY = "\033[A"
@@ -30,8 +32,10 @@ class TestHistory(utils.TestBase):
 
         shell.exit()
         e.exit().eval()
+
         e = shell.start()
         e.prompt().eval()
+        sleep(0.5)
 
         shell.send(UP_KEY, expect=False)
         e.output("a = 1").eval()
@@ -51,6 +55,7 @@ class TestHistory(utils.TestBase):
         e = comm_shell.start()
         e.prompt().eval()
 
+        sleep(0.5)
         comm_shell.send(UP_KEY, expect=False)
         e.output("b = 123").eval()
         comm_shell.sendline("")
@@ -62,6 +67,7 @@ class TestHistory(utils.TestBase):
         e = shell.start()
         e.prompt().eval()
 
+        sleep(0.5)
         shell.send(UP_KEY, expect=False)
         e.output("a = 1").eval()
         shell.sendline("")

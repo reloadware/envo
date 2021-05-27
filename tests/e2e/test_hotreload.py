@@ -332,7 +332,7 @@ class TestHotReload(utils.TestBase):
         shell.sendline("from time import sleep; sleep(10)")
         e.prompt()
         shell.sendline('print("command_test")')
-        sleep(0.5)
+        sleep(1.0)
         shell.trigger_reload()
         with pytest.raises(ReloadTimeout):
             shell.envo.assert_reloaded(1, timeout=0.2)

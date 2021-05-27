@@ -88,7 +88,11 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
 
     @command
     def sandbox(self) -> None:
-        ...
+        run([
+            "echo test1 && sleep 1",
+            "echo test2 && sleep 1",
+            "echo test3 && sleep 1",
+             ], progress_bar="", print_output=False)
 
     @localci.command
     def __flake(self) -> None:

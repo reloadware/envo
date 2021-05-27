@@ -39,6 +39,7 @@ class EnvoCommEnv(UserEnv):  # type: ignore
         version: str = "0.1.0"
         watch_files: List[str] = []
         ignore_files: List[str] = []
+        verbose_run = True
 
     pip_ver: str
     poetry_ver: str

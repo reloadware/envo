@@ -14,12 +14,6 @@ def init() -> None:
     init()
 
 
-@fixture
-def shell_unit() -> None:
-    from tests.unit.utils import shell_unit
-
-    shell_unit()
-
 
 @fixture
 def mock_shell(mocker) -> None:

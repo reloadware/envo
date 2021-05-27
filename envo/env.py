@@ -26,6 +26,7 @@ from typing import (
 from rhei import Stopwatch
 from watchdog import events
 from watchdog.events import FileModifiedEvent
+from envo.status import Status
 
 from envo import logger
 from envo.logging import Logger
@@ -553,7 +554,7 @@ class BaseEnv:
         stage: str = "comm"
         watch_files: List[str] = []
         ignore_files: List[str] = []
-        verbose_run: bool = False
+        verbose_run: bool = True
 
     root: Path
     path: Raw[str]
@@ -653,7 +654,7 @@ class BaseEnv:
         return cls.Meta.root / f"env_{cls.Meta.stage}.py"
 
 
-class ImportedEnv(BaseEnv):
+class ImportedEnv:
     """
     Simple version of Env
     """
@@ -700,18 +701,23 @@ class EnvBuilder:
         return InheritedEnv
 
     @classmethod
+    def build_shell_env_from_file(cls, file: Path) -> Type["Env"]:
+        env = import_from_file(file).Env  # type: ignore
+        return cls.build_shell_env(env)
+
+    @classmethod
     def build_imported_env(cls, env: Type[BaseEnv]) -> Type["ImportedEnv"]:
         user_env = cls.build_env(env)
 
-        class InheritedEnv(ImportedEnv, user_env):
+        class InheritedEnv(user_env, ImportedEnv):
             pass
 
         return InheritedEnv
 
     @classmethod
-    def build_shell_env_from_file(cls, file: Path) -> Type["Env"]:
+    def build_imported_env_from_file(cls, file: Path) -> Type["ImportedEnv"]:
         env = import_from_file(file).Env  # type: ignore
-        return cls.build_shell_env(env)
+        return cls.build_imported_env(env)
 
 
 class UserEnv(BaseEnv):
@@ -1169,6 +1175,36 @@ class Env(BaseEnv):
         )
         path.write_text(content, "utf-8")
         return path
+
+    def get_env(self, directory: Union[Path, str]) -> "Env":
+        directory = Path(directory)
+        env_file = directory / f"env_{self.stage}.py"
+
+        if not env_file.exists():
+            raise EnvoError(f"{env_file} does not exit")
+
+        env_class = EnvBuilder.build_shell_env_from_file(env_file)
+        status = Status(
+            calls=Status.Callbacks(
+                on_ready=Callback(lambda: None),
+                on_not_ready=Callback(lambda: None),
+            )
+        )
+
+        env = env_class(
+            li=Env.Links(self._li.shell, status=status),
+            calls=Env.Callbacks(
+                restart=Callback(lambda: None),
+                on_error=Callback(lambda: None),
+            ),
+            se=Env.Sets(
+                reloader_enabled=False,
+                blocking=True,
+                extra_watchers=[],
+            ),
+        )
+
+        return env
 
     def _collect_magic_functions(self) -> None:
         """

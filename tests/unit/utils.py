@@ -92,10 +92,6 @@ def env(env_dir: Path = Path(".")) -> Env:
     return env
 
 
-def shell_unit() -> None:
-    command("test")
-
-
 def init_child_env(child_dir: Path) -> None:
     cwd = Path(".").absolute()
     child_dir.mkdir()

@@ -84,7 +84,7 @@ if enabled:
 
 if stickybeak_enabled:
     project_root = Path(__file__).parent
-    server = stickybeak.Server(project_root, STICKYBEAK_PORT)
+    server = stickybeak.Server(project_root, int(os.environ["ENVO_E2E_STICKYBEAK_PORT"]), timeout=15.0)
     server.start()
 
 

@@ -6,7 +6,9 @@ from subprocess import Popen
 
 __all__ = ["CommandError", "run"]
 
-from typing import Optional
+from textwrap import dedent
+
+from typing import Optional, List, Union
 
 from envo.misc import is_linux, is_windows
 from envo import console
@@ -16,14 +18,11 @@ class CommandError(RuntimeError):
     pass
 
 
-def run(
-    command: str,
-    ignore_errors = False,
-    print_output = True,
-    verbose = False,
-    background=False
-) -> Optional[str]:
-    # join multilines
+def _run(command: str,
+         ignore_errors=False,
+         print_output=True,
+         verbose=False,
+         background=False) -> Optional[str]:
     verbose = verbose or os.environ.get("ENVO_VERBOSE_RUN")
 
     command_extra = re.sub(r"\\(?:\t| )*\n(?:\t| )*", "", command)
@@ -40,8 +39,9 @@ def run(
     else:
         raise NotImplementedError()
 
-    if verbose:
-        console.rule(f"[bold rgb(225,221,0)]{command}", align="center", style="rgb(255,0,255)")
+    if verbose and print_output:
+        dedent_cmd = dedent(command.strip())
+        console.rule(f"[bold rgb(225,221,0)]{dedent_cmd}", align="center", style="rgb(255,0,255)")
 
     proc = Popen(popen_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
@@ -71,3 +71,27 @@ def run(
         ret = b"".join(buffer)
         ret = ret.decode("utf-8")
         return ret
+
+
+def run(
+        command: Union[str, List[str]],
+        ignore_errors=False,
+        print_output=True,
+        verbose=False,
+        background=False,
+        progress_bar: Optional[str] = None
+) -> List[Optional[str]]:
+    # join multilines
+    ret = []
+    if not isinstance(command, list):
+        command = [command]
+
+    if progress_bar is not None:
+        from rich.progress import track
+        for c in track(command, description=progress_bar):
+            ret.append(_run(c, ignore_errors, print_output, verbose, background))
+    else:
+        for c in command:
+            ret.append(_run(c, ignore_errors, print_output, verbose, background))
+
+    return ret

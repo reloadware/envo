@@ -40,6 +40,7 @@ class EnvoCiEnv(UserEnv):  # type: ignore
         watch_files: List[str] = []
         ignore_files: List[str] = []
         plugins: List[Plugin] = []
+        verbose_run = True
 
     def __init__(self) -> None:
         super().__init__()
@@ -54,7 +55,6 @@ class EnvoCiEnv(UserEnv):  # type: ignore
     def test(self) -> None:
         os.chdir(self.root)
         logger.info("Running tests", print_msg=True)
-        pass
         # run(
         #     "pytest --reruns 3 -v tests --cov-report xml:workspace/cov.xml --cov=envo ./workspace"
         # )

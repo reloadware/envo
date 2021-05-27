@@ -1,4 +1,5 @@
 from tests.e2e import utils
+from tests.e2e.utils import PromptState
 
 
 class TestCommands(utils.TestBase):
@@ -27,7 +28,7 @@ class TestCommands(utils.TestBase):
 
         shell.sendline("cmd")
         e.output(r"test output\n")
-        e.prompt().eval()
+        e.prompt(PromptState.MAYBE_LOADING).eval()
 
         shell.exit()
         e.exit().eval()
@@ -47,6 +48,44 @@ class TestCommands(utils.TestBase):
 
         shell.sendline("cmd")
         e.output(r"Finished\n")
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_multiple_cmds(self, shell):
+        utils.add_command(
+            """
+        @command(in_root=False)
+        def cmd(self) -> str:
+            run(["echo test1", "echo test2"])
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("cmd")
+        e.output(r"test1\ntest2\n")
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_progress_bar(self, shell):
+        utils.add_command(
+            """
+        @command(in_root=False)
+        def cmd(self) -> str:
+            run(["echo test1", "echo test2", "echo test3", "echo test4"], progress_bar="Processing", print_output=False)
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("cmd")
+        e.output(r"Processing ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00\n")
         e.prompt().eval()
 
         shell.exit()

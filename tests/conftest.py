@@ -10,19 +10,21 @@ envo_root = test_root.parent
 
 
 @fixture
-def sandbox() -> Path:
-    pwd = Path(os.environ["PWD"])
+def sandbox(request) -> Path:
+    sandbox_dir = Path(request.module.__file__).parent / "sandbox"
 
-    test_dir = Path(os.getenv("PYTEST_CURRENT_TEST").split("::")[0]).parent
-
-    sandbox_dir = pwd / test_dir / "sandbox"
     if sandbox_dir.exists():
-        shutil.rmtree(str(sandbox_dir), ignore_errors=True)
+        for f in sandbox_dir.glob("*"):
+            if f.is_dir():
+                shutil.rmtree(f)
+            else:
+                f.unlink()
 
     sys.path.insert(0, str(sandbox_dir))
 
     if not sandbox_dir.exists():
         sandbox_dir.mkdir()
+
     os.chdir(str(sandbox_dir))
 
     return sandbox_dir

@@ -41,8 +41,6 @@ test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
 
 
-injector = Injector(address=f"http://localhost:{STICKYBEAK_PORT}")
-
 ASSERT_TIMEOUT = 10
 
 
@@ -165,120 +163,120 @@ class Expecter:
             AssertInTime(condition, timeout)
 
 
+class RemoteEnvo:
+    @classmethod
+    def get_logger(cls) -> "Logger":
+        from envo.logging import logger
+
+        return logger
+
+    @classmethod
+    def get_env_field(cls, field: str) -> Any:
+        import envo.e2e
+
+        return getattr(envo.e2e.envo.mode.env, field)
+
+    @classmethod
+    def get_sys_path(cls) -> List[str]:
+        import sys
+
+        return sys.path
+
+    @classmethod
+    def get_os_environ(cls) -> Dict[str, str]:
+        import os
+
+        return dict(os.environ)
+
+    @classmethod
+    def wait_until_ready(cls, timeout=5) -> None:
+        from time import sleep
+
+        import envo.e2e
+        from envo.e2e import ReadyTimeout
+
+        passed_time = 0.0
+        sleep_time = 0.01
+        while True:
+            sleep(sleep_time)
+            passed_time += sleep_time
+            if passed_time >= timeout:
+                raise ReadyTimeout
+
+            if not envo.e2e.envo:
+                continue
+
+            if not envo.e2e.envo.mode:
+                continue
+
+            mode = envo.e2e.envo.mode
+            if mode.status.ready:
+                break
+
+        sleep(0.2)
+
+    @classmethod
+    def assert_reloaded(
+        cls, number: int = 1, path=r".*env_test\.py", timeout=5.0
+    ) -> None:
+        import re
+        from time import sleep
+
+        from envo import logger, logging
+        from envo.e2e import ReloadTimeout
+
+        passed_time = 0.0
+        sleep_time = 0.05
+        while True:
+            sleep(sleep_time)
+            passed_time += sleep_time
+
+            msgs = logger.get_msgs(
+                filter=logging.MsgFilter(metadata_re={"type": r"reload"})
+            )
+            if number == 0 and len(msgs) == 0:
+                break
+
+            if len(msgs) == number and re.findall(
+                path, str(msgs[-1].metadata["path"]).replace("\\", "/")
+            ):
+                break
+
+            if passed_time >= timeout:
+                raise ReloadTimeout
+
+        cls.wait_until_ready()
+
+    @classmethod
+    def assert_partially_reloaded(cls, number: int = 1, timeout=5) -> None:
+        from time import sleep
+
+        from envo import logger, logging
+        from envo.e2e import ReloadTimeout
+
+        passed_time = 0.0
+        sleep_time = 0.05
+        while True:
+            sleep(sleep_time)
+            passed_time += sleep_time
+
+            msgs = logger.get_msgs(
+                filter=logging.MsgFilter(metadata_re={"type": r"partial_reload"})
+            )
+            if number == 0 and len(msgs) == 0:
+                break
+
+            if len(msgs) == number:
+                break
+
+            if passed_time >= timeout:
+                raise ReloadTimeout
+
+        cls.wait_until_ready()
+
+
 class SpawnEnvo:
     process: Optional[Popen] = None
-
-    @injector.klass
-    class RemoteEnvo:
-        @classmethod
-        def get_logger(cls) -> "Logger":
-            from envo.logging import logger
-
-            return logger
-
-        @classmethod
-        def get_env_field(cls, field: str) -> Any:
-            import envo.e2e
-
-            return getattr(envo.e2e.envo.mode.env, field)
-
-        @classmethod
-        def get_sys_path(cls) -> List[str]:
-            import sys
-
-            return sys.path
-
-        @classmethod
-        def get_os_environ(cls) -> Dict[str, str]:
-            import os
-
-            return dict(os.environ)
-
-        @classmethod
-        def wait_until_ready(cls, timeout=3) -> None:
-            from time import sleep
-
-            import envo.e2e
-            from envo.e2e import ReadyTimeout
-
-            passed_time = 0.0
-            sleep_time = 0.01
-            while True:
-                sleep(sleep_time)
-                passed_time += sleep_time
-                if passed_time >= timeout:
-                    raise ReadyTimeout
-
-                if not envo.e2e.envo:
-                    continue
-
-                if not envo.e2e.envo.mode:
-                    continue
-
-                mode = envo.e2e.envo.mode
-                if mode.status.ready:
-                    break
-
-            sleep(0.2)
-
-        @classmethod
-        def assert_reloaded(
-            cls, number: int = 1, path=r".*env_test\.py", timeout=3
-        ) -> None:
-            import re
-            from time import sleep
-
-            from envo import logger, logging
-            from envo.e2e import ReloadTimeout
-
-            passed_time = 0.0
-            sleep_time = 0.05
-            while True:
-                sleep(sleep_time)
-                passed_time += sleep_time
-
-                msgs = logger.get_msgs(
-                    filter=logging.MsgFilter(metadata_re={"type": r"reload"})
-                )
-                if number == 0 and len(msgs) == 0:
-                    break
-
-                if len(msgs) == number and re.findall(
-                    path, str(msgs[-1].metadata["path"]).replace("\\", "/")
-                ):
-                    break
-
-                if passed_time >= timeout:
-                    raise ReloadTimeout
-
-            cls.wait_until_ready()
-
-        @classmethod
-        def assert_partially_reloaded(cls, number: int = 1, timeout=3) -> None:
-            from time import sleep
-
-            from envo import logger, logging
-            from envo.e2e import ReloadTimeout
-
-            passed_time = 0.0
-            sleep_time = 0.05
-            while True:
-                sleep(sleep_time)
-                passed_time += sleep_time
-
-                msgs = logger.get_msgs(
-                    filter=logging.MsgFilter(metadata_re={"type": r"partial_reload"})
-                )
-                if number == 0 and len(msgs) == 0:
-                    break
-
-                if len(msgs) == number:
-                    break
-
-                if passed_time >= timeout:
-                    raise ReloadTimeout
-
-            cls.wait_until_ready()
 
     def __init__(self, stage: str = "", debug=True):
         self.screen = pyte.Screen(200, 50)
@@ -296,10 +294,14 @@ class SpawnEnvo:
         self._printed_info = False
         self.output_collector = Thread(target=self._ouptut_collector)
 
+        self.injector = Injector(host="http://localhost", download_deps=False, name="envo")
+        self.injector.prepare()
+
         environ = os.environ.copy()
         if self.debug:
             environ["ENVO_E2E_STICKYBEAK"] = "True"
-        environ["ENVO_E2E_TEST"] = "True"
+            environ["ENVO_E2E_STICKYBEAK_PORT"] = str(self.injector.port)
+            environ["ENVO_E2E_TEST"] = "True"
         environ["PYTHONUNBUFFERED"] = "True"
 
         self.process = Popen(
@@ -315,7 +317,7 @@ class SpawnEnvo:
         self.expecter = Expecter(self, stage=self.stage)
 
         if self.debug:
-            injector.connect()
+            self.injector.connect()
 
         if wait_until_ready and self.debug:
             self.envo.wait_until_ready()
@@ -337,8 +339,9 @@ class SpawnEnvo:
         self.process.kill()
 
     @property
-    def envo(self) -> Type["SpawnEnvo.RemoteEnvo"]:
-        return SpawnEnvo.RemoteEnvo
+    def envo(self) -> Type[RemoteEnvo]:
+        remote_envo = self.injector.klass(RemoteEnvo)
+        return remote_envo
 
     def send(self, text: str, expect=True) -> None:
         if expect:
