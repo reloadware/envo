@@ -578,7 +578,6 @@ class BaseEnv:
             self.pythonpath = ""
         else:
             self.pythonpath = os.environ["PYTHONPATH"]
-        self.pythonpath = str(self.root) + ":" + self.pythonpath
 
         self._magic_functions: Dict[str, Any] = {}
 
@@ -807,8 +806,6 @@ class Env(BaseEnv):
             os.environ.pop("ENVO_VERBOSE_RUN")
 
         self._add_sources_to_syspath()
-
-        self.pythonpath = str(self.root) + ":" + self.pythonpath
 
         self._exiting = False
         self._executing_cmd = False
