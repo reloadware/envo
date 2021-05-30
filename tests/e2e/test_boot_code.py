@@ -1,4 +1,5 @@
 from pathlib import Path
+from time import sleep
 
 from tests.e2e import utils
 from tests.e2e.utils import PromptState
@@ -30,6 +31,7 @@ class TestBootCode(utils.TestBase):
         e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         env_test.write_text(file_before)
+        sleep(0.5)
         e.expected.pop()
         e.expected.pop()
 

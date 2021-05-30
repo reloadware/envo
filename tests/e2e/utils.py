@@ -25,6 +25,7 @@ from tests.utils import add_boot  # noqa F401
 from tests.utils import add_command  # noqa F401
 from tests.utils import add_context  # noqa F401
 from tests.utils import add_declaration  # noqa F401
+from tests.utils import add_method  # noqa F401
 from tests.utils import add_definition  # noqa F401
 from tests.utils import add_flake_cmd  # noqa F401
 from tests.utils import add_hook  # noqa F401

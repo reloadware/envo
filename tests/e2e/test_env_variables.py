@@ -104,16 +104,6 @@ class TestEnvVariables(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    def test_verify_variable_undeclared(self, shell):
-        utils.add_definition("self.test_var = 12")
-
-        e = shell.start()
-        e.output('Variable "test_var" is undeclared!\n')
-        e.prompt(utils.PromptState.EMERGENCY).eval()
-
-        shell.exit()
-        e.exit().eval()
-
     def test_raw_in_nested(self, shell):
         utils.add_declaration(
             """

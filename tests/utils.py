@@ -14,6 +14,7 @@ __all__ = [
     "add_command",
     "add_declaration",
     "add_definition",
+    "add_method",
     "add_hook",
     "change_file",
     "add_flake_cmd",
@@ -24,7 +25,6 @@ __all__ = [
     "add_boot",
     "clean_output",
     "run",
-    "add_function",
 ]
 
 
@@ -118,6 +118,10 @@ def add_command(code: str, file=Path("env_test.py")) -> None:
     )
 
 
+def add_method(code: str, file=Path("env_test.py")) -> None:
+    add_command(code, file)
+
+
 def add_hook(code: str, file=Path("env_test.py")) -> None:
     add_command(code, file)
 
@@ -204,10 +208,6 @@ def add_plugins(name: str, file=Path("env_test.py")) -> None:
         "plugins: List[Plugin] = []", f"plugins: List[Plugin] = [{name}]", file=file
     )
 
-
-def add_function(code: str, file=Path("env_comm.py")) -> None:
-    cleaned_code = textwrap.dedent(code)
-    file.write_text(file.read_text() + cleaned_code)
 
 
 def add_imports(code: str, file=Path("env_comm.py")) -> None:

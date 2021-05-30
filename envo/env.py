@@ -574,6 +574,8 @@ class BaseEnv:
 
         self.path = os.environ["PATH"]
 
+        # TODO: Make it stateless
+        self._pythonpath = ""
         if "PYTHONPATH" not in os.environ:
             self.pythonpath = ""
         else:
@@ -597,6 +599,20 @@ class BaseEnv:
         self._collect_magic_functions()
 
         self.init_parts()
+
+    @property
+    def pythonpath(self) -> str:
+        return self._pythonpath
+
+    @pythonpath.setter
+    def pythonpath(self, value: str) -> None:
+        self._pythonpath = value
+        parts = self._pythonpath.split(":")
+
+        for p in parts:
+            if p in sys.path:
+                continue
+            sys.path.append(p)
 
     def init_parts(self) -> None:
         def decorated_init(klass, fun):
@@ -911,12 +927,6 @@ class Env(BaseEnv):
         var_names = set()
         f: str
         for f in dir(self):
-            # skip properties
-            if hasattr(self.__class__, f) and inspect.isdatadescriptor(
-                getattr(self.__class__, f)
-            ):
-                continue
-
             attr: Any = getattr(self, f)
 
             if (
@@ -931,15 +941,11 @@ class Env(BaseEnv):
             var_names.add(f)
 
         unset = field_names - var_names
-        undeclr = var_names - field_names
 
         error_msgs: List[str] = []
 
         if unset:
             error_msgs += [f'Variable "{v}" is unset!' for v in unset]
-
-        if undeclr:
-            error_msgs += [f'Variable "{v}" is undeclared!' for v in undeclr]
 
         return error_msgs
 
