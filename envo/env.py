@@ -927,7 +927,7 @@ class Env(BaseEnv):
         var_names = set()
         f: str
         for f in dir(self):
-            attr: Any = getattr(self, f)
+            attr = inspect.getattr_static(self, f)
 
             if (
                 inspect.ismethod(attr)
@@ -971,7 +971,12 @@ class Env(BaseEnv):
             for f, a in c.__annotations__.items():
                 if f.startswith("_"):
                     continue
-                attr = getattr(obj, f)
+
+                try:
+                    attr = getattr(obj, f)
+                except Exception as e:
+                    attr = repr(e)
+
                 t = type(attr)
 
                 raw = "envo.env.Raw" in str(a)

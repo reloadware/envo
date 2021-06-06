@@ -20,3 +20,22 @@ class TestComputedVars(utils.TestBase):
 
         shell.exit()
         e.exit().eval()
+
+    def test_error_in_property(self, shell):
+        utils.add_declaration("computed: int")
+        utils.add_method("""
+        @property
+        def computed(self) -> int:
+            a = 1/0
+            return a
+        """)
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("$SANDBOX_COMPUTED")
+        e.output(r"\"ZeroDivisionError('division by zero',)\"\n")
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()

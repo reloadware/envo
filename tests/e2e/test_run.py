@@ -33,6 +33,26 @@ class TestCommands(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    def test_envs_persist(self, shell):
+        utils.add_definition("self.pythonpath = 'test_dir'")
+        utils.add_command(
+            """
+        @command(in_root=False)
+        def cmd(self) -> str:
+            run(f"echo $PYTHONPATH")
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("cmd")
+        e.output(r"test_dir\n")
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
     def test_background(self, shell):
         utils.add_command(
             """
