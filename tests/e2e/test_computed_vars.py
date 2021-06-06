@@ -34,7 +34,7 @@ class TestComputedVars(utils.TestBase):
         e.prompt().eval()
 
         shell.sendline("$SANDBOX_COMPUTED")
-        e.output(r"\"ZeroDivisionError('division by zero',)\"\n")
+        e.output(r'''"ZeroDivisionError\('division by zero',\)"\n''')
         e.prompt().eval()
 
         shell.exit()

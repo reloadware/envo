@@ -409,3 +409,22 @@ class TestCommands(utils.TestBase):
 
         shell.exit()
         e.exit().eval()
+
+    def test_fire_str(self, shell):
+        utils.add_command(
+            """
+        @command
+        def cmd(self, arg: str) -> str:
+            return f"super {arg}"
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline('cmd "cake"')
+        e.output(r"super cake\n")
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()

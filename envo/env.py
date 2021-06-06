@@ -1231,6 +1231,7 @@ class Env(BaseEnv):
 
         if self._is_python_fire_cmd(command):
             fun = command.split()[0]
+            command = command.replace('"', '\\"')
             return f'__envo__execute_with_fire__({fun}, "{command}")'
 
         return command
