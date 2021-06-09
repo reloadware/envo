@@ -86,6 +86,10 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
         self.mypy()
         self.test()
 
+    @e.command
+    def failing(self) -> None:
+        run("lsfds")
+
     @command
     def sandbox(self) -> None:
         run([

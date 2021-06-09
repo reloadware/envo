@@ -110,7 +110,7 @@ class MagicFunction:
         try:
             return self.call(*args, **kwargs)
         except SystemExit as e:
-            logger.traceback()
+            # logger.traceback()
             self.env._li.shell.history.last_cmd_rtn = e.code
             sys.exit(e.code)
         except BaseException as e:

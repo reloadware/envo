@@ -127,8 +127,6 @@ class TestCommands(utils.TestBase):
                 in utils.clean_output(e.value.stdout)
             )
 
-        assert "SystemExit" in utils.clean_output(e.value.stderr)
-
     def test_single_command_command_fail_traceback(self):
         utils.add_command(
             """
