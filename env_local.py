@@ -87,8 +87,8 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
         self.test()
 
     @e.command
-    def failing(self) -> None:
-        run("lsfds")
+    def long(self) -> None:
+        run("sleep 5")
 
     @command
     def sandbox(self) -> None:

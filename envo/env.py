@@ -113,6 +113,8 @@ class MagicFunction:
             # logger.traceback()
             self.env._li.shell.history.last_cmd_rtn = e.code
             sys.exit(e.code)
+        except KeyboardInterrupt:
+            pass
         except BaseException as e:
             logger.traceback()
             self.env._li.shell.history.last_cmd_rtn = 1
