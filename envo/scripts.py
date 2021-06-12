@@ -132,12 +132,12 @@ class HeadlessMode:
     def _create_env_object(self, file: Path) -> Env:
         env_class = EnvBuilder.build_shell_env_from_file(file)
         env = env_class(
-            li=Env.Links(self.li.shell, status=self.status),
-            calls=Env.Callbacks(
+            li=Env._Links(self.li.shell, status=self.status),
+            calls=Env._Callbacks(
                 restart=self.calls.restart,
                 on_error=self.calls.on_error,
             ),
-            se=Env.Sets(
+            se=Env._Sets(
                 reloader_enabled=self.reloader_enabled,
                 blocking=self.blocking,
                 extra_watchers=self.extra_watchers,

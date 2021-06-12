@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
 import envo  # noqa: F401
 from envo import (  # noqa: F401
     Plugin,
-    Raw,
     VirtualEnv,
     boot_code,
     command,

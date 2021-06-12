@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from envo.env import NoValueError, RedefinedVarError
 from tests.e2e import utils
 
 
@@ -7,16 +8,18 @@ class TestEnvVariables(utils.TestBase):
     def test_nested(self, shell):
         utils.add_declaration(
             """
-            @dataclass
-            class Python:
-                version: str
-                name: str
+            class Python(var):
+                version: str = var()
+                name: str = var()
 
-            python: Python
+            python = Python()
             """
         )
         utils.add_definition(
-            'self.python = self.Python(version="3.8.2", name="python")',
+            """
+            self.python.version = "3.8.2"
+            self.python.name = "python"
+            """,
             file=Path("env_test.py"),
         )
 
@@ -35,16 +38,18 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_nested(self, shell):
         utils.add_declaration(
             """
-            @dataclass
-            class Python:
-                version: str
-                name: str
+            class Python(var):
+                version: str = var()
+                name: str = var()
 
-            python: Raw[Python]
+            python = Python(raw=True)
             """
         )
         utils.add_definition(
-            'self.python = self.Python(version="3.8.2", name="python")',
+            """
+            self.python.version = "3.8.2"
+            self.python.name = "python"
+            """,
             file=Path("env_test.py"),
         )
 
@@ -63,21 +68,23 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_double_nested(self, shell):
         utils.add_declaration(
             """
-            @dataclass
-            class Python:
-                @dataclass
-                class Version:
-                    major: str
-                    minor: str
+            class Python(var):
+                class Version(var):
+                    major: str = var()
+                    minor: str = var()
 
-                version: Version
-                name: str
+                version = Version()
+                name: str = var()
 
-            python: Raw[Python]
+            python = Python(raw=True)
             """
         )
         utils.add_definition(
-            'self.python = self.Python(version=self.Python.Version("3", "6"), name="python")',
+            """
+            self.python.version.major = "3"
+            self.python.version.minor = "6"
+            self.python.name = "python"
+            """,
             file=Path("env_test.py"),
         )
 
@@ -94,11 +101,12 @@ class TestEnvVariables(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    def test_verify_unset_variable(self, shell):
-        utils.add_declaration("test_var: int")
+    def test_validate_non_optional_var_not_set(self, shell):
+        utils.add_declaration("test_var: int = var(optional=False)")
 
         e = shell.start()
-        e.output('Variable "test_var" is unset!\n')
+
+        e.output(f"{NoValueError(type_=int, var_name='sandbox.test_var')}\n")
         e.prompt(utils.PromptState.EMERGENCY).eval()
 
         shell.exit()
@@ -107,22 +115,14 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_in_nested(self, shell):
         utils.add_declaration(
             """
-            @dataclass
-            class Python:
-                version: Raw[str]
+            class Python(var):
+                version: str = var(raw=True)
 
-            python: Python
+            python: Python = Python()
             """
         )
         utils.add_definition(
-            'self.python = self.Python(version="3.8.2")',
-            file=Path("env_test.py"),
-        )
-
-        utils.add_definition(
-            """
-            self.python = self.Python(version="3.8.2")
-            """,
+            'self.python.version = version="3.8.2"',
             file=Path("env_test.py"),
         )
 
@@ -138,22 +138,20 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_in_double_nested(self, shell):
         utils.add_declaration(
             """
-            @dataclass
-            class Python:
-                @dataclass
-                class Version:
-                    major: str
-                    minor: str
-                    raw_var: Raw[str]
+            class Python(var):
+                class Version(var):
+                    major: str = var()
+                    minor: str = var()
+                    raw_var: str = var(raw=True)
 
-                version: Version
-                name: str
+                version = Version()
+                name: str = var()
 
-            python: Raw[Python]
+            python = Python()
             """
         )
         utils.add_definition(
-            'self.python = self.Python(version=self.Python.Version("3", "6", "raw_value"), name="python")',
+            'self.python.version.raw_var = "raw_value"',
             file=Path("env_test.py"),
         )
 
@@ -169,28 +167,26 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_nested_redefined(self, shell):
         utils.add_declaration(
             """
-            @dataclass
-            class Python:
-                version: Raw[str]
+            class Python(var):
+                version: str = var(raw=True)
 
-            @dataclass
-            class Javascript:
-                version: Raw[str]
+            class Javascript(var):
+                version: str = var(raw=True)
 
-            python: Python
-            javascript: Javascript
+            python = Python()
+            javascript = Javascript()
             """
         )
         utils.add_definition(
             """
-            self.python = self.Python(version="3.8.2")
-            self.javascript = self.Javascript(version="3.8.2")
+            self.python.version = "3.8.2"
+            self.javascript.version = "3.8.2"
             """,
             file=Path("env_test.py"),
         )
 
         e = shell.start()
-        e.output('Variable "version" is redefined\n')
+        e.output(f'{RedefinedVarError("VERSION")}\n')
         e.prompt(utils.PromptState.EMERGENCY).eval()
 
         shell.exit()
