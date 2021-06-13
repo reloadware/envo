@@ -41,16 +41,11 @@ class EnvoCommEnv(UserEnv):  # type: ignore
         ignore_files: List[str] = []
         verbose_run = True
 
-    class Python:
-        version: str = var(default="3.6")
-
     pip_ver: str = var(default="21.0.1")
     poetry_ver: str = var(default="1.0.10")
-    python: Python = Python()
 
     def __init__(self) -> None:
-        self.pip_ver = "21.0.5"
-        self.python.version = "3.6.1"
+        pass
 
     @command
     def bootstrap(self):
