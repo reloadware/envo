@@ -1,14 +1,15 @@
 from pathlib import Path
 
-from envo.env import NoValueError, RedefinedVarError
+from tests import facade
 from tests.e2e import utils
+from tests.e2e.utils import PromptState
 
 
 class TestEnvVariables(utils.TestBase):
     def test_nested(self, shell):
         utils.add_declaration(
             """
-            class Python(var):
+            class Python(VarGroup):
                 version: str = var()
                 name: str = var()
 
@@ -38,7 +39,7 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_nested(self, shell):
         utils.add_declaration(
             """
-            class Python(var):
+            class Python(VarGroup):
                 version: str = var()
                 name: str = var()
 
@@ -68,8 +69,8 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_double_nested(self, shell):
         utils.add_declaration(
             """
-            class Python(var):
-                class Version(var):
+            class Python(VarGroup):
+                class Version(VarGroup):
                     major: str = var()
                     minor: str = var()
 
@@ -102,12 +103,36 @@ class TestEnvVariables(utils.TestBase):
         e.exit().eval()
 
     def test_validate_non_optional_var_not_set(self, shell):
-        utils.add_declaration("test_var: int = var(optional=False)")
+        utils.add_declaration("test_var: int = var()")
 
         e = shell.start()
 
-        e.output(f"{NoValueError(type_=int, var_name='sandbox.test_var')}\n")
+        e.output(f"{facade.NoValueError(type_=int, var_name='sandbox.test_var')}\n")
         e.prompt(utils.PromptState.EMERGENCY).eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_optional(self, shell):
+        utils.add_declaration("test_var: Optional[int] = var()")
+
+        e = shell.start()
+
+        e.prompt().eval()
+        shell.sendline("$SANDBOX_TESTVAR")
+        e.output("'None'\n")
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_no_type(self, shell):
+        utils.add_declaration("test_var = var()")
+
+        e = shell.start()
+
+        e.output(f'{facade.NoTypeError(var_name="sandbox.test_var")}\n')
+        e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         shell.exit()
         e.exit().eval()
@@ -115,7 +140,7 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_in_nested(self, shell):
         utils.add_declaration(
             """
-            class Python(var):
+            class Python(VarGroup):
                 version: str = var(raw=True)
 
             python: Python = Python()
@@ -138,14 +163,14 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_in_double_nested(self, shell):
         utils.add_declaration(
             """
-            class Python(var):
-                class Version(var):
-                    major: str = var()
-                    minor: str = var()
+            class Python(VarGroup):
+                class Version(VarGroup):
+                    major: Optional[str] = var()
+                    minor: Optional[str] = var()
                     raw_var: str = var(raw=True)
 
                 version = Version()
-                name: str = var()
+                name: Optional[str] = var()
 
             python = Python()
             """
@@ -167,10 +192,10 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_nested_redefined(self, shell):
         utils.add_declaration(
             """
-            class Python(var):
+            class Python(VarGroup):
                 version: str = var(raw=True)
 
-            class Javascript(var):
+            class Javascript(VarGroup):
                 version: str = var(raw=True)
 
             python = Python()
@@ -186,7 +211,7 @@ class TestEnvVariables(utils.TestBase):
         )
 
         e = shell.start()
-        e.output(f'{RedefinedVarError("VERSION")}\n')
+        e.output(f'{facade.RedefinedVarError("VERSION")}\n')
         e.prompt(utils.PromptState.EMERGENCY).eval()
 
         shell.exit()

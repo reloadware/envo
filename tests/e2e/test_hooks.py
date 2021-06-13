@@ -1,4 +1,4 @@
-from envo.misc import is_linux, is_windows
+from tests import facade
 from tests.e2e import utils
 from tests.e2e.utils import PromptState
 
@@ -133,9 +133,9 @@ class TestHooks(utils.TestBase):
         e.prompt().eval()
 
         shell.sendline('print("pancake");print("banana")')
-        if is_linux():
+        if facade.is_linux():
             e.output(r" sweet pancake sweet\n sweet banana sweet\n").prompt().eval()
-        if is_windows():
+        if facade.is_windows():
             e.output(
                 r" sweet pancake sweet\n sweet banana sweet\n sweet\n sweet "
             ).prompt().eval()

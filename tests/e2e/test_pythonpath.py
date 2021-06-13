@@ -1,7 +1,6 @@
 from textwrap import dedent
 
 from tests.e2e import utils
-from tests.e2e.utils import PromptState
 
 
 class TestPythonpath(utils.TestBase):

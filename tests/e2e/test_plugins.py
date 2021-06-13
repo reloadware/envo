@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from envo.plugins import VenvPath
 from tests.e2e import utils
+from tests import facade
 
 
 class TestVenv(utils.TestBase):
@@ -25,7 +25,7 @@ class TestVenv(utils.TestBase):
 
         path = shell.envo.get_env_field("path")
 
-        venv_path = VenvPath(root_path=venv_dir, venv_name=venv_name)
+        venv_path = facade.VenvPath(root_path=venv_dir, venv_name=venv_name)
 
         assert path.count(str(venv_path.bin_path)) == 1
 
@@ -35,7 +35,7 @@ class TestVenv(utils.TestBase):
         assert sys_path.count(str(site_packages_path)) == 1
 
     def assert_predicted(self, shell, venv_dir: Path, venv_name=".venv") -> None:
-        venv_path = VenvPath(root_path=venv_dir, venv_name=venv_name)
+        venv_path = facade.VenvPath(root_path=venv_dir, venv_name=venv_name)
         path = shell.envo.get_env_field("path")
         assert path.count(str(venv_path.bin_path)) == 1
 
@@ -49,7 +49,7 @@ class TestVenv(utils.TestBase):
         ["env_comm.py", "env_test.py"],
     )
     def test_venv_addon(self, file, shell, sandbox):
-        venv_path = VenvPath(root_path=sandbox, venv_name=".venv")
+        venv_path = facade.VenvPath(root_path=sandbox, venv_name=".venv")
         utils.run("python -m venv .venv")
         utils.run(f"{str(venv_path.bin_path / 'pip')} install url-regex")
         utils.add_plugins("VirtualEnv", file=Path(file))
@@ -63,7 +63,7 @@ class TestVenv(utils.TestBase):
         e.exit().eval()
 
     def test_venv_addon_no_venv(self, sandbox, shell):
-        venv_path = VenvPath(root_path=sandbox, venv_name=".venv")
+        venv_path = facade.VenvPath(root_path=sandbox, venv_name=".venv")
 
         utils.add_plugins("VirtualEnv")
         utils.replace_in_code(
@@ -84,7 +84,7 @@ class TestVenv(utils.TestBase):
         e.exit().eval()
 
     def test_autodiscovery(self, shell, init_child_env, sandbox):
-        venv_path = VenvPath(root_path=sandbox, venv_name=".venv")
+        venv_path = facade.VenvPath(root_path=sandbox, venv_name=".venv")
 
         utils.run("python -m venv .venv")
         utils.run(f"{str(venv_path.bin_path / 'pip')} install url-regex")
@@ -117,7 +117,7 @@ class TestVenv(utils.TestBase):
         e.exit().eval()
 
     def test_custom_venv_name(self, shell, sandbox, init_child_env):
-        venv_path = VenvPath(root_path=sandbox, venv_name=".custom_venv")
+        venv_path = facade.VenvPath(root_path=sandbox, venv_name=".custom_venv")
 
         utils.run("python -m venv .custom_venv")
         utils.run(f"{str(venv_path.bin_path / 'pip')} install url-regex")

@@ -1,4 +1,3 @@
-from envo.env import ComputedVarError
 from tests.e2e import utils
 from tests.e2e.utils import PromptState
 

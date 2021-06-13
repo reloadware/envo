@@ -1,10 +1,5 @@
 import os
 from pathlib import Path
-from subprocess import CalledProcessError
-
-from pytest import raises
-
-from envo.misc import is_linux, is_windows
 from tests.e2e import utils
 
 

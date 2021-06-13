@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-from envo.misc import import_from_file, import_from_file_raw
+from tests import facade
 from tests.e2e import utils
 
 
@@ -41,7 +41,7 @@ class TestStubs(utils.TestBase):
         self.assert_files_in_dir(3)
 
         assert stub_file.exists()
-        stub = import_from_file_raw(stub_file)
+        stub = facade.import_from_file_raw(stub_file)
         env = stub.SandboxCommEnv
 
         # user defined command
@@ -68,7 +68,7 @@ class TestStubs(utils.TestBase):
 
         assert Path("../env_comm.pyi").exists()
         assert Path("../env_test.pyi").exists()
-        stub = import_from_file_raw(Path("../env_test.pyi"))
+        stub = facade.import_from_file_raw(Path("../env_test.pyi"))
         env = stub.SandboxTestEnv
 
         # user defined command
@@ -100,10 +100,10 @@ class TestStubs(utils.TestBase):
         assert Path("env_comm.pyi").exists()
         assert Path("env_test.pyi").exists()
 
-        comm_stub = import_from_file_raw(Path("env_comm.pyi"))
+        comm_stub = facade.import_from_file_raw(Path("env_comm.pyi"))
         comm_env = comm_stub.SandboxCommEnv
 
-        test_stub = import_from_file_raw(Path("env_test.pyi"))
+        test_stub = facade.import_from_file_raw(Path("env_test.pyi"))
         test_env = test_stub.SandboxTestEnv
 
         # user defined command

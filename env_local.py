@@ -7,7 +7,6 @@ from envo import (  # noqa: F401
     BaseEnv,
     Namespace,
     Plugin,
-    Raw,
     UserEnv,
     VirtualEnv,
     boot_code,

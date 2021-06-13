@@ -25,7 +25,7 @@ from envo import (  # noqa: F401
 
 # Declare your command namespaces here
 # like this:
-# my_namespace = command(namespace="my_namespace")
+pr = Namespace("pr")
 
 
 class EnvoCommEnv(UserEnv):  # type: ignore
@@ -47,7 +47,7 @@ class EnvoCommEnv(UserEnv):  # type: ignore
     def __init__(self) -> None:
         pass
 
-    @command
+    @pr.command
     def bootstrap(self):
         run(f"pip install pip=={self.pip_ver}")
         run(f"pip install poetry=={self.poetry_ver}")

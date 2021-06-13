@@ -5,9 +5,8 @@ from time import sleep
 
 import pytest
 
-from envo.e2e import ReloadTimeout
-from envo.env import NoValueError
-from envo.misc import is_linux, is_windows
+from tests import facade
+
 from tests.e2e import utils
 from tests.e2e.utils import PromptState
 
@@ -188,7 +187,7 @@ class TestHotReload(utils.TestBase):
 
         ignored_file.touch()
 
-        with pytest.raises(ReloadTimeout):
+        with pytest.raises(facade.ReloadTimeout):
             shell.envo.assert_reloaded(5, r".*test_dir/ignored_file\.py")
 
         shell.exit()
@@ -222,11 +221,12 @@ class TestHotReload(utils.TestBase):
         )
 
         e = shell.start()
-        e.output(rf'{NoValueError(int, "child.test_var")}\n')
+        e.output(rf'{facade.NoValueError(int, "child.test_var")}\n')
         e.prompt(name=r"child", state=PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         e.expected.pop()
         e.expected.pop()
+        sleep(1)
 
         utils.replace_in_code(
             "test_var: int = var(optional=False)",
@@ -254,14 +254,14 @@ class TestHotReload(utils.TestBase):
         e.exit().eval()
 
     def test_if_reproductible(self, shell):
-        if is_linux():
+        if facade.is_linux():
             os.environ["PATH"] = "/already_existing_path:" + os.environ["PATH"]
             utils.add_definition(
                 """
                 self.path = "/some_path:" + self.path
                 """
             )
-        if is_windows():
+        if facade.is_windows():
             os.environ["PATH"] = "\\already_existing_path;" + os.environ["PATH"]
             utils.add_definition(
                 """
@@ -279,9 +279,9 @@ class TestHotReload(utils.TestBase):
         shell.sendline("print($PATH)")
         sleep(0.5)
 
-        if is_linux():
+        if facade.is_linux():
             e.output(r"\['/some_path', .*'/already_existing_path'.*\]\n")
-        if is_windows():
+        if facade.is_windows():
             e.output(r"\['\\\\some_path', .*'\\\\already_existing_path'.*\]\n")
 
         e.prompt().eval()
@@ -312,13 +312,13 @@ class TestHotReload(utils.TestBase):
         shell.sendline('print("command_test")')
         sleep(1.0)
         shell.trigger_reload()
-        with pytest.raises(ReloadTimeout):
+        with pytest.raises(facade.ReloadTimeout):
             shell.envo.assert_reloaded(1, timeout=0.2)
 
         sleep(0.1)
 
         shell.trigger_reload()
-        with pytest.raises(ReloadTimeout):
+        with pytest.raises(facade.ReloadTimeout):
             shell.envo.assert_reloaded(1, timeout=0.2)
 
         e.output("command_test\n")

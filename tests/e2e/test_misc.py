@@ -5,7 +5,7 @@ from time import sleep
 
 import pytest
 
-from envo.misc import is_linux, is_windows
+from tests import facade
 from tests.e2e import utils
 
 
@@ -118,14 +118,14 @@ class TestMisc(utils.TestBase):
         e = shell.start()
         e.prompt().eval()
 
-        if is_linux():
+        if facade.is_linux():
             file = Path("script.sh")
             file.touch()
             file.write_text("echo $SANDBOX_ROOT\n")
             shell.sendline("bash script.sh")
             e.output(str(Path(".").absolute()) + r"\n")
 
-        if is_windows():
+        if facade.is_windows():
             file = Path("script.bat")
             file.touch()
             file.write_text("@ECHO OFF\necho %SANDBOX_ROOT%\n")

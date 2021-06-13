@@ -4,7 +4,7 @@ from subprocess import CalledProcessError
 
 from pytest import raises
 
-from envo.misc import is_linux, is_windows
+from tests import facade
 from tests.e2e import utils
 
 
@@ -117,10 +117,10 @@ class TestCommands(utils.TestBase):
         with raises(CalledProcessError) as e:
             utils.run("""envo test -c "flake" """)
 
-        if is_linux():
+        if facade.is_linux():
             assert e.value.returncode == 127
             assert "flaake: command not found" in utils.clean_output(e.value.stdout)
-        if is_windows():
+        if facade.is_windows():
             assert e.value.returncode == 255
             assert (
                 "'flaake' is not recognized as an internal or external command"
@@ -171,7 +171,7 @@ class TestCommands(utils.TestBase):
     def test_env_variables_available_in_run(self, shell):
         utils.add_declaration("test_var: str = var(raw=True)")
         utils.add_definition('self.test_var = "test_value"')
-        if is_linux():
+        if facade.is_linux():
             utils.add_command(
                 """
                 @command
@@ -179,7 +179,7 @@ class TestCommands(utils.TestBase):
                     run("echo $TEST_VAR")
                 """
             )
-        if is_windows():
+        if facade.is_windows():
             utils.add_command(
                 """
                 @command
@@ -224,11 +224,11 @@ class TestCommands(utils.TestBase):
         e.output(r"Namespaced flake\n'Flake return value'\n").prompt().eval()
 
         shell.sendline("my_mypy")
-        if is_linux():
+        if facade.is_linux():
             e.output(
                 r"xonsh: subprocess mode: command not found: my_mypy\nmy_mypy: command not found\n"
             )
-        if is_windows():
+        if facade.is_windows():
             e.output(r"xonsh: subprocess mode: command not found: my_mypy\n")
 
         e.prompt().eval()

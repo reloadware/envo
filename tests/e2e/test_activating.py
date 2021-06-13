@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from envo import const
+from tests import facade
 from tests.e2e import utils
 
 
@@ -24,7 +24,7 @@ class TestActivating:
         self.shell.start()
 
         e = self.shell.expecter
-        e.prompt(emoji=const.STAGES.get_stage_name_to_emoji()[stage]).eval()
+        e.prompt(emoji=facade.const.STAGES.get_stage_name_to_emoji()[stage]).eval()
 
         assert (dir / Path("env_comm.py")).exists()
 
