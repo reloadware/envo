@@ -4,12 +4,12 @@ import re
 import sys
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from copy import copy
+from copy import copy, deepcopy
 from dataclasses import dataclass, field, is_dataclass
 from pathlib import Path
 from threading import Lock, Thread
 from time import sleep
-from types import ModuleType
+from types import ModuleType, MethodType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -569,6 +569,7 @@ class EnvReloader:
 EnvType = Type["EnvType"]
 
 
+# Serves as a blueprint
 @dataclass(repr=False)
 class var:
     raw: bool = False
@@ -576,25 +577,17 @@ class var:
     default: EnvType = None
     default_factory: Optional[Callable] = None
 
-    # Vars can be grouped in subclasses. Groups becomes namespaces when turned into environment variables
-    parent: Optional["var"] = field(init=False, default=None)  # Will be injected by Env
-    children: List["var"] = field(init=False, default_factory=list)  # Will be injected by Env
-    name: Optional[str] = field(init=False, default=None)  # Will be injected by Env
-    type_: Optional[Type] = field(init=False, default=None)  # Will be injected by Env
-    env: Optional["BaseEnv"] = field(init=False, default=None)  # Will be injected by Env
+    _root_name: Optional[str] = field(init=False, default=None)
 
-    value: Optional[EnvType] = field(init=False, default=None)
-    _ready: Optional[EnvType] = field(init=False, default=False)
+    def factory(self, type_: Type, name: str, env: "BaseEnv", parent: "BaseVar", root_name) -> "BaseVar":
+        ret = Var(_raw=self.raw, _optional=self.optional, _default=self.default, _default_factory=self.default_factory,
+                  _type_=type_, _name=name, _env=env, _parent=parent, _root_name=root_name)
+        return ret
 
-    def __post_init__(self) -> None:
-        if self.default_factory:
-            self.default = self.default_factory()
-
-        self.value = self.default
-
-    def _collect_vars(self, obj: Any, env: "BaseEnv") -> None:
+    def create_vars(self, obj: Any, env: "BaseEnv", parent: Optional["BaseVar"]) -> List["Var"]:
         annotations = [c.__annotations__ for c in obj.__class__.__mro__ if hasattr(c, "__annotations__")]
         flat_annotations = {}
+        ret = []
         for a in annotations:
             flat_annotations.update(a)
 
@@ -605,32 +598,104 @@ class var:
                 continue
 
             # Vars are defined as class attributes so we have redefine them for instances to prevent singletons issues
-            copied = copy(v)
-            setattr(obj.__class__, n, copied)
+            concrete = v.factory(type_=flat_annotations.get(n, None), name=n,
+                               env=env, parent=parent, root_name=self._root_name)
+            ret.append(concrete)
+            vars = v.create_vars(v, env, parent=concrete)
 
-            copied.env = env
-            copied.name = n
-            copied.type_ = flat_annotations.get(n, None)
-            self.children.append(copied)
+            for v in vars:
+                object.__setattr__(concrete, v._name, v)
 
-            copied._collect_vars(copied, env)
-            copied.parent = self
+            concrete._vars.extend(vars)
+            object.__setattr__(obj, n, concrete)
+            ret.extend(vars)
+
+        return ret
+
+
+class VarMixin:
+    def __setattr__(self, key: str, value: Any) -> None:
+        try:
+            object.__getattribute__(self, "_attr_hooks_enabled")
+        except AttributeError:
+            object.__setattr__(self, "_attr_hooks_enabled", True)
+
+        if key == "_attr_hooks_enabled":
+            object.__setattr__(self, key, value)
+            return
+
+        if not object.__getattribute__(self, "_attr_hooks_enabled"):
+            object.__setattr__(self, key, value)
+            return
+
+        if not hasattr(self, key):
+            object.__setattr__(self, key, value)
+            return
+
+        attr = object.__getattribute__(self, key)
+
+        if not isinstance(attr, BaseVar):
+            object.__setattr__(self, key, value)
+            return
+
+        if not object.__getattribute__(attr, "final"):
+            object.__setattr__(self, key, value)
+            return
+
+        object.__getattribute__(attr, "set_value")(value)
+
+    def __getattribute__(self, item: str) -> Any:
+        try:
+            object.__getattribute__(self, "_attr_hooks_enabled")
+        except AttributeError:
+            object.__setattr__(self, "_attr_hooks_enabled", True)
+
+        attr = object.__getattribute__(self, item)
+
+        if item == "_attr_hooks_enabled":
+            return attr
+
+        if not object.__getattribute__(self, "_attr_hooks_enabled"):
+            return attr
+
+        if not isinstance(attr, BaseVar):
+            return attr
+
+        if not object.__getattribute__(attr, "final"):
+            return attr
+
+        return object.__getattribute__(attr, "get_value")()
+
+
+@dataclass(repr=False)
+class BaseVar(ABC, VarMixin):
+    _raw: bool
+    _name: str
+    _type_: Type
+    _env: "BaseEnv"
+    _parent: Optional["BaseVar"]
+    _root_name: str
+    _optional: bool
+
+    _vars: List["BaseVar"] = field(init=False, default_factory=list)
+    _value: Optional[EnvType] = field(init=False, default=None)
 
     def get_errors(self) -> List[ValidationError]:
         errors = []
 
         # Try evaluating value first. There might be some issues with that
         try:
-            self.value
+            self.get_value()
         except Exception as e:
             return [ComputedVarError(var_name=self.fullname, exception=e)]
 
-        if not self.optional and self.value is None:
-            errors.append(NoValueError(type_=self.type_, var_name=self.fullname))
-        elif self.value is not None:
+        if not self._optional and self.get_value() is None:
+            errors.append(NoValueError(type_=self._type_, var_name=self.fullname))
+        elif self.get_value() is not None:
             try:
-                if self.type_ and not isinstance(self.value, self.type_):
-                    errors.append(WrongTypeError(type_=self.type_, var_name=self.fullname, got_type=type(self.value)))
+                if self._type_ and not isinstance(self.get_value(), self._type_):
+                    errors.append(
+                        WrongTypeError(type_=self._type_, var_name=self.fullname, got_type=type(self.get_value())))
             except TypeError:
                 # isinstance will fail for types like Union[] etc
                 pass
@@ -638,8 +703,8 @@ class var:
         return errors
 
     def get_env_name(self) -> str:
-        if self.raw:
-            ret = self.name
+        if self._raw:
+            ret = self._name
         else:
             ret = self.fullname
             ret = ret.replace("_", "").replace(".", "_")
@@ -649,36 +714,64 @@ class var:
         return ret
 
     @property
-    def flat(self) -> List["var"]:
-        ret = []
-        for c in self.children:
-            if not c.children:
-                ret.append(c)
-            else:
-                ret.extend(c.flat)
+    def fullname(self) -> str:
+        if self._raw:
+            return self._name
 
+        ret = f"{self._parent.fullname}.{self._name}" if self._parent else f"{self._root_name}.{self._name}"
         return ret
 
     @property
-    def fullname(self) -> str:
-        if self.raw:
-            return self.name
-
-        ret = f"{self.parent.fullname}.{self.name}" if self.parent else self.name
+    def final(self) -> bool:
+        ret = len(self._vars) == 0
         return ret
 
     def __repr__(self) -> str:
-        return f"{self.fullname} = {self.value}"
+        return f"{self.fullname} = {self.get_value()}"
 
-    def __get__(self, instance, owner) -> Any:
-        if self._ready:
-            return self.value
-        else:
-            return self
+    @abstractmethod
+    def get_value(self) -> Any:
+        raise NotImplementedError
 
-    def __set__(self, instance, value) -> None:
-        self.value = value
-        self._ready = True
+    @abstractmethod
+    def set_value(self, new_value) -> None:
+        raise NotImplementedError
+
+
+@dataclass(repr=False)
+class Var(BaseVar):
+    _default: EnvType
+    _default_factory: Optional[Callable]
+
+    def __post_init__(self) -> None:
+        if self._default_factory:
+            self._default = self._default_factory()
+
+        self._value = self._default
+
+    def get_value(self) -> Any:
+        return self._value
+
+    def set_value(self, new_value) -> None:
+        self._value = new_value
+        return self._value
+
+
+@dataclass(repr=False)
+class ComputedVar(BaseVar):
+    _fget: Callable
+    _fset: Callable
+
+    def get_value(self) -> Any:
+        object.__setattr__(self, "_attr_hooks_enabled", False)
+        ret = self._fget(self._env)
+        object.__setattr__(self, "_attr_hooks_enabled", True)
+        return ret
+
+    def set_value(self, new_value) -> None:
+        object.__setattr__(self, "_attr_hooks_enabled", False)
+        self._fset(self._env, new_value)
+        object.__setattr__(self, "_attr_hooks_enabled", True)
 
 
 @dataclass
@@ -686,14 +779,13 @@ class computed_var(var):
     fget: Callable = None
     fset: Callable = None
 
-    optional: bool = field(init=False, default=None)
-    default: EnvType = field(init=False, default=None)
-    default_factory: Optional[Callable] = field(init=False, default=None)
+    def factory(self, type_: Type, name: str, env: "BaseEnv", parent: "Var", root_name) -> "BaseVar":
+        ret = ComputedVar(_raw=self.raw, _optional=self.optional, _type_=type_, _name=name, _env=env, _parent=parent, _root_name=root_name,
+                          _fget=self.fget, _fset=self.fset)
+        return ret
 
-    def __post_init__(self) -> None:
-        setattr(self.__class__, "value", property(fget=self.fget, fset=self.fset))
 
-class BaseEnv:
+class BaseEnv(VarMixin):
     class Meta:
         """
         Environment metadata.
@@ -715,32 +807,33 @@ class BaseEnv:
     stage: str = var()
     envo_stage: str = var(raw=True)
 
-    def pythonpath_fget(self) -> str:
-        return self._pythonpath
+    def pythonpath_get(self) -> str:
+        return self.pythonpath._value
 
-    def pythonpath_fset(self, value: str) -> None:
-        self.pythonpath = value
-        parts = self._pythonpath.split(":")
+    def pythonpath_set(self, value: str) -> None:
+        parts = value.split(":")
 
         for p in parts:
             if p in sys.path:
                 continue
             sys.path.append(p)
-    pythonpath: str = computed_var(raw=True, fget=pythonpath_fget, fset=pythonpath_fset)
 
-    vars: List[var]
+        self.pythonpath._value = value
+    pythonpath: str = computed_var(raw=True, fget=pythonpath_get, fset=pythonpath_set)
+
+    vars: List[Var]
 
     __initialised__ = False
 
     def __init__(self):
+        VarMixin.__init__(self)
+
         self.meta = self.Meta()
         self._name = self.meta.name
 
-        self.vars = []
         root_var = var()
-        root_var.name = self.meta.name
-        root_var._collect_vars(self, self)
-        self.vars = root_var.flat
+        root_var._root_name = self.meta.name
+        self.vars = root_var.create_vars(self, self, parent=None)
 
         self.root = self.meta.root
         self.stage = self.meta.stage
@@ -748,8 +841,6 @@ class BaseEnv:
 
         self.path = os.environ["PATH"]
 
-        # TODO: Make it stateless
-        self._pythonpath = ""
         if "PYTHONPATH" not in os.environ:
             self.pythonpath = ""
         else:
@@ -1091,7 +1182,7 @@ class Env(BaseEnv):
             if name in envs:
                 raise RedefinedVarError(name)
 
-            envs[name] = str(v.value)
+            envs[name] = str(v.get_value())
 
         envs = {k.upper(): v for k, v in envs.items()}
 
