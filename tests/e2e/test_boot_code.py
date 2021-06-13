@@ -31,7 +31,7 @@ class TestBootCode(utils.TestBase):
         e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         env_test.write_text(file_before)
-        sleep(0.5)
+        sleep(1)
         e.expected.pop()
         e.expected.pop()
 

@@ -38,7 +38,7 @@ class TestMisc(utils.TestBase):
         )
 
     def test_dump(self):
-        utils.add_declaration("test_var: str")
+        utils.add_declaration("test_var: str = var()")
         utils.add_definition('self.test_var = "test_value"')
 
         ret = utils.run("envo test dump")
@@ -54,7 +54,7 @@ class TestMisc(utils.TestBase):
             (
                 r'ENVO_STAGE="test"\n'
                 r'PATH=".*"\n'
-                r'PYTHONPATH=".*\n'
+                r'PYTHONPATH=".*"\n'
                 r'SANDBOX_ROOT=".*sandbox"\n'
                 r'SANDBOX_STAGE="test"\n'
                 r'SANDBOX_TESTVAR="test_value"'

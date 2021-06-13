@@ -615,16 +615,7 @@ class var:
 
 class VarMixin:
     def __setattr__(self, key: str, value: Any) -> None:
-        try:
-            object.__getattribute__(self, "_attr_hooks_enabled")
-        except AttributeError:
-            object.__setattr__(self, "_attr_hooks_enabled", True)
-
         if key == "_attr_hooks_enabled":
-            object.__setattr__(self, key, value)
-            return
-
-        if not object.__getattribute__(self, "_attr_hooks_enabled"):
             object.__setattr__(self, key, value)
             return
 
@@ -638,27 +629,40 @@ class VarMixin:
             object.__setattr__(self, key, value)
             return
 
+        try:
+            object.__getattribute__(attr, "_attr_hooks_enabled")
+        except AttributeError:
+            object.__setattr__(attr, "_attr_hooks_enabled", True)
+
+        if not object.__getattribute__(attr, "_attr_hooks_enabled"):
+            object.__setattr__(self, key, value)
+            return
+
+
         if not object.__getattribute__(attr, "final"):
             object.__setattr__(self, key, value)
             return
 
+        # if not object.__getattribute__(attr, "_attr_hooks_enabled"):
+        #     return attr
+
         object.__getattribute__(attr, "set_value")(value)
 
     def __getattribute__(self, item: str) -> Any:
-        try:
-            object.__getattribute__(self, "_attr_hooks_enabled")
-        except AttributeError:
-            object.__setattr__(self, "_attr_hooks_enabled", True)
-
         attr = object.__getattribute__(self, item)
 
         if item == "_attr_hooks_enabled":
             return attr
 
-        if not object.__getattribute__(self, "_attr_hooks_enabled"):
+        if not isinstance(attr, BaseVar):
             return attr
 
-        if not isinstance(attr, BaseVar):
+        try:
+            object.__getattribute__(attr, "_attr_hooks_enabled")
+        except AttributeError:
+            object.__setattr__(attr, "_attr_hooks_enabled", True)
+
+        if not object.__getattribute__(attr, "_attr_hooks_enabled"):
             return attr
 
         if not object.__getattribute__(attr, "final"):
@@ -824,6 +828,11 @@ class BaseEnv(VarMixin):
     vars: List[Var]
 
     __initialised__ = False
+
+    def __new__(cls, *args, **kwargs) -> "BaseEnv":
+        env = super().__new__(cls)
+        BaseEnv.__init__(env, *args, **kwargs)
+        return env
 
     def __init__(self):
         VarMixin.__init__(self)
@@ -1070,9 +1079,12 @@ class Env(BaseEnv):
     _env_reloader: EnvReloader
     _sys_modules_snapshot: Dict[str, ModuleType] = OrderedDict()
 
-    def __init__(self, calls: _Callbacks, se: _Sets, li: _Links) -> None:
-        BaseEnv.__init__(self)
+    def __new__(cls, *args, **kwargs) -> "Env":
+        env = BaseEnv.__new__(cls)
+        env.__init__(*args, **kwargs)
+        return env
 
+    def __init__(self, calls: _Callbacks, se: _Sets, li: _Links) -> None:
         self._calls = calls
         self._se = se
         self._li = li
