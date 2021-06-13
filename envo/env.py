@@ -2,13 +2,14 @@ import inspect
 import os
 import re
 import sys
+from abc import ABC, abstractmethod
 from collections import OrderedDict
-from copy import copy
+from copy import copy, deepcopy
 from dataclasses import dataclass, field, is_dataclass
 from pathlib import Path
 from threading import Lock, Thread
 from time import sleep
-from types import ModuleType
+from types import ModuleType, MethodType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -20,7 +21,7 @@ from typing import (
     Tuple,
     Type,
     TypeVar,
-    Union,
+    Union, ClassVar,
 )
 
 from rhei import Stopwatch
@@ -36,7 +37,6 @@ __all__ = [
     "UserEnv",
     "BaseEnv",
     "Env",
-    "Raw",
     "command",
     "context",
     "precmd",
@@ -51,20 +51,45 @@ __all__ = [
     "boot_code",
     "Namespace",
     "Source",
+    "var",
+    "computed_var"
 ]
+
+
+class ValidationError(ABC, EnvoError):
+    pass
+
+
+class WrongTypeError(ValidationError):
+    def __init__(self, type_: Type, var_name: str, got_type: Type) -> None:
+        msg = f'Expected type "{type_.__name__}" for var "{var_name}" got "{got_type}"'
+        super().__init__(msg)
+
+
+class NoValueError(ValidationError):
+    def __init__(self, type_: Type, var_name: str) -> None:
+        msg = f'Expected value of type "{type_.__name__}" for var "{var_name}" not None'
+        super().__init__(msg)
+
+
+class RedefinedVarError(ValidationError):
+    def __init__(self, var_name: str) -> None:
+        msg = f'Variable "{var_name}" is redefined'
+        super().__init__(msg)
+
+
+class ComputedVarError(ValidationError):
+    def __init__(self, var_name: str, exception: Exception) -> None:
+        msg = f'During computing "{var_name}" following error occured: \n{repr(exception)}'
+        super().__init__(msg)
 
 
 T = TypeVar("T")
 
 if TYPE_CHECKING:
-    Raw = Union[T]
     from envo import Plugin, misc
     from envo.scripts import Status
     from envo.shell import FancyShell
-else:
-
-    class Raw(Generic[T]):
-        pass
 
 
 @dataclass
@@ -541,7 +566,230 @@ class EnvReloader:
         Thread(target=fun).start()
 
 
-class BaseEnv:
+EnvType = Type["EnvType"]
+
+
+# Serves as a blueprint
+@dataclass(repr=False)
+class var:
+    raw: bool = False
+    optional: bool = True
+    default: EnvType = None
+    default_factory: Optional[Callable] = None
+
+    _root_name: Optional[str] = field(init=False, default=None)
+
+    def factory(self, type_: Type, name: str, env: "BaseEnv", parent: "BaseVar", root_name) -> "BaseVar":
+        ret = Var(_raw=self.raw, _optional=self.optional, _default=self.default, _default_factory=self.default_factory,
+                  _type_=type_, _name=name, _env=env, _parent=parent, _root_name=root_name)
+        return ret
+
+    def create_vars(self, obj: Any, env: "BaseEnv", parent: Optional["BaseVar"]) -> List["Var"]:
+        annotations = [c.__annotations__ for c in obj.__class__.__mro__ if hasattr(c, "__annotations__")]
+        flat_annotations = {}
+        ret = []
+        for a in annotations:
+            flat_annotations.update(a)
+
+        for n in dir(obj):
+            v = inspect.getattr_static(obj, n)
+
+            if not isinstance(v, var):
+                continue
+
+            # Vars are defined as class attributes so we have redefine them for instances to prevent singletons issues
+            concrete = v.factory(type_=flat_annotations.get(n, None), name=n,
+                               env=env, parent=parent, root_name=self._root_name)
+            ret.append(concrete)
+            vars = v.create_vars(v, env, parent=concrete)
+
+            for v in vars:
+                object.__setattr__(concrete, v._name, v)
+
+            concrete._vars.extend(vars)
+            object.__setattr__(obj, n, concrete)
+            ret.extend(vars)
+
+        return ret
+
+
+class VarMixin:
+    def __setattr__(self, key: str, value: Any) -> None:
+        if key == "_attr_hooks_enabled":
+            object.__setattr__(self, key, value)
+            return
+
+        if not hasattr(self, key):
+            object.__setattr__(self, key, value)
+            return
+
+        attr = object.__getattribute__(self, key)
+
+        if not isinstance(attr, BaseVar):
+            object.__setattr__(self, key, value)
+            return
+
+        try:
+            object.__getattribute__(attr, "_attr_hooks_enabled")
+        except AttributeError:
+            object.__setattr__(attr, "_attr_hooks_enabled", True)
+
+        if not object.__getattribute__(attr, "_attr_hooks_enabled"):
+            object.__setattr__(self, key, value)
+            return
+
+
+        if not object.__getattribute__(attr, "final"):
+            object.__setattr__(self, key, value)
+            return
+
+        # if not object.__getattribute__(attr, "_attr_hooks_enabled"):
+        #     return attr
+
+        object.__getattribute__(attr, "set_value")(value)
+
+    def __getattribute__(self, item: str) -> Any:
+        attr = object.__getattribute__(self, item)
+
+        if item == "_attr_hooks_enabled":
+            return attr
+
+        if not isinstance(attr, BaseVar):
+            return attr
+
+        try:
+            object.__getattribute__(attr, "_attr_hooks_enabled")
+        except AttributeError:
+            object.__setattr__(attr, "_attr_hooks_enabled", True)
+
+        if not object.__getattribute__(attr, "_attr_hooks_enabled"):
+            return attr
+
+        if not object.__getattribute__(attr, "final"):
+            return attr
+
+        return object.__getattribute__(attr, "get_value")()
+
+
+@dataclass(repr=False)
+class BaseVar(ABC, VarMixin):
+    _raw: bool
+    _name: str
+    _type_: Type
+    _env: "BaseEnv"
+    _parent: Optional["BaseVar"]
+    _root_name: str
+    _optional: bool
+
+    _vars: List["BaseVar"] = field(init=False, default_factory=list)
+    _value: Optional[EnvType] = field(init=False, default=None)
+
+    def get_errors(self) -> List[ValidationError]:
+        errors = []
+
+        # Try evaluating value first. There might be some issues with that
+        try:
+            self.get_value()
+        except Exception as e:
+            return [ComputedVarError(var_name=self.fullname, exception=e)]
+
+        if not self._optional and self.get_value() is None:
+            errors.append(NoValueError(type_=self._type_, var_name=self.fullname))
+        elif self.get_value() is not None:
+            try:
+                if self._type_ and not isinstance(self.get_value(), self._type_):
+                    errors.append(
+                        WrongTypeError(type_=self._type_, var_name=self.fullname, got_type=type(self.get_value())))
+            except TypeError:
+                # isinstance will fail for types like Union[] etc
+                pass
+
+        return errors
+
+    def get_env_name(self) -> str:
+        if self._raw:
+            ret = self._name
+        else:
+            ret = self.fullname
+            ret = ret.replace("_", "").replace(".", "_")
+
+        ret = ret.upper()
+
+        return ret
+
+    @property
+    def fullname(self) -> str:
+        if self._raw:
+            return self._name
+
+        ret = f"{self._parent.fullname}.{self._name}" if self._parent else f"{self._root_name}.{self._name}"
+        return ret
+
+    @property
+    def final(self) -> bool:
+        ret = len(self._vars) == 0
+        return ret
+
+    def __repr__(self) -> str:
+        return f"{self.fullname} = {self.get_value()}"
+
+    @abstractmethod
+    def get_value(self) -> Any:
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_value(self, new_value) -> None:
+        raise NotImplementedError
+
+
+@dataclass(repr=False)
+class Var(BaseVar):
+    _default: EnvType
+    _default_factory: Optional[Callable]
+
+    def __post_init__(self) -> None:
+        if self._default_factory:
+            self._default = self._default_factory()
+
+        self._value = self._default
+
+    def get_value(self) -> Any:
+        return self._value
+
+    def set_value(self, new_value) -> None:
+        self._value = new_value
+        return self._value
+
+
+@dataclass(repr=False)
+class ComputedVar(BaseVar):
+    _fget: Callable
+    _fset: Callable
+
+    def get_value(self) -> Any:
+        object.__setattr__(self, "_attr_hooks_enabled", False)
+        ret = self._fget(self._env)
+        object.__setattr__(self, "_attr_hooks_enabled", True)
+        return ret
+
+    def set_value(self, new_value) -> None:
+        object.__setattr__(self, "_attr_hooks_enabled", False)
+        self._fset(self._env, new_value)
+        object.__setattr__(self, "_attr_hooks_enabled", True)
+
+
+@dataclass
+class computed_var(var):
+    fget: Callable = None
+    fset: Callable = None
+
+    def factory(self, type_: Type, name: str, env: "BaseEnv", parent: "Var", root_name) -> "BaseVar":
+        ret = ComputedVar(_raw=self.raw, _optional=self.optional, _type_=type_, _name=name, _env=env, _parent=parent, _root_name=root_name,
+                          _fget=self.fget, _fset=self.fset)
+        return ret
+
+
+class BaseEnv(VarMixin):
     class Meta:
         """
         Environment metadata.
@@ -558,17 +806,43 @@ class BaseEnv:
         ignore_files: List[str] = []
         verbose_run: bool = True
 
-    root: Path
-    path: Raw[str]
-    stage: str
-    envo_stage: Raw[str]
-    pythonpath: Raw[str]
+    root: Path = var()
+    path: str = var(raw=True)
+    stage: str = var()
+    envo_stage: str = var(raw=True)
+
+    def pythonpath_get(self) -> str:
+        return self.pythonpath._value
+
+    def pythonpath_set(self, value: str) -> None:
+        parts = value.split(":")
+
+        for p in parts:
+            if p in sys.path:
+                continue
+            sys.path.append(p)
+
+        self.pythonpath._value = value
+    pythonpath: str = computed_var(raw=True, fget=pythonpath_get, fset=pythonpath_set)
+
+    vars: List[Var]
 
     __initialised__ = False
 
+    def __new__(cls, *args, **kwargs) -> "BaseEnv":
+        env = super().__new__(cls)
+        BaseEnv.__init__(env, *args, **kwargs)
+        return env
+
     def __init__(self):
+        VarMixin.__init__(self)
+
         self.meta = self.Meta()
         self._name = self.meta.name
+
+        root_var = var()
+        root_var._root_name = self.meta.name
+        self.vars = root_var.create_vars(self, self, parent=None)
 
         self.root = self.meta.root
         self.stage = self.meta.stage
@@ -576,8 +850,6 @@ class BaseEnv:
 
         self.path = os.environ["PATH"]
 
-        # TODO: Make it stateless
-        self._pythonpath = ""
         if "PYTHONPATH" not in os.environ:
             self.pythonpath = ""
         else:
@@ -602,19 +874,19 @@ class BaseEnv:
 
         self.init_parts()
 
-    @property
-    def pythonpath(self) -> str:
-        return self._pythonpath
+        a = 1
 
-    @pythonpath.setter
-    def pythonpath(self, value: str) -> None:
-        self._pythonpath = value
-        parts = self._pythonpath.split(":")
+    def validate(self) -> None:
+        """
+        Validate env
+        """
+        errors = []
 
-        for p in parts:
-            if p in sys.path:
-                continue
-            sys.path.append(p)
+        for v in self.vars:
+            errors.extend(v.get_errors())
+
+        if errors:
+            raise EnvoError("\n".join([str(e) for e in errors]))
 
     def init_parts(self) -> None:
         def decorated_init(klass, fun):
@@ -634,6 +906,7 @@ class BaseEnv:
         for p in parts:
             p.__undecorated_init__ = p.__init__
             p.__init__ = decorated_init(p, p.__init__)
+
 
         for p in parts:
             if not p.__initialised__:
@@ -709,13 +982,21 @@ class BaseEnv:
         """
         Go through fields and transform decorated functions to commands.
         """
+        def hasattr_static(obj:Any, field: str) -> bool:
+            try:
+                inspect.getattr_static(obj, field)
+            except AttributeError:
+                return False
+            else:
+                return True
+
         for f in dir(self):
-            if hasattr(self.__class__, f) and inspect.isdatadescriptor(
-                getattr(self.__class__, f)
+            if hasattr_static(self.__class__, f) and inspect.isdatadescriptor(
+                inspect.getattr_static(self.__class__, f)
             ):
                 continue
 
-            attr = getattr(self, f)
+            attr = inspect.getattr_static(self, f)
 
             if isinstance(attr, MagicFunction):
                 # inject env into super funtions
@@ -770,15 +1051,7 @@ class EnvBuilder:
 
 
 class UserEnv(BaseEnv):
-    def __new__(cls, stage: Optional[str] = None) -> "UserEnv":
-        if stage:
-            env_class = EnvBuilder.build_env(import_from_file(Path(f"env_{stage}.py")).Env)
-        else:
-            env_class = EnvBuilder.build_env(cls)
-
-        obj = BaseEnv.__new__(env_class)
-        BaseEnv.__init__(obj)
-        return obj
+    pass
 
 
 class Env(BaseEnv):
@@ -787,17 +1060,17 @@ class Env(BaseEnv):
     """
 
     @dataclass
-    class Callbacks:
+    class _Callbacks:
         restart: Callback
         on_error: Callable
 
     @dataclass
-    class Links:
+    class _Links:
         shell: Optional["FancyShell"]
         status: "Status"
 
     @dataclass
-    class Sets:
+    class _Sets:
         extra_watchers: List[FilesWatcher]
         reloader_enabled: bool = True
         blocking: bool = False
@@ -811,9 +1084,7 @@ class Env(BaseEnv):
         env.__init__(*args, **kwargs)
         return env
 
-    def __init__(self, calls: Callbacks, se: Sets, li: Links) -> None:
-        BaseEnv.__init__(self)
-
+    def __init__(self, calls: _Callbacks, se: _Sets, li: _Links) -> None:
         self._calls = calls
         self._se = se
         self._li = li
@@ -878,15 +1149,6 @@ class Env(BaseEnv):
         for p in reversed(self.meta.sources):
             sys.path.insert(0, str(p.root))
 
-    def validate(self) -> None:
-        """
-        Validate env
-        """
-        self.logger.debug("Validating env")
-        errors = self._get_errors()
-        if errors:
-            raise EnvoError("\n".join(errors))
-
     def _on_reload_start(self) -> None:
         self.logger.info("Running reload, trying partial first")
         self._li.status.source_ready = False
@@ -909,48 +1171,6 @@ class Env(BaseEnv):
 
         self._env_reloader.stop()
 
-    def _get_errors(self) -> List[str]:
-        """
-        Return list of detected errors (unset, undeclared)
-
-        :return: error messages
-        """
-        # look for undeclared variables
-        _internal_objs = ("meta", "logger")
-
-        field_names = set()
-        for c in self.__class__.mro():
-            if not hasattr(c, "__annotations__"):
-                continue
-            field_names |= set(
-                [f for f in c.__annotations__.keys() if not f.startswith("_")]
-            )
-
-        var_names = set()
-        f: str
-        for f in dir(self):
-            attr = inspect.getattr_static(self, f)
-
-            if (
-                inspect.ismethod(attr)
-                or f.startswith("_")
-                or inspect.isclass(attr)
-                or f in _internal_objs
-                or isinstance(attr, MagicFunction)
-            ):
-                continue
-
-            var_names.add(f)
-
-        unset = field_names - var_names
-
-        error_msgs: List[str] = []
-
-        if unset:
-            error_msgs += [f'Variable "{v}" is unset!' for v in unset]
-
-        return error_msgs
-
     def get_name(self) -> str:
         """
         Return env name
@@ -960,47 +1180,6 @@ class Env(BaseEnv):
     def redraw_prompt(self) -> None:
         self._li.shell.redraw()
 
-    @classmethod
-    def fields(cls, obj: Any, namespace: Optional[str] = None) -> Dict[str, Field]:
-        """
-        Return fields.
-        """
-        ret = OrderedDict()
-
-        for c in obj.__class__.__mro__:
-            if not hasattr(c, "__annotations__"):
-                continue
-            for f, a in c.__annotations__.items():
-                if f.startswith("_"):
-                    continue
-
-                try:
-                    attr = getattr(obj, f)
-                except Exception as e:
-                    attr = repr(e)
-
-                t = type(attr)
-
-                raw = "envo.env.Raw" in str(a)
-                if is_dataclass(t):
-                    ret.update(
-                        cls.fields(
-                            attr,
-                            namespace=f"{namespace}_{f}"
-                            if namespace and not raw
-                            else f,
-                        )
-                    )
-                else:
-                    field = Field(
-                        name=f, namespace=namespace, type=t, value=attr, raw=raw
-                    )
-                    ret[field.full_name] = field
-
-        ret = OrderedDict(sorted(ret.items(), key=lambda x: x[0]))
-
-        return ret
-
     def get_env_vars(self) -> Dict[str, str]:
         """
         Return environmental variables in following format:
@@ -1009,11 +1188,13 @@ class Env(BaseEnv):
         :param owner_name:
         """
         envs = {}
-        for name, f in self.fields(self, self._name).items():
-            if f.namespaced_name in envs:
-                raise EnvoError(f'Variable "{f.namespaced_name}" is redefined')
+        for v in self.vars:
+            name = v.get_env_name()
 
-            envs[f.namespaced_name] = str(f.value)
+            if name in envs:
+                raise RedefinedVarError(name)
+
+            envs[name] = str(v.get_value())
 
         envs = {k.upper(): v for k, v in envs.items()}
 

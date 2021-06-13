@@ -6,6 +6,7 @@ from time import sleep
 import pytest
 
 from envo.e2e import ReloadTimeout
+from envo.env import NoValueError
 from envo.misc import is_linux, is_windows
 from tests.e2e import utils
 from tests.e2e.utils import PromptState
@@ -211,47 +212,24 @@ class TestHotReload(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    def test_error(self, shell):
-        e = shell.start()
-        e.prompt(PromptState.MAYBE_LOADING).eval()
-
-        utils.replace_in_code("# Declare your variables here", "test_var: int")
-        shell.envo.assert_reloaded(1)
-
-        e.expected.pop()
-
-        e.output(r'Variable "test_var" is unset!\n')
-        e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
-
-        e.expected.pop()
-        e.expected.pop()
-
-        utils.replace_in_code("test_var: int", "# Declare your variables here")
-        e.prompt(PromptState.MAYBE_LOADING).eval()
-
-        shell.envo.assert_reloaded(2)
-
-        shell.exit()
-        e.exit().eval()
-
     def test_parents_are_watched_in_emergency_mode(self, shell, init_child_env):
         os.chdir("child")
 
         utils.replace_in_code(
             "# Declare your variables here",
-            "test_var: int",
+            "test_var: int = var(optional=False)",
             file=Path("../env_comm.py"),
         )
 
         e = shell.start()
-        e.output(r'Variable "test_var" is unset!\n')
+        e.output(rf'{NoValueError(int, "child.test_var")}\n')
         e.prompt(name=r"child", state=PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         e.expected.pop()
         e.expected.pop()
 
         utils.replace_in_code(
-            "test_var: int",
+            "test_var: int = var(optional=False)",
             "# Declare your variables here",
             file=Path("../env_comm.py"),
         )

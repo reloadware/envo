@@ -5,7 +5,6 @@ import envo  # noqa: F401
 from envo import (  # noqa: F401
     Namespace,
     Plugin,
-    Raw,
     UserEnv,
     VirtualEnv,
     boot_code,
@@ -21,6 +20,7 @@ from envo import (  # noqa: F401
     postcmd,
     precmd,
     run,
+    var
 )
 
 # Declare your command namespaces here
@@ -41,12 +41,11 @@ class EnvoCommEnv(UserEnv):  # type: ignore
         ignore_files: List[str] = []
         verbose_run = True
 
-    pip_ver: str
-    poetry_ver: str
+    pip_ver: str = var(default="21.0.1")
+    poetry_ver: str = var(default="1.0.10")
 
     def __init__(self) -> None:
-        self.pip_ver = "21.0.1"
-        self.poetry_ver = "1.0.10"
+        pass
 
     @command
     def bootstrap(self):
