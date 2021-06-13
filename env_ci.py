@@ -6,7 +6,6 @@ import envo  # noqa: F401
 from envo import (  # noqa: F401
     Namespace,
     Plugin,
-    Raw,
     UserEnv,
     VirtualEnv,
     boot_code,
