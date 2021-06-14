@@ -216,12 +216,12 @@ class TestHotReload(utils.TestBase):
 
         utils.replace_in_code(
             "# Declare your variables here",
-            "test_var: int = var(optional=False)",
+            "test_var: int = var()",
             file=Path("../env_comm.py"),
         )
 
         e = shell.start()
-        e.output(rf'{facade.NoValueError(int, "child.test_var")}\n')
+        e.output(rf'{facade.NoValueError("child.test_var", int)}\n')
         e.prompt(name=r"child", state=PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         e.expected.pop()
@@ -229,7 +229,7 @@ class TestHotReload(utils.TestBase):
         sleep(1)
 
         utils.replace_in_code(
-            "test_var: int = var(optional=False)",
+            "test_var: int = var()",
             "# Declare your variables here",
             file=Path("../env_comm.py"),
         )
@@ -258,14 +258,14 @@ class TestHotReload(utils.TestBase):
             os.environ["PATH"] = "/already_existing_path:" + os.environ["PATH"]
             utils.add_definition(
                 """
-                self.path = "/some_path:" + self.path
+                self.e.path = "/some_path:" + self.e.path
                 """
             )
         if facade.is_windows():
             os.environ["PATH"] = "\\already_existing_path;" + os.environ["PATH"]
             utils.add_definition(
                 """
-                self.path = "\\\\some_path;" + self.path
+                self.e.path = "\\\\some_path;" + self.e.path
                 """
             )
 

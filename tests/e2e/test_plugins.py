@@ -67,7 +67,7 @@ class TestVenv(utils.TestBase):
 
         utils.add_plugins("VirtualEnv")
         utils.replace_in_code(
-            "# Define your variables here", "VirtualEnv.init(self, venv_path=self.root)"
+            "# Define your variables here", "VirtualEnv.init(self, venv_path=self.meta.root)"
         )
 
         e = shell.start()

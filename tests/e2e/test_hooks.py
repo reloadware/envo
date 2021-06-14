@@ -103,7 +103,7 @@ class TestHooks(utils.TestBase):
             r"""
             @precmd(cmd_regex=r"print\(.*\)")
             def pre_print(self, command: str) -> str:
-                print(self.stage);
+                print(self.e.stage);
                 return command
             """
         )

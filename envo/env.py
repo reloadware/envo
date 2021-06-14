@@ -34,7 +34,8 @@ from envo.status import Status
 from envo import logger
 from envo.logging import Logger
 from envo.misc import Callback, EnvoError, FilesWatcher, import_from_file
-from envo.environ import var, computed_var, VarMixin, Var, BaseVar
+from envium import var, computed_var, VarGroup
+import envium
 
 __all__ = [
     "UserEnv",
@@ -62,12 +63,6 @@ if TYPE_CHECKING:
     from envo import Plugin, misc
     from envo.scripts import Status
     from envo.shell import FancyShell
-
-
-class RedefinedVarError(EnvoError):
-    def __init__(self, var_name: str) -> None:
-        msg = f'Variable "{var_name}" is redefined'
-        super().__init__(msg)
 
 
 @dataclass
@@ -166,7 +161,7 @@ class Command(MagicFunction):
         cwd = Path(".").absolute()
 
         if self.kwargs["in_root"]:
-            os.chdir(str(self.env.root))
+            os.chdir(str(self.env.meta.root))
 
         try:
             ret = self.func(*args, **kwargs)
@@ -544,7 +539,7 @@ class EnvReloader:
         Thread(target=fun).start()
 
 
-class BaseEnv(VarMixin):
+class BaseEnv:
     class Meta:
         """
         Environment metadata.
@@ -561,26 +556,25 @@ class BaseEnv(VarMixin):
         ignore_files: List[str] = []
         verbose_run: bool = True
 
-    root: Path = var()
-    path: str = var(raw=True)
-    stage: str = var()
-    envo_stage: str = var(raw=True)
+    class Environ(envium.Environ):
+        def pythonpath_get(self) -> str:
+            return self.pythonpath._value
 
-    def pythonpath_get(self) -> str:
-        return self.pythonpath._value
+        def pythonpath_set(self, value: str) -> None:
+            parts = value.split(":")
 
-    def pythonpath_set(self, value: str) -> None:
-        parts = value.split(":")
+            for p in parts:
+                if p in sys.path:
+                    continue
+                sys.path.append(p)
 
-        for p in parts:
-            if p in sys.path:
-                continue
-            sys.path.append(p)
+            self.pythonpath._value = value
 
-        self.pythonpath._value = value
-    pythonpath: str = computed_var(raw=True, fget=pythonpath_get, fset=pythonpath_set)
-
-    vars: List[BaseVar]
+        pythonpath: str = computed_var(raw=True, fget=pythonpath_get, fset=pythonpath_set)
+        root: Path = var()
+        path: str = var(raw=True)
+        stage: str = var()
+        envo_stage: str = var(raw=True)
 
     __initialised__ = False
 
@@ -590,20 +584,15 @@ class BaseEnv(VarMixin):
         return env
 
     def __init__(self):
-        VarMixin.__init__(self)
-
         self.meta = self.Meta()
-        self._name = self.meta.name
 
-        root_var = var()
-        root_var._root_name = self.meta.name
-        self.vars = root_var.create_vars(self, self, parent=None)
+        self.e = self.Environ(name=self.meta.name)
 
-        self.root = self.meta.root
-        self.stage = self.meta.stage
-        self.envo_stage = self.stage
+        self.e.root = self.meta.root
+        self.e.stage = self.meta.stage
+        self.e.envo_stage = self.meta.stage
 
-        self.path = os.environ["PATH"]
+        self.e.path = os.environ["PATH"]
 
         if "PYTHONPATH" not in os.environ:
             self.pythonpath = ""
@@ -633,10 +622,7 @@ class BaseEnv(VarMixin):
         """
         Validate env
         """
-        errors = []
-
-        for v in self.vars:
-            errors.extend(v.get_errors())
+        errors = self.e.errors
 
         if errors:
             raise EnvoError("\n".join([str(e) for e in errors]))
@@ -773,9 +759,15 @@ class EnvBuilder:
         class InheritedEnv(env, *parents, *plugins):
             pass
 
+        environ_classes = [env.Environ] + [p.Environ for p in parents] + [p.Environ for p in plugins]
+
+        class Environ(*environ_classes):
+            pass
+
         env = InheritedEnv
         env.__name__ = cls.__name__
         env._parents = parents
+        env.Environ = Environ
         return env
 
     @classmethod
@@ -864,7 +856,7 @@ class Env(BaseEnv):
         self._shell_environ_before = None
 
         self.logger.info(
-            "Starting env", metadata={"root": self.root, "stage": self.stage}
+            "Starting env", metadata={"root": self.meta.root, "stage": self.meta.stage}
         )
 
         self._collect_magic_functions()
@@ -928,30 +920,10 @@ class Env(BaseEnv):
         """
         Return env name
         """
-        return self._name
+        return self.meta.name
 
     def redraw_prompt(self) -> None:
         self._li.shell.redraw()
-
-    def get_env_vars(self) -> Dict[str, str]:
-        """
-        Return environmental variables in following format:
-        {NAMESPACE_ENVNAME}
-
-        :param owner_name:
-        """
-        envs = {}
-        for v in self.vars:
-            name = v.get_env_name()
-
-            if name in envs:
-                raise RedefinedVarError(name)
-
-            envs[name] = str(v.get_value())
-
-        envs = {k.upper(): v for k, v in envs.items()}
-
-        return envs
 
     def repr(self, level: int = 0) -> str:
         ret = []
@@ -1014,6 +986,20 @@ class Env(BaseEnv):
                 context[namespaced_name] = v
 
         return context
+
+    def dump_dot_env(self) -> Path:
+        """
+        Dump .env file for the current environment.
+
+        File name follows env_{env_name} format.
+        """
+        path = Path(f".env_{self.meta.stage}")
+        content = "\n".join(
+            [f'{key}="{value}"' for key, value in self.e.get_env_vars().items()]
+        )
+        path.write_text(content, "utf-8")
+        return path
+
 
     def on_shell_create(self) -> None:
         """
@@ -1089,9 +1075,9 @@ class Env(BaseEnv):
 
         if not self._shell_environ_before:
             self._shell_environ_before = dict(self._li.shell.environ.items())
-        self._li.shell.environ.update(**self.get_env_vars())
+        self._li.shell.environ.update(**self.e.get_env_vars())
 
-        os.environ.update(**self.get_env_vars())
+        os.environ.update(**self.e.get_env_vars())
 
     def _deactivate(self) -> None:
         """
@@ -1111,22 +1097,9 @@ class Env(BaseEnv):
                         continue
                     self._li.shell.environ[k] = v
 
-    def dump_dot_env(self) -> Path:
-        """
-        Dump .env file for the current environment.
-
-        File name follows env_{env_name} format.
-        """
-        path = Path(f".env_{self.meta.stage}")
-        content = "\n".join(
-            [f'{key}="{value}"' for key, value in self.get_env_vars().items()]
-        )
-        path.write_text(content, "utf-8")
-        return path
-
     def get_env(self, directory: Union[Path, str]) -> "BaseEnv":
         directory = Path(directory)
-        env_file = directory / f"env_{self.stage}.py"
+        env_file = directory / f"env_{self.meta.stage}.py"
 
         if not env_file.exists():
             raise EnvoError(f"{env_file} does not exit")

@@ -42,10 +42,11 @@ class TestComputedVars(utils.TestBase):
         e.exit().eval()
 
     def test_error_in_property(self, shell):
-        utils.add_declaration("computed: int")
-        utils.add_method("""
+        utils.add_declaration("""
         def compute(self) -> int:
-            return 1 / 0 
+            return 1 / 0
+        def compute_set(self, value) -> int:
+            self.computed = value * 2
         computed: int = computed_var(fget=compute)
         """)
 

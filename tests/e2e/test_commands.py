@@ -170,7 +170,7 @@ class TestCommands(utils.TestBase):
 
     def test_env_variables_available_in_run(self, shell):
         utils.add_declaration("test_var: str = var(raw=True)")
-        utils.add_definition('self.test_var = "test_value"')
+        utils.add_definition('self.e.test_var = "test_value"')
         if facade.is_linux():
             utils.add_command(
                 """

@@ -18,8 +18,8 @@ class TestEnvVariables(utils.TestBase):
         )
         utils.add_definition(
             """
-            self.python.version = "3.8.2"
-            self.python.name = "python"
+            self.e.python.version = "3.8.2"
+            self.e.python.name = "python"
             """,
             file=Path("env_test.py"),
         )
@@ -48,8 +48,8 @@ class TestEnvVariables(utils.TestBase):
         )
         utils.add_definition(
             """
-            self.python.version = "3.8.2"
-            self.python.name = "python"
+            self.e.python.version = "3.8.2"
+            self.e.python.name = "python"
             """,
             file=Path("env_test.py"),
         )
@@ -82,9 +82,9 @@ class TestEnvVariables(utils.TestBase):
         )
         utils.add_definition(
             """
-            self.python.version.major = "3"
-            self.python.version.minor = "6"
-            self.python.name = "python"
+            self.e.python.version.major = "3"
+            self.e.python.version.minor = "6"
+            self.e.python.name = "python"
             """,
             file=Path("env_test.py"),
         )
@@ -147,7 +147,7 @@ class TestEnvVariables(utils.TestBase):
             """
         )
         utils.add_definition(
-            'self.python.version = version="3.8.2"',
+            'self.e.python.version = version="3.8.2"',
             file=Path("env_test.py"),
         )
 
@@ -176,7 +176,7 @@ class TestEnvVariables(utils.TestBase):
             """
         )
         utils.add_definition(
-            'self.python.version.raw_var = "raw_value"',
+            'self.e.python.version.raw_var = "raw_value"',
             file=Path("env_test.py"),
         )
 
@@ -204,8 +204,8 @@ class TestEnvVariables(utils.TestBase):
         )
         utils.add_definition(
             """
-            self.python.version = "3.8.2"
-            self.javascript.version = "3.8.2"
+            self.e.python.version = "3.8.2"
+            self.e.javascript.version = "3.8.2"
             """,
             file=Path("env_test.py"),
         )

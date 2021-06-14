@@ -53,7 +53,7 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
 
     @command
     def test(self) -> None:
-        os.chdir(self.root)
+        os.chdir(self.e.root)
         logger.info("Running tests", print_msg=True)
         run("pytest tests -v")
 

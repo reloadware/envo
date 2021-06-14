@@ -29,7 +29,7 @@ class EnvoCommEnv(envo.env.BaseEnv):  # type: ignore
         emoji: str = const.emojis["emergency"]
         parents: List[str] = []
         plugins: List[Plugin] = []
-        name: str = ""
+        name: str = "emergency"
         version: str = "0.1.0"
         watch_files: List[str] = []
         ignore_files: List[str] = []

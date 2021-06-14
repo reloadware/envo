@@ -38,8 +38,7 @@ class TestMisc(utils.TestBase):
         )
 
     def test_dump(self):
-        utils.add_declaration("test_var: str = var()")
-        utils.add_definition('self.test_var = "test_value"')
+        utils.add_declaration("test_var: str = var(default='test_value')")
 
         ret = utils.run("envo test dump")
         assert "Saved envs to .env_test" in ret

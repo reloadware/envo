@@ -52,7 +52,7 @@ class EnvoCiEnv(UserEnv):  # type: ignore
 
     @command
     def test(self) -> None:
-        os.chdir(self.root)
+        os.chdir(self.e.root)
         logger.info("Running tests", print_msg=True)
         # run(
         #     "pytest --reruns 3 -v tests --cov-report xml:workspace/cov.xml --cov=envo ./workspace"
@@ -90,10 +90,10 @@ class EnvoCiEnv(UserEnv):  # type: ignore
     def generate_version(self) -> None:
         import toml
 
-        config = toml.load(str(self.root / "pyproject.toml"))
+        config = toml.load(str(self.e.root / "pyproject.toml"))
         version: str = config["tool"]["poetry"]["version"]
 
-        version_file = self.root / "envo/__version__.py"
+        version_file = self.e.root / "envo/__version__.py"
         Path(version_file).touch()
 
         version_file.write_text(f'__version__ = "{version}"\n')

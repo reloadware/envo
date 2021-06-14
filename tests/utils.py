@@ -86,7 +86,7 @@ def add_declaration(code: str, file=Path("env_test.py")) -> None:
         # Declare your variables here
         """,
         file=file,
-        indent=4,
+        indent=8,
     )
 
 

@@ -13,9 +13,14 @@ __all__ = [
 
 from envo.logging import Logger
 from envo.misc import is_windows
+import envium
+from envium import var
 
 
 class Plugin(envo.env.BaseEnv):
+    class Environ(envium.Environ):
+        pass
+
     @classmethod
     def init(cls, *args, **kwargs):
         cls.__init__(*args, **kwargs)
@@ -82,7 +87,7 @@ class BaseVenv:
         return path
 
     def activate(self, env: BaseEnv) -> None:
-        env.path = f"""{self._get_path()}{self._path_delimiter}{env.path}"""
+        env.path = f"""{self._get_path()}{self._path_delimiter}{env.e.path}"""
 
     def deactivate(self, env: BaseEnv) -> None:
         if self._get_path() in env.path:
@@ -153,13 +158,14 @@ class VirtualEnv(Plugin):
     """
     Env that activates virtual environment.
     """
+    class Environ(envium.Environ):
+        venv_path: Path = var()
 
-    venv_path: Path
 
     def __init__(
         self, venv_path: Optional[Path] = None, venv_name: str = ".venv"
     ) -> None:
-        self.venv_path = self.root if not venv_path else venv_path
+        self.e.venv_path = self.meta.root if not venv_path else venv_path
 
         self._possible_site_packages = []
         self._venv_dir_name = venv_name
@@ -170,14 +176,14 @@ class VirtualEnv(Plugin):
 
         try:
             self._venv = ExistingVenv(
-                root=self.venv_path,
+                root=self.e.venv_path,
                 venv_name=venv_name,
                 discover=venv_path is None,
             )
 
         except CantFindEnv:
             self.__logger.info("Couldn't find venv. Falling back to predicting")
-            self._venv = PredictedVenv(root=self.venv_path, venv_name=venv_name)
+            self._venv = PredictedVenv(root=self.e.venv_path, venv_name=venv_name)
 
         self._venv.activate(self)
 

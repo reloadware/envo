@@ -5,7 +5,7 @@ from tests.e2e import utils
 
 class TestPythonpath(utils.TestBase):
     def test_basic(self, shell):
-        utils.add_definition("self.pythonpath = 'test_path'")
+        utils.add_definition("self.e.pythonpath = 'test_path'")
 
         e = shell.start()
         e.prompt().eval()

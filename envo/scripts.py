@@ -394,7 +394,7 @@ class EnvoHeadless(EnvoBase):
         self.shell = Shell.create(Shell.Callbacks(), data_dir_name=self.data_dir_name)
         self.init()
         content = "\n".join(
-            [f'export {k}="{v}"' for k, v in self.mode.env.get_env_vars().items()]
+            [f'export {k}="{v}"' for k, v in self.mode.env.e.get_env_vars().items()]
         )
         print(content)
 
