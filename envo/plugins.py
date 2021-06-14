@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import envo
-from envo import BaseEnv, Namespace, logger
+from envo import BaseEnv, Namespace, logger, BaseEnv
 
 __all__ = [
     "Plugin",
@@ -18,7 +18,7 @@ from envium import var
 
 
 class Plugin(envo.env.BaseEnv):
-    class Environ(envium.Environ):
+    class Environ(envo.env.BaseEnv.Environ):
         pass
 
     @classmethod
@@ -86,12 +86,12 @@ class BaseVenv:
         path = f"""{str(self.venv_path.bin_path)}"""
         return path
 
-    def activate(self, env: BaseEnv) -> None:
-        env.path = f"""{self._get_path()}{self._path_delimiter}{env.e.path}"""
+    def activate(self, e: BaseEnv.Environ) -> None:
+        e.path = f"""{self._get_path()}{self._path_delimiter}{e.path}"""
 
-    def deactivate(self, env: BaseEnv) -> None:
-        if self._get_path() in env.path:
-            env.path = env.path.replace(self._get_path() + self._path_delimiter, "")
+    def deactivate(self, e: BaseEnv.Environ) -> None:
+        if self._get_path() in e.path:
+            e.path = e.path.replace(self._get_path() + self._path_delimiter, "")
 
 
 class PredictedVenv(BaseVenv):
@@ -100,14 +100,14 @@ class PredictedVenv(BaseVenv):
 
         self.venv_path = VenvPath(root_path=root, venv_name=venv_name)
 
-    def activate(self, env: BaseEnv) -> None:
-        super().activate(env)
+    def activate(self, e: BaseEnv.Environ) -> None:
+        super().activate(e)
         for d in self.venv_path.possible_site_packages:
             if str(d) not in sys.path:
                 sys.path.insert(0, str(d))
 
-    def deactivate(self, env: BaseEnv) -> None:
-        super().deactivate(env)
+    def deactivate(self, e: BaseEnv.Environ) -> None:
+        super().deactivate(e)
         for d in self.venv_path.possible_site_packages:
             if str(d) in sys.path:
                 sys.path.remove(str(d))
@@ -135,14 +135,14 @@ class ExistingVenv(BaseVenv):
 
         raise CantFindEnv()
 
-    def activate(self, env: BaseEnv) -> None:
-        super().activate(env)
+    def activate(self, e: BaseEnv.Environ) -> None:
+        super().activate(e)
 
         if str(self.venv_path.site_packages_path) not in sys.path:
             sys.path.insert(0, str(self.venv_path.site_packages_path))
 
-    def deactivate(self, env: BaseEnv) -> None:
-        super().deactivate(env)
+    def deactivate(self, e: BaseEnv.Environ) -> None:
+        super().deactivate(e)
 
         try:
             while str(self.venv_path.site_packages_path) in sys.path:
@@ -185,7 +185,7 @@ class VirtualEnv(Plugin):
             self.__logger.info("Couldn't find venv. Falling back to predicting")
             self._venv = PredictedVenv(root=self.e.venv_path, venv_name=venv_name)
 
-        self._venv.activate(self)
+        self._venv.activate(self.e)
 
     @classmethod
     def init(
@@ -199,4 +199,4 @@ class VirtualEnv(Plugin):
     @venv.onunload
     def __deactivate(self) -> None:
         self.__logger.info("Deactivating VirtualEnv")
-        self._venv.deactivate(self)
+        self._venv.deactivate(self.e)

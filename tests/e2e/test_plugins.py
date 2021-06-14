@@ -23,7 +23,7 @@ class TestVenv(utils.TestBase):
         e.output(r"<class 'url_regex\.url_regex\.UrlRegex'>\n")
         e.prompt(name=activated_from).eval()
 
-        path = shell.envo.get_env_field("path")
+        path = shell.envo.get_os_environ()["PATH"]
 
         venv_path = facade.VenvPath(root_path=venv_dir, venv_name=venv_name)
 

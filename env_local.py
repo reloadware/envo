@@ -44,6 +44,11 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
         ignore_files: List[str] = []
         verbose_run = True
 
+    class Environ(UserEnv.Environ):
+        pass
+
+    e: Environ
+
     def __init__(self) -> None:
         pass
 

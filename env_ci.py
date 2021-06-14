@@ -41,9 +41,14 @@ class EnvoCiEnv(UserEnv):  # type: ignore
         plugins: List[Plugin] = []
         verbose_run = True
 
+    class Environ(UserEnv.Environ):
+        pass
+
+    e: Environ
+
     def __init__(self) -> None:
-        super().__init__()
-        # Define your variables here
+        pass
+
 
     @command
     def bootstrap(self) -> None:

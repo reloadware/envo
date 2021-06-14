@@ -175,7 +175,7 @@ class RemoteEnvo:
     def get_env_field(cls, field: str) -> Any:
         import envo.e2e
 
-        return getattr(envo.e2e.envo.mode.env, field)
+        return getattr(envo.e2e.envo.mode.env.e, field)
 
     @classmethod
     def get_sys_path(cls) -> List[str]:
