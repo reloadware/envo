@@ -759,7 +759,7 @@ class EnvBuilder:
         class InheritedEnv(env, *parents, *plugins):
             pass
 
-        environ_classes = [env.Environ] + [p.Environ for p in parents] + [p.Environ for p in plugins]
+        environ_classes = [env.Environ] + [BaseEnv.Environ] + [p.Environ for p in parents] + [p.Environ for p in plugins]
 
         class Environ(*environ_classes):
             pass

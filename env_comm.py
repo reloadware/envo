@@ -41,7 +41,7 @@ class EnvoCommEnv(UserEnv):  # type: ignore
         ignore_files: List[str] = []
         verbose_run = True
 
-    class Environ(UserEnv.Environ):
+    class Environ:
         pip_ver: str = var(default="21.0.1")
         poetry_ver: str = var(default="1.0.10")
 

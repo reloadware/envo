@@ -41,7 +41,7 @@ class EnvoCiEnv(UserEnv):  # type: ignore
         plugins: List[Plugin] = []
         verbose_run = True
 
-    class Environ(UserEnv.Environ):
+    class Environ:
         pass
 
     e: Environ

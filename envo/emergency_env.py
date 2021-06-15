@@ -34,6 +34,11 @@ class EnvoCommEnv(envo.env.BaseEnv):  # type: ignore
         watch_files: List[str] = []
         ignore_files: List[str] = []
 
+    class Environ:
+        ...
+
+    e: Environ
+
     def __init__(self) -> None:
         pass
 
