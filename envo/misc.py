@@ -8,7 +8,7 @@ import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from globmatch_temp import glob_match
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
@@ -230,11 +230,10 @@ def path_to_module_name(path: Path, package_root: Path) -> str:
     return ret
 
 
-def import_from_file(path: Path) -> Any:
-    path = path.resolve()
-    module_name = path_to_module_name(path, path.parent)
-    loader = importlib.machinery.SourceFileLoader(module_name, str(path))
-    spec = importlib.util.spec_from_loader(module_name, loader)
+def import_from_file(path: Union[Path, str]) -> Any:
+    path = Path(path)
+    loader = importlib.machinery.SourceFileLoader(str(path), str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
 
@@ -251,14 +250,6 @@ def get_module_from_full_name(full_name: str) -> Optional[str]:
         parts.pop(0)
         if not parts:
             return None
-
-
-def import_from_file_raw(path: Path) -> Any:
-    loader = importlib.machinery.SourceFileLoader(str(path), str(path))
-    spec = importlib.util.spec_from_loader(loader.name, loader)
-    module = importlib.util.module_from_spec(spec)
-    loader.exec_module(module)
-    return module
 
 
 def get_envo_relevant_traceback(exc: BaseException) -> List[str]:

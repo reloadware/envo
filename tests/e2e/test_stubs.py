@@ -41,7 +41,7 @@ class TestStubs(utils.TestBase):
         self.assert_files_in_dir(3)
 
         assert stub_file.exists()
-        stub = facade.import_from_file_raw(stub_file)
+        stub = facade.import_from_file(stub_file)
         env = stub.SandboxCommEnv
 
         # user defined command
@@ -68,7 +68,7 @@ class TestStubs(utils.TestBase):
 
         assert Path("../env_comm.pyi").exists()
         assert Path("../env_test.pyi").exists()
-        stub = facade.import_from_file_raw(Path("../env_test.pyi"))
+        stub = facade.import_from_file(Path("../env_test.pyi"))
         env = stub.SandboxTestEnv
 
         # user defined command
@@ -100,10 +100,10 @@ class TestStubs(utils.TestBase):
         assert Path("env_comm.pyi").exists()
         assert Path("env_test.pyi").exists()
 
-        comm_stub = facade.import_from_file_raw(Path("env_comm.pyi"))
+        comm_stub = facade.import_from_file(Path("env_comm.pyi"))
         comm_env = comm_stub.SandboxCommEnv
 
-        test_stub = facade.import_from_file_raw(Path("env_test.pyi"))
+        test_stub = facade.import_from_file(Path("env_test.pyi"))
         test_env = test_stub.SandboxTestEnv
 
         # user defined command
