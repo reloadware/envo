@@ -51,6 +51,14 @@ class EnvoCommEnv(UserEnv):  # type: ignore
         pass
 
     @pr.command
+    def clean(self):
+        run("rm **/*/sandbox -rf")
+        run(f"rm **/*.pyi -f")
+        run(f"rm **/.pytest_cache -fr")
+        run(f"rm **/*.egg-info -fr")
+        run(f"rm **/*/__pycache__ -fr")
+
+    @pr.command
     def bootstrap(self):
         run(f"pip install pip=={self.e.pip_ver}")
         run(f"pip install poetry=={self.e.poetry_ver}")

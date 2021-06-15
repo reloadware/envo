@@ -511,10 +511,6 @@ class EnvoCreator:
         :param is_comm:
         :return:
         """
-        from jinja2 import Environment
-
-        Environment(keep_trailing_newline=True)
-
         output_file = Path(f"env_{stage}.py")
 
         if output_file.exists():

@@ -159,7 +159,7 @@ class VirtualEnv(Plugin):
     Env that activates virtual environment.
     """
     class Environ(envium.Environ):
-        venv_path: Path = var()
+        venv_path: Optional[Path] = var()
 
 
     def __init__(

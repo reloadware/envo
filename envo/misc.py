@@ -10,7 +10,7 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from globmatch_temp import glob_match
+from globmatch import glob_match
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
@@ -206,17 +206,11 @@ def is_valid_module_name(module: str) -> bool:
 
 
 def render_file(template_path: Path, output: Path, context: Dict[str, Any]) -> None:
-    from jinja2 import StrictUndefined, Template
+    content = template_path.read_text()
+    for n, v in context.items():
+        content = content.replace(f"{{{{ {n} }}}}", v)
 
-    template = Template(template_path.read_text("utf-8"), undefined=StrictUndefined)
-    output.write_text(template.render(**context), "utf-8")
-
-
-def render(template: str, output: Path, context: Dict[str, Any]) -> None:
-    from jinja2 import StrictUndefined, Template
-
-    template = Template(template, undefined=StrictUndefined)
-    output.write_text(template.render(**context), "utf-8")
+    output.write_text(content)
 
 
 def render_py_file(template_path: Path, output: Path, context: Dict[str, Any]) -> None:
