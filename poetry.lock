@@ -165,7 +165,7 @@ marker = "python_version >= \"3.6\" and python_version < \"3.7\" or python_versi
 name = "dataclasses"
 optional = false
 python-versions = ">=3.6, <3.7"
-version = "0.7"
+version = "0.8"
 
 [[package]]
 category = "dev"
@@ -209,7 +209,7 @@ description = ""
 name = "envium"
 optional = false
 python-versions = ">=3.6,<4.0"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 category = "dev"
@@ -816,7 +816,7 @@ docs = ["sphinx", "jaraco.packaging (>=8.2)", "rst.linker (>=1.9)"]
 testing = ["pytest (>=4.6)", "pytest-checkdocs (>=1.2.3)", "pytest-flake8", "pytest-cov", "pytest-enabler", "jaraco.itertools", "func-timeout", "pytest-black (>=0.3.7)", "pytest-mypy"]
 
 [metadata]
-content-hash = "3646564b9d1f5d9052da0ab8c64367472a777a92918ea82ee2e601b20cdac96b"
+content-hash = "ff780f966b4be0c3954522b74c8d0bb2651d12d40b751ddc59befe90325c21e5"
 lock-version = "1.0"
 python-versions = ">=3.6.1, <4.0"
 
@@ -922,8 +922,8 @@ coverage = [
     {file = "coverage-5.5.tar.gz", hash = "sha256:ebe78fe9a0e874362175b02371bdfbee64d8edc42a044253ddf4ee7d3c15212c"},
 ]
 dataclasses = [
-    {file = "dataclasses-0.7-py3-none-any.whl", hash = "sha256:3459118f7ede7c8bea0fe795bff7c6c2ce287d01dd226202f7c9ebc0610a7836"},
-    {file = "dataclasses-0.7.tar.gz", hash = "sha256:494a6dcae3b8bcf80848eea2ef64c0cc5cd307ffc263e17cdf42f3e5420808e6"},
+    {file = "dataclasses-0.8-py3-none-any.whl", hash = "sha256:0201d89fa866f68c8ebd9d08ee6ff50c0b255f8ec63a71c16fda7af82bb887bf"},
+    {file = "dataclasses-0.8.tar.gz", hash = "sha256:8479067f342acf957dc82ec415d355ab5edb7e7646b90dc6e2fd1d96ad084c97"},
 ]
 dill = [
     {file = "dill-0.3.4-py2.py3-none-any.whl", hash = "sha256:7e40e4a70304fd9ceab3535d36e58791d9c4a776b38ec7f7ec9afc8d3dca4d4f"},
@@ -938,8 +938,8 @@ django = [
     {file = "Django-3.2.4.tar.gz", hash = "sha256:66c9d8db8cc6fe938a28b7887c1596e42d522e27618562517cc8929eb7e7f296"},
 ]
 envium = [
-    {file = "envium-0.1.0-py3-none-any.whl", hash = "sha256:4b8e7bef0f3b0789c47190b1ac56a8ac9cb1873b51298ba84b7c50868e3de1ca"},
-    {file = "envium-0.1.0.tar.gz", hash = "sha256:816ccc978728803f3fcca1b17a9a56309736253c304d8586db12942a33ced729"},
+    {file = "envium-0.2.0-py3-none-any.whl", hash = "sha256:ca365353acf5085d01cbfc005865b09b49564a8f0b64648317b79fd9d3cc61f4"},
+    {file = "envium-0.2.0.tar.gz", hash = "sha256:268b7faa232321fac001d315b64e55391324b0a9162c2b17a18127d445e7ceab"},
 ]
 filelock = [
     {file = "filelock-3.0.12-py3-none-any.whl", hash = "sha256:929b7d63ec5b7d6b71b0fa5ac14e030b3f70b75747cef1b10da9b879fef15836"},
