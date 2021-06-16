@@ -583,6 +583,7 @@ class BaseEnv:
         path: str = var(raw=True)
         stage: str = var()
         envo_stage: str = var(raw=True)
+        envo_name: str = var(raw=True)
 
     __initialised__ = False
 
@@ -595,6 +596,7 @@ class BaseEnv:
         self.meta = self.Meta()
 
         self.e = self.Environ(name=self.meta.name)
+        self.e.envo_name = self.meta.name
 
         self.e.root = self.meta.root
         self.e.stage = self.meta.stage
