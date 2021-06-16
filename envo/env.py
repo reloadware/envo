@@ -117,10 +117,6 @@ class MagicFunction:
             logger.traceback()
             self.env._li.shell.history.last_cmd_rtn = 1
 
-    def render(self) -> str:
-        kwargs_str = ", ".join([f"{k}={repr(v)}" for k, v in self.kwargs.items()])
-        return f"{self.decl}   {{{kwargs_str}}}"
-
     def _validate_fun_args(self) -> None:
         args = inspect.getfullargspec(self.func).args
         args.remove("self")
@@ -373,10 +369,22 @@ if False:
     def postcmd():
         return MagicFunction()
 
+@dataclass
+class Context(MagicFunction):
+    def call(self, *args, **kwargs) -> Dict[str, Any]:
+        try:
+            ret = self.func(*args, **kwargs)
+        except Exception as e:
+            logger.traceback()
+            ret = {}
+
+        return ret
+
 
 class context(magic_function):  # noqa: N801
     type: str = "context"
 
+    klass = Context
     def __init__(self) -> None:
         super().__init__()
 

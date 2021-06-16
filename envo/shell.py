@@ -118,13 +118,17 @@ class Shell(BaseShell):  # type: ignore
             self.add_namespace_if_not_exists(namespace)
 
         max_lenght = 50
-        log_value = (
-            str(value)
-            if len(str(value)) < max_lenght
-            else f"{str(value)[0:max_lenght]}(...)"
-        )
-        log_value = log_value.replace("{", "{{")
-        log_value = log_value.replace("}", "}}")
+        try:
+            log_value = (
+                str(value)
+                if len(str(value)) < max_lenght
+                else f"{str(value)[0:max_lenght]}(...)"
+            )
+            log_value = log_value.replace("{", "{{")
+            log_value = log_value.replace("}", "}}")
+        except Exception as e:
+            log_value = repr(e)
+
         logger.debug(f'Setting "{name} = {log_value}" variable')
 
         built_in_name = f"__envo_{name}__"

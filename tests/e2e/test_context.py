@@ -115,13 +115,32 @@ class TestContext(utils.TestBase):
         e.output(r"NameError: name 'slow_var' is not defined\n")
         e.prompt(utils.PromptState.MAYBE_LOADING).eval()
 
-        sleep(0.0)
-
         e.expected.pop()
         e.prompt().eval()
 
         shell.sendline("print(slow_var)")
         e.output(r"slow var value\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_error_in_context(self, shell):
+        utils.add_command(
+            """
+            @context
+            def some_context(self) -> Dict[str, Any]:
+                return {"var": 1/0}
+            """
+        )
+        shell.start(False)
+        e = shell.expecter
+
+        e.prompt(utils.PromptState.MAYBE_LOADING)
+        e.output(fr".*{ZeroDivisionError.__name__}.*")
+        e.prompt().eval()
+
+        shell.sendline("var")
+        e.output(r".*not found.*")
 
         shell.exit()
         e.exit().eval()
