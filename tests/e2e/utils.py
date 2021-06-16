@@ -214,7 +214,7 @@ class RemoteEnvo:
             if mode.status.ready:
                 break
 
-        sleep(0.2)
+        sleep(0.5)
 
     @classmethod
     def assert_reloaded(

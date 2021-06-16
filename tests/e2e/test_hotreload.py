@@ -3,12 +3,17 @@ import shutil
 from pathlib import Path
 from time import sleep
 
+from flaky import flaky
+
 import pytest
 
 from tests import facade
 
 from tests.e2e import utils
 from tests.e2e.utils import PromptState
+
+
+flaky = flaky(max_runs=3, min_passes=1)
 
 
 class TestHotReload(utils.TestBase):
@@ -303,6 +308,7 @@ class TestHotReload(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    @flaky
     def test_not_reloading_during_command(self, shell):
         e = shell.start()
         e.prompt().eval()

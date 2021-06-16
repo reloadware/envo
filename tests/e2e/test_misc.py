@@ -4,9 +4,12 @@ from pathlib import Path
 from time import sleep
 
 import pytest
+from flaky import flaky
 
 from tests import facade
 from tests.e2e import utils
+
+flaky = flaky(max_runs=3, min_passes=1)
 
 
 class TestMisc(utils.TestBase):
@@ -98,6 +101,7 @@ class TestMisc(utils.TestBase):
 
         assert list(Path(".").glob(".*")) == []
 
+    @flaky
     def test_multiple_instances(self):
         shells = []
         for i in range(6):
