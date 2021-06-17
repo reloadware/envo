@@ -5,7 +5,6 @@ import envo  # noqa: F401
 from envo import (  # noqa: F401
     Namespace,
     Plugin,
-    UserEnv,
     VirtualEnv,
     boot_code,
     command,
@@ -20,7 +19,8 @@ from envo import (  # noqa: F401
     postcmd,
     precmd,
     run,
-    var
+    var,
+    Env
 )
 
 # Declare your command namespaces here
@@ -28,27 +28,22 @@ from envo import (  # noqa: F401
 pr = Namespace("pr")
 
 
-class EnvoCommEnv(UserEnv):  # type: ignore
-    class Meta(UserEnv.Meta):  # type: ignore
+class EnvoCommEnv(Env, VirtualEnv):  # type: ignore
+    class Meta(Env.Meta, VirtualEnv):  # type: ignore
         root: str = Path(__file__).parent.absolute()
         stage: str = "comm"
         emoji: str = "👌"
-        parents: List[str] = []
-        plugins: List[Plugin] = [VirtualEnv]
         name: str = "env"
         version: str = "0.1.0"
         watch_files: List[str] = []
         ignore_files: List[str] = []
         verbose_run = True
 
-    class Environ:
+    class Environ(Env.Environ, VirtualEnv.Environ):
         pip_ver: str = var(default="21.0.1")
         poetry_ver: str = var(default="1.0.10")
 
     e: Environ
-
-    def __init__(self) -> None:
-        pass
 
     @pr.command
     def clean(self):

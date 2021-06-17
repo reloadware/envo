@@ -64,5 +64,5 @@ class Status:
             logger.debug("Everything ready")
             self.calls.on_ready()
         else:
-            logger.debug("Not ready {repr(self)}")
+            logger.debug(f"Not ready {repr(self)}")
             self.calls.on_not_ready()

@@ -6,7 +6,6 @@ import envo  # noqa: F401
 from envo import (  # noqa: F401
     Namespace,
     Plugin,
-    UserEnv,
     VirtualEnv,
     boot_code,
     command,
@@ -28,27 +27,24 @@ from envo import (  # noqa: F401
 # my_namespace = command(namespace="my_namespace")
 
 
-class EnvoCiEnv(UserEnv):  # type: ignore
-    class Meta(UserEnv.Meta):  # type: ignore
+from env_comm import Env as ParentEnv
+
+
+class EnvoCiEnv(ParentEnv):  # type: ignore
+    class Meta(ParentEnv.Meta):  # type: ignore
         root: str = Path(__file__).parent.absolute()
         stage: str = "ci"
         emoji: str = "🧪"
-        parents: List[str] = ["env_comm.py"]
         name: str = "env"
         version: str = "0.1.0"
         watch_files: List[str] = []
         ignore_files: List[str] = []
-        plugins: List[Plugin] = []
         verbose_run = True
 
-    class Environ:
+    class Environ(ParentEnv.Environ):
         pass
 
     e: Environ
-
-    def __init__(self) -> None:
-        pass
-
 
     @command
     def bootstrap(self) -> None:
@@ -57,7 +53,6 @@ class EnvoCiEnv(UserEnv):  # type: ignore
 
     @command
     def test(self) -> None:
-        os.chdir(self.e.root)
         logger.info("Running tests", print_msg=True)
         # run(
         #     "pytest --reruns 3 -v tests --cov-report xml:workspace/cov.xml --cov=envo ./workspace"
@@ -95,10 +90,10 @@ class EnvoCiEnv(UserEnv):  # type: ignore
     def generate_version(self) -> None:
         import toml
 
-        config = toml.load(str(self.e.root / "pyproject.toml"))
+        config = toml.load(str(self.meta.root / "pyproject.toml"))
         version: str = config["tool"]["poetry"]["version"]
 
-        version_file = self.e.root / "envo/__version__.py"
+        version_file = self.meta.root / "envo/__version__.py"
         Path(version_file).touch()
 
         version_file.write_text(f'__version__ = "{version}"\n')

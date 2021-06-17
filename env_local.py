@@ -3,11 +3,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
 
 import envo  # noqa: F401
-from envo import (  # noqa: F401
-    BaseEnv,
+root = Path(__file__).parent.absolute()
+envo.add_source_roots([root])
+
+from envo import (  # noqa: F401,
     Namespace,
     Plugin,
-    UserEnv,
     VirtualEnv,
     boot_code,
     command,
@@ -29,28 +30,26 @@ from envo import (  # noqa: F401
 # like this:
 
 localci = Namespace(name="localci")
-e = Namespace(name="e")
+pr = Namespace(name="pr")
 
-class EnvoLocalEnv(UserEnv):  # type: ignore
-    class Meta(UserEnv.Meta):  # type: ignore
+from env_comm import Env as ParentEnv
+
+
+class EnvoLocalEnv(ParentEnv):  # type: ignore
+    class Meta(ParentEnv.Meta):  # type: ignore
         root: Path = Path(__file__).parent.absolute()
         stage: str = "local"
         emoji: str = "🐣"
-        parents: List[str] = ["env_comm.py"]
-        plugins: List[Plugin] = [VirtualEnv]
         name: str = "env"
         version: str = "0.1.0"
         watch_files: List[str] = []
         ignore_files: List[str] = []
         verbose_run = True
 
-    class Environ:
+    class Environ(ParentEnv.Environ):
         pass
 
     e: Environ
-
-    def __init__(self) -> None:
-        pass
 
     @onload
     def _dump_env(self) -> None:
@@ -58,11 +57,10 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
 
     @command
     def test(self) -> None:
-        os.chdir(self.e.root)
         logger.info("Running tests", print_msg=True)
         run("pytest tests -v")
 
-    @e.command
+    @pr.command
     def verbose_test(self) -> None:
         run("echo verbose cmd")
         print("Output")
@@ -90,7 +88,7 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
         self.mypy()
         self.test()
 
-    @e.command
+    @pr.command
     def long(self) -> None:
         run("sleep 5")
 

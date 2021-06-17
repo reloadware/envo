@@ -5,7 +5,7 @@ import textwrap
 import time
 from pathlib import Path
 from threading import Thread
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
@@ -63,7 +63,8 @@ def change_file(file: Path, delay_s: float, new_content: str) -> None:
     thread.start()
 
 
-def replace_in_code(what: str, to_what: str, file=Path("env_test.py"), indent: int = 0):
+def replace_in_code(what: str, to_what: str, file: Union[Path, str] = "env_test.py", indent: int = 0):
+    file = Path(file)
     content = file.read_text()
 
     if what not in content:
@@ -201,13 +202,6 @@ def add_boot(
 
 def add_on_partial_reload(code: str, file=Path("env_test.py")) -> None:
     add_command(code, file)
-
-
-def add_plugins(name: str, file=Path("env_test.py")) -> None:
-    replace_in_code(
-        "plugins: List[Plugin] = []", f"plugins: List[Plugin] = [{name}]", file=file
-    )
-
 
 
 def add_imports(code: str, file=Path("env_comm.py")) -> None:

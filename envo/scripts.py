@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional, Type
 
 import envo.e2e
-from envo import Env, const, logger, logging, misc, shell
-from envo.env import EnvBuilder
-from envo.misc import Callback, EnvoError, FilesWatcher
+from envo import const, logger, logging, misc, shell
+from envo.env import ShellEnv, Env
+from envo.misc import Callback, EnvoError, FilesWatcher, import_from_file
 from envo.shell import FancyShell, PromptBase, PromptState, Shell
 from envo.status import Status
 
@@ -65,7 +65,7 @@ class HeadlessMode:
         restart: Callback
         on_error: Callback
 
-    env: Env
+    shell_env: ShellEnv
     reloader_enabled: bool = False
     blocking: bool = True
 
@@ -83,7 +83,7 @@ class HeadlessMode:
             )
         )
 
-        self.env = None
+        self.shell_env = None
 
         self.li.shell.set_fulll_traceback_enabled(True)
 
@@ -100,8 +100,8 @@ class HeadlessMode:
         self.li.shell.set_prompt(self.prompt.as_str())
 
     def unload(self) -> None:
-        if self.env:
-            self.env._unload()
+        if self.shell_env:
+            self.shell_env._unload()
 
         self.li.shell.calls.reset()
 
@@ -112,38 +112,39 @@ class HeadlessMode:
 
         self.prompt = NormalPrompt()
         self.prompt.state = PromptState.LOADING
-        self.prompt.emoji = self.env.meta.emoji
-        self.prompt.name = self.env.get_name()
+        self.prompt.emoji = self.shell_env.env.meta.emoji
+        self.prompt.name = self.shell_env.get_name()
         self.prompt.msg = self.se.msg
 
         self.li.shell.set_prompt(str(self.prompt))
 
-        self.li.shell.set_variable("env", self.env)
+        self.li.shell.set_variable("env", self.shell_env)
         self.li.shell.set_variable("environ", os.environ)
 
-        self.env.validate()
-        self.env.activate()
+        self.shell_env.validate()
+        self.shell_env.activate()
 
-        self.env.load()
+        self.shell_env.load()
 
     def get_env_file(self) -> Path:
         return self.se.env_path
 
-    def _create_env_object(self, file: Path) -> Env:
-        env_class = EnvBuilder.build_shell_env_from_file(file)
-        env = env_class(
-            li=Env._Links(self.li.shell, status=self.status),
-            calls=Env._Callbacks(
+    def _create_env_object(self, file: Path) -> ShellEnv:
+        env = import_from_file(file).Env()
+
+        shell_env = ShellEnv(
+            li=ShellEnv._Links(shell=self.li.shell, status=self.status, env=env),
+            calls=ShellEnv._Callbacks(
                 restart=self.calls.restart,
                 on_error=self.calls.on_error,
             ),
-            se=Env._Sets(
+            se=ShellEnv._Sets(
                 reloader_enabled=self.reloader_enabled,
                 blocking=self.blocking,
                 extra_watchers=self.extra_watchers,
             ),
         )
-        return env
+        return shell_env
 
     def _create_env(self) -> None:
         env_file = self.get_env_file()
@@ -154,7 +155,7 @@ class HeadlessMode:
             if m.startswith("env_"):
                 sys.modules.pop(m)
         try:
-            self.env = self._create_env_object(env_file)
+            self.shell_env = self._create_env_object(env_file)
         except ImportError as exc:
             raise EnvoError(f"""Couldn't import "{env_file}" ({exc}).""")
 
@@ -172,7 +173,7 @@ class NormalMode(HeadlessMode):
     class Callbacks(HeadlessMode.Callbacks):
         pass
 
-    env: Env
+    shell_env: ShellEnv
     reloader_enabled: bool = True
     blocking: bool = False
 
@@ -188,13 +189,13 @@ class NormalMode(HeadlessMode):
         logger.debug("Creating NormalMode")
 
     def stop(self) -> None:
-        self.env._exit()
+        self.shell_env._exit()
 
 
 class EmergencyMode(HeadlessMode):
     @dataclass
     class Links(HeadlessMode.Links):
-        pass
+        previous_env: ShellEnv
 
     @dataclass
     class Sets(HeadlessMode.Sets):
@@ -221,37 +222,26 @@ class EmergencyMode(HeadlessMode):
         self.li.shell.calls.on_exit = Callback(self.stop)
 
     def get_env_file(self) -> Path:
-        return Path(__file__).parent / "emergency_env.py"
+        self.extra_watchers = []
 
-    def get_watchers_from_env(self, env: misc.EnvParser) -> List[FilesWatcher]:
-        watchers = [
-            FilesWatcher(
-                FilesWatcher.Sets(
-                    root=env.path.parent,
-                    include=["env_*.py"],
-                    exclude=[],
-                ),
-                calls=FilesWatcher.Callbacks(on_event=Callback(None)),
-            )
-        ]
-
-        for p in env.parents:
-            watchers.extend(self.get_watchers_from_env(p))
+        if self.li.previous_env:
+            for w in self.li.previous_env.reloader.env_watchers:
+                self.extra_watchers.append(
+                FilesWatcher(
+                    FilesWatcher.Sets(
+                        root=w.root,
+                        include=["env_*.py"],
+                        exclude=[],
+                    ),
+                    calls=FilesWatcher.Callbacks(on_event=Callback(None)),
+                ))
 
         # remove duplicates
-        watchers = list({obj.se.root: obj for obj in watchers}.values())
-        return watchers
-
-    def _create_env(self) -> None:
-        self.extra_watchers = self.get_watchers_from_env(
-            misc.EnvParser(super().get_env_file())
-        )
-        super()._create_env()
-
-        self.env.Meta.root = self.se.env_path.parent
+        self.extra_watchers = list({obj.se.root: obj for obj in self.extra_watchers}.values())
+        return Path(__file__).parent / "emergency_env.py"
 
     def stop(self) -> None:
-        self.env._exit()
+        self.shell_env._exit()
 
 
 class EnvoBase:
@@ -394,14 +384,14 @@ class EnvoHeadless(EnvoBase):
         self.shell = Shell.create(Shell.Callbacks(), data_dir_name=self.data_dir_name)
         self.init()
         content = "\n".join(
-            [f'export {k}="{v}"' for k, v in self.mode.env.e.get_env_vars().items()]
+            [f'export {k}="{v}"' for k, v in self.mode.shell_env.env.get_env_vars().items()]
         )
         print(content)
 
     def dump(self) -> None:
         self.shell = Shell.create(Shell.Callbacks(), data_dir_name=self.data_dir_name)
         self.init()
-        path = self.mode.env.dump_dot_env()
+        path = self.mode.shell_env.env.dump_dot_env()
         logger.info(f"Saved envs to {str(path)} 💾", print_msg=True)
 
 
@@ -413,7 +403,6 @@ class Envo(EnvoBase):
     environ_before = Dict[str, str]
     inotify: FilesWatcher
     quit: bool
-    env: Env
     mode: HeadlessMode
 
     def __init__(self, se: Sets) -> None:
@@ -465,7 +454,7 @@ class Envo(EnvoBase):
                 msg=msg,
                 env_path=self.find_env(),
             ),
-            li=EmergencyMode.Links(shell=self.shell),
+            li=EmergencyMode.Links(shell=self.shell, previous_env=self.mode.shell_env),
             calls=EmergencyMode.Callbacks(
                 restart=Callback(self.restart), on_error=Callback(None)
             ),
@@ -487,7 +476,7 @@ class Envo(EnvoBase):
         )
         self.init()
 
-        self.mode.env.on_shell_create()
+        self.mode.shell_env.on_shell_create()
 
         self.shell.start()
         self.mode.unload()
@@ -502,7 +491,7 @@ class EnvoCreator:
         logger.debug("Starting EnvoCreator")
         self.se = se
 
-    def _create_from_templ(self, stage: str, parent: str = "") -> None:
+    def _create_from_templ(self, stage: str) -> None:
         """
         Create env file from template.
 
@@ -512,6 +501,8 @@ class EnvoCreator:
         :return:
         """
         output_file = Path(f"env_{stage}.py")
+
+        parent = "env_comm" if stage != "comm" else None
 
         if output_file.exists():
             raise EnvoError(f"{str(output_file)} file already exists.")
@@ -527,7 +518,8 @@ class EnvoCreator:
             "name": env_dir.name,
             "stage": stage,
             "emoji": const.STAGES.get_stage_name_to_emoji().get(stage, "🙂"),
-            "parents": f'"{parent}"' if parent else "",
+            "parent_import": f"\nfrom {parent} import Env as ParentEnv\n" if parent else "",
+            "base_class": "ParentEnv" if parent else Env.__name__
         }
 
         templ_file = Path("env.py.templ")
@@ -539,9 +531,7 @@ class EnvoCreator:
         if not self.se.stage:
             self.se.stage = "comm"
 
-        self._create_from_templ(
-            self.se.stage, parent="env_comm.py" if self.se.stage != "comm" else ""
-        )
+        self._create_from_templ(self.se.stage)
 
         if self.se.stage != "comm" and not Path("env_comm.py").exists():
             self._create_from_templ("comm")

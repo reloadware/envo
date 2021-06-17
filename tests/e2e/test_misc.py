@@ -152,7 +152,7 @@ class TestMisc(utils.TestBase):
         comm_package_init = comm_package / "__init__.py"
         comm_package_init.touch()
 
-        utils.replace_in_code("envo.add_source_roots([])", "envo.add_source_roots([root/'comm'])")
+        utils.replace_in_code("envo.add_source_roots([root])", "envo.add_source_roots([root, root/'comm'])")
         utils.replace_in_code("# Declare your command namespaces here", "import package")
 
         e = shell.start()

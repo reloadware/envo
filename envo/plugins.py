@@ -4,12 +4,14 @@ from pathlib import Path
 from typing import List, Optional
 
 import envo
-from envo import BaseEnv, Namespace, logger, BaseEnv
+from envo import Env, Namespace, logger, Env
 
 __all__ = [
     "Plugin",
     "VirtualEnv",
 ]
+
+from envo.env import BaseEnv
 
 from envo.logging import Logger
 from envo.misc import is_windows
@@ -17,8 +19,8 @@ import envium
 from envium import var
 
 
-class Plugin(envo.env.BaseEnv):
-    class Environ(envo.env.BaseEnv.Environ):
+class Plugin(BaseEnv):
+    class Environ:
         pass
 
     @classmethod
@@ -86,10 +88,10 @@ class BaseVenv:
         path = f"""{str(self.venv_path.bin_path)}"""
         return path
 
-    def activate(self, e: BaseEnv.Environ) -> None:
+    def activate(self, e: Env.Environ) -> None:
         e.path = f"""{self._get_path()}{self._path_delimiter}{e.path}"""
 
-    def deactivate(self, e: BaseEnv.Environ) -> None:
+    def deactivate(self, e: Env.Environ) -> None:
         if self._get_path() in e.path:
             e.path = e.path.replace(self._get_path() + self._path_delimiter, "")
 
@@ -100,13 +102,13 @@ class PredictedVenv(BaseVenv):
 
         self.venv_path = VenvPath(root_path=root, venv_name=venv_name)
 
-    def activate(self, e: BaseEnv.Environ) -> None:
+    def activate(self, e: Env.Environ) -> None:
         super().activate(e)
         for d in self.venv_path.possible_site_packages:
             if str(d) not in sys.path:
                 sys.path.insert(0, str(d))
 
-    def deactivate(self, e: BaseEnv.Environ) -> None:
+    def deactivate(self, e: Env.Environ) -> None:
         super().deactivate(e)
         for d in self.venv_path.possible_site_packages:
             if str(d) in sys.path:
@@ -135,13 +137,13 @@ class ExistingVenv(BaseVenv):
 
         raise CantFindEnv()
 
-    def activate(self, e: BaseEnv.Environ) -> None:
+    def activate(self, e: Env.Environ) -> None:
         super().activate(e)
 
         if str(self.venv_path.site_packages_path) not in sys.path:
             sys.path.insert(0, str(self.venv_path.site_packages_path))
 
-    def deactivate(self, e: BaseEnv.Environ) -> None:
+    def deactivate(self, e: Env.Environ) -> None:
         super().deactivate(e)
 
         try:
@@ -161,42 +163,37 @@ class VirtualEnv(Plugin):
     class Environ(envium.Environ):
         venv_path: Optional[Path] = var()
 
+    @classmethod
+    def customise(cls, venv_path: Optional[Path] = None, venv_name: str = ".venv"):
+        cls.venv_path = venv_path
+        cls.venv_name = venv_name
 
-    def __init__(
-        self, venv_path: Optional[Path] = None, venv_name: str = ".venv"
-    ) -> None:
+    def init(self):
         self.__logger: Logger = logger.create_child("venv", descriptor="VirtualEnv")
 
-        self.e.venv_path = self.meta.root if not venv_path else venv_path
+        self.e.venv_path = self.meta.root if not self.venv_path else self.venv_path
 
         self._possible_site_packages = []
-        self._venv_dir_name = venv_name
+        self._venv_dir_name = self.venv_name
 
         self.__logger.info("VirtualEnv plugin init")
 
         try:
             self._venv = ExistingVenv(
                 root=self.e.venv_path,
-                venv_name=venv_name,
-                discover=venv_path is None,
+                venv_name=self.venv_name,
+                discover=self.venv_path is None,
             )
 
         except CantFindEnv:
             self.__logger.info("Couldn't find venv. Falling back to predicting")
-            self._venv = PredictedVenv(root=self.e.venv_path, venv_name=venv_name)
+            self._venv = PredictedVenv(root=self.e.venv_path, venv_name=self.venv_name)
 
         self._venv.activate(self.e)
-
-    @classmethod
-    def init(
-        cls,
-        self: "VirtualEnv",
-        venv_path: Optional[Path] = None,
-        venv_name: str = ".venv",
-    ):
-        VirtualEnv.__init__(self, venv_path, venv_name)
 
     @venv.onunload
     def __deactivate(self) -> None:
         self.__logger.info("Deactivating VirtualEnv")
         self._venv.deactivate(self.e)
+
+VirtualEnv.customise()

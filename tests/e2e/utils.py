@@ -32,7 +32,6 @@ from tests.utils import add_hook  # noqa F401
 from tests.utils import add_mypy_cmd  # noqa F401
 from tests.utils import add_namespace  # noqa F401
 from tests.utils import add_on_partial_reload  # noqa F401
-from tests.utils import add_plugins  # noqa F401
 from tests.utils import change_file  # noqa F401
 from tests.utils import clean_output  # noqa F401
 from tests.utils import replace_in_code  # noqa F401
@@ -175,7 +174,7 @@ class RemoteEnvo:
     def get_env_field(cls, field: str) -> Any:
         import envo.e2e
 
-        return getattr(envo.e2e.envo.mode.env.e, field)
+        return getattr(envo.e2e.envo.mode.shell_env.env.e, field)
 
     @classmethod
     def get_sys_path(cls) -> List[str]:

@@ -7,6 +7,10 @@ from tests.e2e import utils
 from tests import facade
 
 
+def add_venv_plugin():
+    utils.replace_in_code("(Env)", "(Env, VirtualEnv)", file="env_comm.py")
+
+
 class TestVenv(utils.TestBase):
     def assert_activated(
         self,
@@ -44,15 +48,12 @@ class TestVenv(utils.TestBase):
             set(sys_path)
         )
 
-    @pytest.mark.parametrize(
-        "file",
-        ["env_comm.py", "env_test.py"],
-    )
-    def test_venv_addon(self, file, shell, sandbox):
+    def test_venv_addon(self, shell, sandbox):
         venv_path = facade.VenvPath(root_path=sandbox, venv_name=".venv")
         utils.run("python -m venv .venv")
         utils.run(f"{str(venv_path.bin_path / 'pip')} install url-regex")
-        utils.add_plugins("VirtualEnv", file=Path(file))
+
+        add_venv_plugin()
 
         e = shell.start()
         e.prompt().eval()
@@ -65,9 +66,10 @@ class TestVenv(utils.TestBase):
     def test_venv_addon_no_venv(self, sandbox, shell):
         venv_path = facade.VenvPath(root_path=sandbox, venv_name=".venv")
 
-        utils.add_plugins("VirtualEnv")
+        add_venv_plugin()
         utils.replace_in_code(
-            "# Define your variables here", "VirtualEnv.init(self, venv_path=self.meta.root)"
+            "# Declare your command namespaces here",
+            'VirtualEnv.customise(venv_path=root)',
         )
 
         e = shell.start()
@@ -91,7 +93,7 @@ class TestVenv(utils.TestBase):
 
         os.chdir("child")
 
-        utils.add_plugins("VirtualEnv")
+        add_venv_plugin()
 
         e = shell.start()
         e.prompt(name="child", state=utils.PromptState.MAYBE_LOADING).eval()
@@ -102,10 +104,11 @@ class TestVenv(utils.TestBase):
         e.exit().eval()
 
     def test_autodiscovery_cant_find(self, sandbox, shell):
-        utils.add_plugins("VirtualEnv")
+        add_venv_plugin()
+
         utils.replace_in_code(
-            "# Define your variables here",
-            "VirtualEnv.init(self, venv_name='.some_venv')",
+            "# Declare your command namespaces here",
+            'VirtualEnv.customise(venv_name=".some_venv")',
         )
 
         e = shell.start()
@@ -124,10 +127,10 @@ class TestVenv(utils.TestBase):
 
         os.chdir("child")
 
-        utils.add_plugins("VirtualEnv")
+        add_venv_plugin()
         utils.replace_in_code(
-            "# Define your variables here",
-            "VirtualEnv.init(self, venv_name='.custom_venv')",
+            "# Declare your command namespaces here",
+            'VirtualEnv.customise(venv_name=".custom_venv")',
         )
 
         e = shell.start()

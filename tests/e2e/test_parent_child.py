@@ -40,9 +40,9 @@ class TestParentChild(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    def test_super_uses_self(self, shell, init_child_env):
+    def test_super_uses_self(self, shell):
         utils.add_declaration("var: str", Path("env_comm.py"))
-        utils.add_definition("self.var = 'cake'", Path("env_test.py"))
+        utils.add_definition("self.var = 'cake'", Path("env_comm.py"))
 
         utils.add_command(
             """
@@ -50,10 +50,9 @@ class TestParentChild(utils.TestBase):
             def cmd(self) -> None:
                 print(self.var)
             """,
-            Path("env_test.py"),
+            Path("env_comm.py"),
         )
 
-        os.chdir("child")
         utils.add_definition("self.var = 'super cake'", Path("env_test.py"))
         utils.add_command(
             """
@@ -66,10 +65,10 @@ class TestParentChild(utils.TestBase):
 
         e = shell.start()
 
-        e.prompt(name="child")
+        e.prompt()
 
         shell.sendline("cmd")
-        e.output(r"super cake\n").prompt(name="child").eval()
+        e.output(r"super cake\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()

@@ -135,7 +135,6 @@ class TestContext(utils.TestBase):
         shell.start(False)
         e = shell.expecter
 
-        e.prompt(utils.PromptState.MAYBE_LOADING)
         e.output(fr".*{ZeroDivisionError.__name__}.*")
         e.prompt().eval()
 

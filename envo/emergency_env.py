@@ -19,28 +19,28 @@ from envo import (  # noqa: F401
     postcmd,
     precmd,
     run,
+    Env
 )
 
 
-class EnvoCommEnv(envo.env.BaseEnv):  # type: ignore
-    class Meta(envo.env.BaseEnv.Meta):  # type: ignore
+class EmergencyEnv(Env):  # type: ignore
+    class Meta(Env.Meta):  # type: ignore
         root = Path(__file__).parent.absolute()
         stage: str = "emergency"
         emoji: str = const.emojis["emergency"]
-        parents: List[str] = []
         plugins: List[Plugin] = []
         name: str = "emergency"
         version: str = "0.1.0"
         watch_files: List[str] = []
         ignore_files: List[str] = []
 
-    class Environ:
+    class Environ(Env.Environ):
         ...
 
     e: Environ
 
-    def __init__(self) -> None:
+    def init(self) -> None:
         pass
 
 
-Env = EnvoCommEnv
+Env = EmergencyEnv
