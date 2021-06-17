@@ -376,3 +376,8 @@ def is_darwin():
 
 def is_windows():
     return __platform__ == PLATFORM_WINDOWS
+
+
+def add_source_roots(paths: List[Union[Path, str]]) -> None:
+    for p in paths:
+        sys.path.insert(0, str(p))

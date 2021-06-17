@@ -878,7 +878,7 @@ class Env(BaseEnv):
         self._li.shell.calls.post_cmd = Callback(self._on_postcmd)
         self._li.shell.calls.on_exit = Callback(self._on_destroy)
 
-        self.genstub()
+        # self.genstub()
 
         self._env_reloader = None
 

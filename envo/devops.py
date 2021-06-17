@@ -21,9 +21,11 @@ class CommandError(RuntimeError):
 def _run(command: str,
          ignore_errors=False,
          print_output=True,
-         verbose=False,
+         verbose: Optional[bool]=None,
          background=False) -> Optional[str]:
-    verbose = verbose or os.environ.get("ENVO_VERBOSE_RUN")
+
+    if verbose is None:
+        verbose = os.environ.get("ENVO_VERBOSE_RUN", False)
 
     command_extra = re.sub(r"\\(?:\t| )*\n(?:\t| )*", "", command)
 

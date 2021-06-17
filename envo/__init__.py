@@ -22,5 +22,5 @@ from envo.logging import logger
 from envo.devops import *
 from envo.env import *
 from envo.plugins import *
-from envo.misc import EnvoError, import_from_file
+from envo.misc import EnvoError, import_from_file, add_source_roots
 from envium import var, computed_var, VarGroup

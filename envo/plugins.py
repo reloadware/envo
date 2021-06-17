@@ -165,12 +165,12 @@ class VirtualEnv(Plugin):
     def __init__(
         self, venv_path: Optional[Path] = None, venv_name: str = ".venv"
     ) -> None:
+        self.__logger: Logger = logger.create_child("venv", descriptor="VirtualEnv")
+
         self.e.venv_path = self.meta.root if not venv_path else venv_path
 
         self._possible_site_packages = []
         self._venv_dir_name = venv_name
-
-        self.__logger: Logger = logger.create_child("venv", descriptor="VirtualEnv")
 
         self.__logger.info("VirtualEnv plugin init")
 

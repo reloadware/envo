@@ -31,6 +31,7 @@ class TestMisc(utils.TestBase):
         ret = utils.run("envo test dry-run")
         assert re.match(
             (
+                r'export ENVO_NAME="sandbox"\n'
                 r'export ENVO_STAGE="test"\n'
                 r'export PATH=".*"\n'
                 r'export PYTHONPATH=".*"\n'
@@ -54,6 +55,7 @@ class TestMisc(utils.TestBase):
         print(f"Comparing:\n{content}")
         assert re.match(
             (
+                r'ENVO_NAME="sandbox"\n'
                 r'ENVO_STAGE="test"\n'
                 r'PATH=".*"\n'
                 r'PYTHONPATH=".*"\n'
@@ -135,6 +137,25 @@ class TestMisc(utils.TestBase):
             shell.sendline("script.bat")
             e.output(str(Path(".").absolute()).replace("\\", "\\\\") + r"\n")
 
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_add_source_roots(self, shell):
+        comm_path = Path("comm")
+        comm_path.mkdir()
+
+        comm_package = comm_path / "package"
+        comm_package.mkdir()
+
+        comm_package_init = comm_package / "__init__.py"
+        comm_package_init.touch()
+
+        utils.replace_in_code("envo.add_source_roots([])", "envo.add_source_roots([root/'comm'])")
+        utils.replace_in_code("# Declare your command namespaces here", "import package")
+
+        e = shell.start()
         e.prompt().eval()
 
         shell.exit()
