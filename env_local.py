@@ -32,7 +32,7 @@ from envo import (  # noqa: F401,
 localci = Namespace(name="localci")
 pr = Namespace(name="pr")
 
-from env_comm import Env as ParentEnv
+from env_comm import ThisEnv as ParentEnv
 
 
 class EnvoLocalEnv(ParentEnv):  # type: ignore
@@ -71,8 +71,8 @@ class EnvoLocalEnv(ParentEnv):  # type: ignore
         self.black()
         run("flake8")
 
-    @command
-    def mypy(self) -> None:
+    @pr.command
+    def mypy(self, arg) -> None:
         logger.info("Running mypy")
         run("mypy envo")
 
@@ -105,4 +105,4 @@ class EnvoLocalEnv(ParentEnv):  # type: ignore
         run("circleci local execute --job flake8")
 
 
-Env = EnvoLocalEnv
+ThisEnv = EnvoLocalEnv

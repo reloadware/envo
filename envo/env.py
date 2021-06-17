@@ -402,17 +402,17 @@ magic_functions = {
 
 
 class Namespace:
-    command: Type[command]
-    context: Type[context]
-    boot_code: Type[boot_code]
-    onload: Type[onload]
-    onunload: Type[onunload]
-    oncreate: Type[oncreate]
-    ondestroy: Type[ondestroy]
-    precmd: Type[precmd]
-    onstdout: Type[onstdout]
-    onstderr: Type[onstderr]
-    on_partial_reload: Type[on_partial_reload]
+    command: Type[Callable]
+    context: Type[Callable]
+    boot_code: Type[Callable]
+    onload: Type[Callable]
+    onunload: Type[Callable]
+    oncreate: Type[Callable]
+    ondestroy: Type[Callable]
+    precmd: Type[Callable]
+    onstdout: Type[Callable]
+    onstderr: Type[Callable]
+    on_partial_reload: Type[Callable]
 
     def __init__(self, name: str) -> None:
         self._name = name
@@ -652,7 +652,7 @@ class Env(BaseEnv):
         if not env_file.exists():
             raise EnvoError(f"{env_file} does not exit")
 
-        env = import_from_file(env_file).Env()
+        env = import_from_file(env_file).ThisEnv()
         return env
 
     @classmethod

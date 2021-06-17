@@ -130,7 +130,7 @@ class HeadlessMode:
         return self.se.env_path
 
     def _create_env_object(self, file: Path) -> ShellEnv:
-        env = import_from_file(file).Env()
+        env = import_from_file(file).ThisEnv()
 
         shell_env = ShellEnv(
             li=ShellEnv._Links(shell=self.li.shell, status=self.status, env=env),
@@ -518,7 +518,7 @@ class EnvoCreator:
             "name": env_dir.name,
             "stage": stage,
             "emoji": const.STAGES.get_stage_name_to_emoji().get(stage, "🙂"),
-            "parent_import": f"\nfrom {parent} import Env as ParentEnv\n" if parent else "",
+            "parent_import": f"\nfrom {parent} import ThisEnv as ParentEnv\n" if parent else "",
             "base_class": "ParentEnv" if parent else Env.__name__
         }
 

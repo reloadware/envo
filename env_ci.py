@@ -27,7 +27,7 @@ from envo import (  # noqa: F401
 # my_namespace = command(namespace="my_namespace")
 
 
-from env_comm import Env as ParentEnv
+from env_comm import ThisEnv as ParentEnv
 
 
 class EnvoCiEnv(ParentEnv):  # type: ignore
@@ -111,4 +111,4 @@ class EnvoCiEnv(ParentEnv):  # type: ignore
         )
 
 
-Env = EnvoCiEnv
+ThisEnv = EnvoCiEnv
