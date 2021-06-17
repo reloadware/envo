@@ -335,7 +335,7 @@ class onstdout(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-    def onstdout():
+    def onstdout(func):
         return MagicFunction()
 
 
@@ -346,7 +346,7 @@ class onstderr(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-    def onstderr():
+    def onstderr(func):
         return MagicFunction()
 
 
@@ -357,7 +357,7 @@ class postcmd(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-    def postcmd():
+    def postcmd(func):
         return MagicFunction()
 
 @dataclass
@@ -382,7 +382,7 @@ class context(magic_function):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
-    def context():
+    def context(func):
         return MagicFunction()
 
 
@@ -598,9 +598,9 @@ class Env(BaseEnv):
         self.e.path = os.environ["PATH"]
 
         if "PYTHONPATH" not in os.environ:
-            self.pythonpath = ""
+            self.e.pythonpath = ""
         else:
-            self.pythonpath = os.environ["PYTHONPATH"]
+            self.e.pythonpath = os.environ["PYTHONPATH"]
 
         self.magic_functions = {"context": {}, "precmd": {}, "onstdout": {}, "onstderr": {}, "postcmd": {},
                                 "onload": {}, "oncreate": {}, "ondestroy": {}, "onunload": {}, "boot_code": {},

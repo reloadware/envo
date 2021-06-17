@@ -142,3 +142,18 @@ class TestVenv(utils.TestBase):
 
         shell.exit()
         e.exit().eval()
+
+    def test_at_load_time(self, shell, sandbox):
+        venv_path = facade.VenvPath(root_path=sandbox, venv_name=".venv")
+        utils.run("python -m venv .venv")
+        utils.run(f"{str(venv_path.bin_path / 'pip')} install url-regex")
+
+        utils.replace_in_code("# Declare your command namespaces here", "VirtualEnv().init()", file="env_comm.py")
+
+        e = shell.start()
+        e.prompt().eval()
+
+        self.assert_activated(shell, venv_dir=sandbox)
+
+        shell.exit()
+        e.exit().eval()

@@ -1,3 +1,4 @@
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -107,12 +108,14 @@ class PredictedVenv(BaseVenv):
         for d in self.venv_path.possible_site_packages:
             if str(d) not in sys.path:
                 sys.path.insert(0, str(d))
+                e.pythonpath = f"{str(d)}:{e.pythonpath}"
 
     def deactivate(self, e: Env.Environ) -> None:
         super().deactivate(e)
         for d in self.venv_path.possible_site_packages:
             if str(d) in sys.path:
                 sys.path.remove(str(d))
+                e.pythonpath = e.pythonpath.replace(str(d), "")
 
 
 class ExistingVenv(BaseVenv):
@@ -142,6 +145,7 @@ class ExistingVenv(BaseVenv):
 
         if str(self.venv_path.site_packages_path) not in sys.path:
             sys.path.insert(0, str(self.venv_path.site_packages_path))
+            e.pythonpath = f"{str(self.venv_path.site_packages_path)}:{e.pythonpath}"
 
     def deactivate(self, e: Env.Environ) -> None:
         super().deactivate(e)
@@ -149,11 +153,9 @@ class ExistingVenv(BaseVenv):
         try:
             while str(self.venv_path.site_packages_path) in sys.path:
                 sys.path.remove(str(self.venv_path.site_packages_path))
+                e.pythonpath = e.pythonpath.replace(str(self.venv_path.site_packages_path), "")
         except CantFindEnv:
             pass
-
-
-venv = Namespace("__venv")
 
 
 class VirtualEnv(Plugin):
@@ -161,7 +163,10 @@ class VirtualEnv(Plugin):
     Env that activates virtual environment.
     """
     class Environ(envium.Environ):
-        venv_path: Optional[Path] = var()
+        path: str = var(raw=True)
+        pythonpath: str = var(raw=True)
+
+    e: Environ
 
     @classmethod
     def customise(cls, venv_path: Optional[Path] = None, venv_name: str = ".venv"):
@@ -169,9 +174,15 @@ class VirtualEnv(Plugin):
         cls.venv_name = venv_name
 
     def init(self):
+        root = Path(".").absolute()
+        # Handle standalone and inherited case
+        if hasattr(self, "e"):
+            e = self.e
+        else:
+            e = VirtualEnv.Environ(name="envo", load=True)
         self.__logger: Logger = logger.create_child("venv", descriptor="VirtualEnv")
 
-        self.e.venv_path = self.meta.root if not self.venv_path else self.venv_path
+        venv_path = root if not self.venv_path else self.venv_path
 
         self._possible_site_packages = []
         self._venv_dir_name = self.venv_name
@@ -180,20 +191,17 @@ class VirtualEnv(Plugin):
 
         try:
             self._venv = ExistingVenv(
-                root=self.e.venv_path,
+                root=venv_path,
                 venv_name=self.venv_name,
                 discover=self.venv_path is None,
             )
 
         except CantFindEnv:
             self.__logger.info("Couldn't find venv. Falling back to predicting")
-            self._venv = PredictedVenv(root=self.e.venv_path, venv_name=self.venv_name)
+            self._venv = PredictedVenv(root=venv_path, venv_name=self.venv_name)
 
-        self._venv.activate(self.e)
+        self._venv.activate(e)
+        os.environ.update(e.get_env_vars())
 
-    @venv.onunload
-    def __deactivate(self) -> None:
-        self.__logger.info("Deactivating VirtualEnv")
-        self._venv.deactivate(self.e)
 
 VirtualEnv.customise()

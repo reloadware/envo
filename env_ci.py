@@ -98,17 +98,5 @@ class EnvoCiEnv(ParentEnv):  # type: ignore
 
         version_file.write_text(f'__version__ = "{version}"\n')
 
-    @command
-    def upload_codecov(self) -> None:
-        run(
-            """
-            curl -s https://codecov.io/bash | bash -s -- \
-            -t "${CODECOV_TOKEN}" \
-            -n "${CIRCLE_BUILD_NUM}" \
-            -f "./workspace/cov.xml" \
-            -Z
-            """
-        )
-
 
 ThisEnv = EnvoCiEnv

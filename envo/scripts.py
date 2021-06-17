@@ -157,6 +157,7 @@ class HeadlessMode:
         try:
             self.shell_env = self._create_env_object(env_file)
         except ImportError as exc:
+            logger.traceback()
             raise EnvoError(f"""Couldn't import "{env_file}" ({exc}).""")
 
 
