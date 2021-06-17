@@ -360,6 +360,7 @@ class TestCommands(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    @flaky
     def test_in_root_true(self, shell):
         Path("dir").mkdir()
         Path("dir/file.py").touch()
@@ -367,6 +368,7 @@ class TestCommands(utils.TestBase):
         utils.add_command(
             """
         @command(in_root=True)
+        
         def cmd(self) -> str:
             run(f"ls")
         """

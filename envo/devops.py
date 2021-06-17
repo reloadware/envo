@@ -79,7 +79,7 @@ def run(
         command: Union[str, List[str]],
         ignore_errors=False,
         print_output=True,
-        verbose=False,
+        verbose: Optional[bool]=None,
         background=False,
         progress_bar: Optional[str] = None
 ) -> List[Optional[str]]:
