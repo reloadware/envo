@@ -33,7 +33,7 @@ from envo.status import Status
 
 from envo import logger
 from envo.logging import Logger
-from envo.misc import Callback, EnvoError, FilesWatcher, import_from_file
+from envo.misc import Callback, EnvoError, FilesWatcher, import_env_from_file
 from envium import var, computed_var, VarGroup
 import envium
 
@@ -652,7 +652,7 @@ class Env(BaseEnv):
         if not env_file.exists():
             raise EnvoError(f"{env_file} does not exit")
 
-        env = import_from_file(env_file).ThisEnv()
+        env = import_env_from_file(env_file).ThisEnv()
         return env
 
     @classmethod

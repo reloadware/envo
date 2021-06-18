@@ -7,8 +7,8 @@ from tests.e2e import utils
 from tests import facade
 
 
-def add_venv_plugin():
-    utils.replace_in_code("(Env)", "(Env, VirtualEnv)", file="env_comm.py")
+def add_venv_plugin(parent_env: str = "Env"):
+    utils.replace_in_code(f"({parent_env})", f"({parent_env}, VirtualEnv)", file="env_comm.py")
 
 
 class TestVenv(utils.TestBase):
@@ -93,7 +93,7 @@ class TestVenv(utils.TestBase):
 
         os.chdir("child")
 
-        add_venv_plugin()
+        add_venv_plugin("ParentEnv")
 
         e = shell.start()
         e.prompt(name="child", state=utils.PromptState.MAYBE_LOADING).eval()
@@ -127,7 +127,7 @@ class TestVenv(utils.TestBase):
 
         os.chdir("child")
 
-        add_venv_plugin()
+        add_venv_plugin("ParentEnv")
         utils.replace_in_code(
             "# Declare your command namespaces here",
             'VirtualEnv.customise(venv_name=".custom_venv")',

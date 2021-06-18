@@ -28,15 +28,6 @@ def init_child_env() -> None:
 
 
 @fixture
-def init_2_same_childs() -> None:
-    sandbox1 = Path("sandbox")
-    utils.init_child_env(sandbox1)
-
-    sandbox2 = Path("sandbox/sandbox")
-    utils.init_child_env(sandbox2)
-
-
-@fixture
 def shell() -> utils.SpawnEnvo:
     from tests.e2e.utils import shell
 

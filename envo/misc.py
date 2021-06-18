@@ -24,6 +24,8 @@ __all__ = [
     "FilesWatcher",
 ]
 
+from envo import const
+
 
 class EnvoError(Exception):
     pass
@@ -232,6 +234,25 @@ def import_from_file(path: Union[Path, str]) -> Any:
     loader.exec_module(module)
 
     return module
+
+
+def import_env_from_file(path: Union[Path, str]) -> Any:
+    # Ensure all env modules are reloaded
+    for n, m in sys.modules.copy().items():
+        if not hasattr(m, "__file__"):
+            continue
+        # Check if it's env file
+        if not Path(m.__file__).name.startswith("env_"):
+            continue
+        # Double check
+        if not hasattr(m, const.THIS_ENV):
+            continue
+
+        del sys.modules[n]
+
+    ret = import_from_file(path)
+
+    return ret
 
 
 def get_module_from_full_name(full_name: str) -> Optional[str]:

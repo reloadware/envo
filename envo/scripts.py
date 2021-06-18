@@ -10,7 +10,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Type
 import envo.e2e
 from envo import const, logger, logging, misc, shell
 from envo.env import ShellEnv, Env
-from envo.misc import Callback, EnvoError, FilesWatcher, import_from_file
+from envo.misc import Callback, EnvoError, FilesWatcher, import_env_from_file
 from envo.shell import FancyShell, PromptBase, PromptState, Shell
 from envo.status import Status
 
@@ -130,7 +130,7 @@ class HeadlessMode:
         return self.se.env_path
 
     def _create_env_object(self, file: Path) -> ShellEnv:
-        env = import_from_file(file).ThisEnv()
+        env = import_env_from_file(file).ThisEnv()
 
         shell_env = ShellEnv(
             li=ShellEnv._Links(shell=self.li.shell, status=self.status, env=env),
@@ -520,7 +520,8 @@ class EnvoCreator:
             "stage": stage,
             "emoji": const.STAGES.get_stage_name_to_emoji().get(stage, "🙂"),
             "parent_import": f"\nfrom {parent} import ThisEnv as ParentEnv\n" if parent else "",
-            "base_class": "ParentEnv" if parent else Env.__name__
+            "base_class": "ParentEnv" if parent else Env.__name__,
+            "this_env": const.THIS_ENV
         }
 
         templ_file = Path("env.py.templ")

@@ -19,7 +19,7 @@ class TestParentChild(utils.TestBase):
         e = shell.start()
         e.prompt(name=r"child").eval()
 
-        utils.replace_in_code("child", "ch")
+        utils.replace_in_code('name: str = "child"', 'name: str = "ch"')
 
         e.expected.pop()
         e.prompt(name=r"child").eval()
@@ -30,12 +30,27 @@ class TestParentChild(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    def test_same_child_names(self, shell, init_2_same_childs):
-        root_dir = Path(".").absolute()
-        os.chdir(root_dir / "sandbox/sandbox")
+    def test_hot_reload_parent(self, shell, init_child_env):
+        utils.add_definition("self.attr = 'Cake'")
+        utils.add_command("""
+        @command
+        def get_attr(self):
+            print(self.attr)
+        """)
+
+        os.chdir("child")
 
         e = shell.start()
-        e.prompt(name="sandbox")
+        e.prompt(name=r"child").eval()
+        shell.sendline("get_attr")
+        e.output(r"Cake\n")
+        e.prompt(name=r"child").eval()
+
+        utils.replace_in_code("self.attr = 'Cake'", "self.attr = 'Super Cake'", "../env_test.py")
+        shell.envo.wait_until_ready()
+        shell.sendline("get_attr")
+        e.output(r"Super Cake\n")
+        e.prompt(name=r"child").eval()
 
         shell.exit()
         e.exit().eval()

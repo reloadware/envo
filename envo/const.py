@@ -7,6 +7,7 @@ from typing import Dict, Optional
 __all__ = ["STAGES", "emojis"]
 
 DEFAULT_EMOJI = "🙂"
+THIS_ENV = "ThisEnv"
 
 
 @dataclass

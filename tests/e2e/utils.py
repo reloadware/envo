@@ -444,23 +444,31 @@ def init_child_env(child_dir: Path) -> None:
     if child_dir.exists():
         shutil.rmtree(child_dir, ignore_errors=False)
 
+    Path("__init__.py").touch()
     child_dir.mkdir()
     os.chdir(str(child_dir))
+    Path("__init__.py").touch()
     result = run("envo test init")
     assert "Created test environment" in result
 
     comm_file = Path("env_comm.py")
-    content = comm_file.read_text()
-    content = content.replace("parents: List[str] = []", 'parents = ["../env_comm.py"]')
-    comm_file.write_text(content)
+    replace_in_code("# Declare your command namespaces here",
+                              "from env_comm import ThisEnv as ParentEnv", "env_comm.py")
+    replace_in_code("(Env)", "(ParentEnv)", "env_comm.py")
+    replace_in_code("(Env.Environ)", "(ParentEnv.Environ)", "env_comm.py")
 
     test_file = Path("env_test.py")
-    content = test_file.read_text()
-    content = content.replace(
-        'parents: List[str] = ["env_comm.py"]',
-        'parents = ["env_comm.py", "../env_test.py"]',
-    )
-    test_file.write_text(content)
+
+    replace_in_code("envo.add_source_roots([root])",
+                    "envo.add_source_roots([root.parent])", "env_comm.py")
+    replace_in_code("envo.add_source_roots([root])",
+                    "envo.add_source_roots([root.parent])", "env_test.py")
+    replace_in_code("from env_comm import ThisEnv as ParentEnv",
+                    "from child.env_comm import ThisEnv as ParentEnv\nfrom env_test import ThisEnv as ParentTestEnv", "env_test.py")
+
+    replace_in_code("(ParentEnv)",
+                    "(ParentEnv, ParentTestEnv)",
+                    "env_test.py")
 
     os.chdir(str(cwd))
 
