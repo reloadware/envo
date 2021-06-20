@@ -110,3 +110,22 @@ class TestCommands(utils.TestBase):
 
         shell.exit()
         e.exit().eval()
+
+    def test_inject(self, shell):
+        utils.add_command(
+            """
+        @command(in_root=False)
+        def cmd(self) -> str:
+            inject("print('Cake')")
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("cmd")
+        e.output(r"Cake\n")
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()

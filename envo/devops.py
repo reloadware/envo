@@ -4,11 +4,13 @@ import subprocess
 import sys
 from subprocess import Popen
 
-__all__ = ["CommandError", "run"]
+__all__ = ["CommandError", "run", "inject"]
 
 from textwrap import dedent
 
 from typing import Optional, List, Union
+
+from xonsh.base_shell import BaseShell
 
 from envo.misc import is_linux, is_windows
 from envo import console
@@ -97,3 +99,7 @@ def run(
             ret.append(_run(c, ignore_errors, print_output, verbose, background))
 
     return ret
+
+
+def inject(command: str) -> None:
+    BaseShell.default(__xonsh__.shell, command)
