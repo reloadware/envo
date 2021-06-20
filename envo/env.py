@@ -584,6 +584,7 @@ class Env(BaseEnv):
         envo_name: str = var(raw=True)
 
     magic_functions: Dict[str, Any]
+    meta: Meta
 
     def __init__(self):
         self.meta = self.Meta()
@@ -608,10 +609,10 @@ class Env(BaseEnv):
 
         self._collect_magic_functions()
 
-        for p in reversed(self.get_parts()):
-            p.init(self)
+        self.init()
 
     def init(self) -> None:
+        super().init()
         pass
 
     def validate(self) -> None:

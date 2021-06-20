@@ -24,10 +24,6 @@ class Plugin(BaseEnv):
     class Environ:
         pass
 
-    @classmethod
-    def init(cls, *args, **kwargs):
-        cls.__init__(*args, **kwargs)
-
 
 class CantFindEnv(Exception):
     pass
@@ -164,7 +160,7 @@ class VirtualEnv(Plugin):
     """
     class Environ(envium.Environ):
         path: str = var(raw=True)
-        pythonpath: str = var(raw=True)
+        pythonpath: str = var(raw=True, default="")
 
     e: Environ
 
@@ -174,6 +170,8 @@ class VirtualEnv(Plugin):
         cls.venv_name = venv_name
 
     def init(self):
+        super().init()
+
         root = Path(".").absolute()
         # Handle standalone and inherited case
         if hasattr(self, "e"):

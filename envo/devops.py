@@ -45,7 +45,7 @@ def _run(command: str,
         dedent_cmd = dedent(command.strip())
         console.rule(f"[bold rgb(225,221,0)]{dedent_cmd}", align="center", style="rgb(255,0,255)")
 
-    proc = Popen(popen_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    proc = Popen(popen_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=os.environ)
 
     if background:
         return None
