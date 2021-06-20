@@ -2,7 +2,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import envo
 from envo import Env, Namespace, logger, Env
@@ -104,14 +104,12 @@ class PredictedVenv(BaseVenv):
         for d in self.venv_path.possible_site_packages:
             if str(d) not in sys.path:
                 sys.path.insert(0, str(d))
-                e.pythonpath = f"{str(d)}:{e.pythonpath}"
 
     def deactivate(self, e: Env.Environ) -> None:
         super().deactivate(e)
         for d in self.venv_path.possible_site_packages:
             if str(d) in sys.path:
                 sys.path.remove(str(d))
-                e.pythonpath = e.pythonpath.replace(str(d), "")
 
 
 class ExistingVenv(BaseVenv):
@@ -141,7 +139,6 @@ class ExistingVenv(BaseVenv):
 
         if str(self.venv_path.site_packages_path) not in sys.path:
             sys.path.insert(0, str(self.venv_path.site_packages_path))
-            e.pythonpath = f"{str(self.venv_path.site_packages_path)}:{e.pythonpath}"
 
     def deactivate(self, e: Env.Environ) -> None:
         super().deactivate(e)
@@ -149,7 +146,6 @@ class ExistingVenv(BaseVenv):
         try:
             while str(self.venv_path.site_packages_path) in sys.path:
                 sys.path.remove(str(self.venv_path.site_packages_path))
-                e.pythonpath = e.pythonpath.replace(str(self.venv_path.site_packages_path), "")
         except CantFindEnv:
             pass
 
@@ -160,13 +156,12 @@ class VirtualEnv(Plugin):
     """
     class Environ(envium.Environ):
         path: str = var(raw=True)
-        pythonpath: str = var(raw=True, default="")
 
     e: Environ
 
     @classmethod
-    def customise(cls, venv_path: Optional[Path] = None, venv_name: str = ".venv"):
-        cls.venv_path = venv_path
+    def customise(cls, venv_path: Optional[Union[Path, str]] = None, venv_name: str = ".venv"):
+        cls.venv_path = Path(venv_path) if venv_path else None
         cls.venv_name = venv_name
 
     def init(self):
