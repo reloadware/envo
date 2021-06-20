@@ -169,7 +169,10 @@ class VirtualEnv(Plugin):
 
         root = Path(".").absolute()
         # Handle standalone and inherited case
-        e = VirtualEnv.Environ(name="envo", load=True)
+        if hasattr(self, "e"):
+            e = self.e
+        else:
+            e = VirtualEnv.Environ(name="envo", load=True)
         self.__logger: Logger = logger.create_child("venv", descriptor="VirtualEnv")
 
         venv_path = root if not self.venv_path else self.venv_path
