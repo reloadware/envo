@@ -11,6 +11,7 @@ from textwrap import dedent
 from typing import Optional, List, Union
 
 from xonsh.base_shell import BaseShell
+from xonsh.ptk_shell.shell import PromptToolkitShell
 
 from envo.misc import is_linux, is_windows
 from envo import console
@@ -102,4 +103,4 @@ def run(
 
 
 def inject(command: str) -> None:
-    BaseShell.default(__xonsh__.shell, command)
+    __xonsh__.execer.eval(command)
