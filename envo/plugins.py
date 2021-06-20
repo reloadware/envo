@@ -161,7 +161,7 @@ class VirtualEnv(Plugin):
 
     @classmethod
     def customise(cls, venv_path: Optional[Union[Path, str]] = None, venv_name: str = ".venv"):
-        cls.venv_path = Path(venv_path) if venv_path else None
+        cls.venv_path = Path(venv_path).absolute() if venv_path else None
         cls.venv_name = venv_name
 
     def init(self):
@@ -169,10 +169,7 @@ class VirtualEnv(Plugin):
 
         root = Path(".").absolute()
         # Handle standalone and inherited case
-        if hasattr(self, "e"):
-            e = self.e
-        else:
-            e = VirtualEnv.Environ(name="envo", load=True)
+        e = VirtualEnv.Environ(name="envo", load=True)
         self.__logger: Logger = logger.create_child("venv", descriptor="VirtualEnv")
 
         venv_path = root if not self.venv_path else self.venv_path

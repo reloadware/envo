@@ -29,7 +29,7 @@ defaults: &defaults
     CRYPTOGRAPHY_DONT_BUILD_RUST: 1
 
 cache-key: &cache-key
-  deps-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "poetry.lock" }}
+  deps-{{ .Branch }}-{{ checksum "poetry.lock" }}
 
 restore_cache: &restore_cache
   restore_cache:
