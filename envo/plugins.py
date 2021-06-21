@@ -194,7 +194,7 @@ class VirtualEnv(Plugin):
             self._venv = PredictedVenv(root=venv_path, venv_name=self.venv_name)
 
         self._venv.activate(e)
-        os.environ.update(e.get_env_vars())
+        os.environ["PATH"] = e.path
 
 
 VirtualEnv.customise()
