@@ -1,4 +1,5 @@
 import pytest
+from pytest import raises
 
 from envo import run
 from envo.misc import is_linux, is_windows
@@ -10,15 +11,21 @@ class TestLinuxRun:
     def setup(self, sandbox):
         pass
 
-    def test_run_simple_echo(self, capsys):
-        result = run('echo "test"', print_output=False)
-        assert result == "test\n"
+    def test_print_output_false(self, capsys):
+        run('echo "test"', print_output=True, raise_on_error=False, verbose=False)
         assert capsys.readouterr().out == ""
+        assert capsys.readouterr().err == ""
 
     def test_run_simple_echo_print(self, capsys):
         result = run('echo "test"', print_output=True)
         assert capsys.readouterr().out == "test\n"
-        assert result == "test\n"
+        assert result == ["test\n"]
+
+    def test_print_error_false(self, capsys):
+        with raises(SystemExit):
+            run('echo "test" && sth', print_errors=False)
+        assert capsys.readouterr().out == "test\n"
+        assert capsys.readouterr().err == ""
 
     def test_run_multiple_results(self, capsys):
         result = run(
@@ -28,7 +35,7 @@ class TestLinuxRun:
         echo "test$VAR1"
         """
         )
-        assert result == "test\ntest123\n"
+        assert result == ["test\ntest123\n"]
 
         assert capsys.readouterr().out == "test\ntest123\n"
 
@@ -44,7 +51,7 @@ class TestLinuxRun:
 
         out, err = capsys.readouterr()
 
-        assert "missing_command: command not found\n" in out
+        assert "missing_command: command not found\n" in err
         assert e.value.code == 127
 
     def test_multine_command(self):
@@ -57,11 +64,12 @@ class TestLinuxRun:
              $VAR1"
             """
         )
-        assert result == "test blabla\ntest123\n"
+        assert result == ["test blabla\ntest123\n"]
 
     def test_ignore_errors(self):
         result = run("""non_existend_command""", ignore_errors=True)
-        assert "non_existend_command: command not found" in result
+        assert "non_existend_command: command not found" in result[0]
+        assert len(result) == 1
 
     def test_pipefail(self):
         with pytest.raises(SystemExit) as e:

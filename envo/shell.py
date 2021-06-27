@@ -149,9 +149,7 @@ class Shell(BaseShell):  # type: ignore
             sys.argv = argv_before
 
     def add_namespace_if_not_exists(self, name: str) -> None:
-        self.run_code(
-            f'class Namespace: pass\n{name} = Namespace() if "{name}" not in globals() else {name}'
-        )
+        exec(f'class Namespace: pass\n{name} = Namespace() if "{name}" not in globals() else {name}\n', builtins.__dict__)
 
     def set_context(self, context: Dict[str, Any]) -> None:
         for k, v in context.items():
@@ -160,7 +158,13 @@ class Shell(BaseShell):  # type: ignore
         self.context.update(**context)
 
     def _run_code(self, code: str) -> None:
-        exec(code, builtins.__dict__)
+        line = code if code.endswith("\n") else code + "\n"
+        src, c = self.push(line)
+        if c is None:
+            return
+
+        from xonsh.codecache import run_compiled_code
+        run_compiled_code(c, self.ctx, None, "single")
 
     def run_code(self, code: str) -> None:
         logger.debug(f'Running code """{code}"""')

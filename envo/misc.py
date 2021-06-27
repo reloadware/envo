@@ -97,7 +97,7 @@ class FilesWatcher(FileSystemEventHandler):
     def on_any_event(self, event: FileSystemEvent):
         kwargs = event.__dict__
 
-        for k in kwargs.keys():
+        for k in list(kwargs.keys()):
             kwargs[k.lstrip("_")] = Path(kwargs.pop(k)).resolve()
 
         event = event.__class__(**kwargs)
@@ -240,6 +240,8 @@ def import_env_from_file(path: Union[Path, str]) -> Any:
     # Ensure all env modules are reloaded
     for n, m in sys.modules.copy().items():
         if not hasattr(m, "__file__"):
+            continue
+        if not m.__file__:
             continue
         # Check if it's env file
         if not Path(m.__file__).name.startswith("env_"):

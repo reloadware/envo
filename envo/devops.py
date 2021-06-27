@@ -4,14 +4,13 @@ import subprocess
 import sys
 from subprocess import Popen
 
-__all__ = ["CommandError", "run", "inject"]
+__all__ = ["CommandError", "run", "inject", "run_get"]
 
 from textwrap import dedent
 
 from typing import Optional, List, Union
 
-from xonsh.base_shell import BaseShell
-from xonsh.ptk_shell.shell import PromptToolkitShell
+from dataclasses import dataclass
 
 from envo.misc import is_linux, is_windows
 from envo import console
@@ -21,15 +20,7 @@ class CommandError(RuntimeError):
     pass
 
 
-def _run(command: str,
-         ignore_errors=False,
-         print_output=True,
-         verbose: Optional[bool]=None,
-         background=False) -> Optional[str]:
-
-    if verbose is None:
-        verbose = os.environ.get("ENVO_VERBOSE_RUN", False)
-
+def _get_popen_cmd(command: str) -> List[str]:
     command_extra = re.sub(r"\\(?:\t| )*\n(?:\t| )*", "", command)
 
     if is_windows():
@@ -44,62 +35,87 @@ def _run(command: str,
     else:
         raise NotImplementedError()
 
-    if verbose and print_output:
+    return popen_cmd
+
+
+@dataclass
+class Output:
+    stdout: str
+    stderr: str
+
+
+def run_get(command: str) -> Output:
+    popen_cmds = _get_popen_cmd(command=command)
+
+    proc = Popen(popen_cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ)
+    outs, errs = proc.communicate()
+
+    output = Output(stdout=outs.decode("utf-8"), stderr=errs.decode("utf-8"))
+    return output
+
+
+def _run(command: str,
+         raise_on_error=True,
+         print_output=True,
+         print_errors=True,
+         verbose: Optional[bool]=None,
+         background=False) -> Optional[str]:
+
+    if verbose is None:
+        verbose = os.environ.get("ENVO_VERBOSE_RUN", False)
+
+    popen_cmd = _get_popen_cmd(command)
+
+    if verbose:
         dedent_cmd = dedent(command.strip())
         console.rule(f"[bold rgb(225,221,0)]{dedent_cmd}", align="center", style="rgb(255,0,255)")
 
-    proc = Popen(popen_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=os.environ)
+    kwargs = {}
+    if not print_output:
+        kwargs["stdout"] = subprocess.PIPE
+
+    if not print_errors:
+        kwargs["stderr"] = subprocess.PIPE
+
+    proc = Popen(popen_cmd, env=os.environ, **kwargs)
 
     if background:
         return None
 
-    buffer = []
-
-    while True:
-        c = proc.stdout.read(1)
-        if not c or c == b"\xf0":
-            break
-
-        if print_output:
-            try:
-                sys.stdout.buffer.write(c)
-                sys.stdout.flush()
-            except ValueError:
-                break
-        buffer.append(c)
-
     ret_code = proc.wait()
 
-    if ret_code != 0 and not ignore_errors:
+    if ret_code != 0 and raise_on_error:
         sys.exit(ret_code)
-    else:
-        ret = b"".join(buffer)
-        ret = ret.decode("utf-8")
-        return ret
 
 
 def run(
         command: Union[str, List[str]],
-        ignore_errors=False,
+        raise_on_error=True,
         print_output=True,
+        print_errors=True,
         verbose: Optional[bool]=None,
         background=False,
         progress_bar: Optional[str] = None
-) -> List[Optional[str]]:
+) -> None:
     # join multilines
-    ret = []
     if not isinstance(command, list):
         command = [command]
 
     if progress_bar is not None:
         from rich.progress import track
         for c in track(command, description=progress_bar):
-            ret.append(_run(c, ignore_errors, print_output, verbose, background))
+            _run(command=c, raise_on_error=raise_on_error,
+                            print_output=print_output,
+                            print_errors=print_errors,
+                            verbose=verbose,
+                            background=background)
     else:
         for c in command:
-            ret.append(_run(c, ignore_errors, print_output, verbose, background))
-
-    return ret
+            _run(command=c, raise_on_error=raise_on_error,
+                            print_output=print_output,
+                            print_errors=print_errors,
+                            verbose=verbose,
+                            background=background)
 
 
 def inject(command: str) -> None:

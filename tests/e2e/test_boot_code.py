@@ -14,7 +14,21 @@ class TestBootCode(utils.TestBase):
         e.prompt().eval()
 
         shell.sendline("math")
-        e.output(r"<module 'math' \(built-in\)>\n").prompt().eval()
+        e.output(r"<module 'math'.*\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_bash(self, shell):
+        Path("dir").mkdir()
+        boot = ["cd dir"]
+        utils.add_boot(boot)
+        e = shell.start()
+
+        e.prompt().eval()
+        shell.sendline("pwd")
+        e.output(r".*sandbox/dir\n")
+        e.prompt().eval()
 
         shell.exit()
         e.exit().eval()

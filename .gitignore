@@ -67,7 +67,7 @@ docs/_build/
 celerybeat-schedule
 
 # Environments
-.venv/
+.venv*/
 
 # Spyder project settings
 .spyderproject

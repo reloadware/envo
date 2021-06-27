@@ -25,7 +25,7 @@ from envo import (  # noqa: F401
 
 # Declare your command namespaces here
 # like this:
-pr = Namespace("pr")
+p = Namespace("p")
 
 
 class EnvoCommEnv(Env, VirtualEnv):  # type: ignore
@@ -41,11 +41,11 @@ class EnvoCommEnv(Env, VirtualEnv):  # type: ignore
 
     class Environ(Env.Environ, VirtualEnv.Environ):
         pip_ver: str = var(default="21.0.1")
-        poetry_ver: str = var(default="1.0.10")
+        poetry_ver: str = var(default="1.1.7")
 
     e: Environ
 
-    @pr.command
+    @p.command
     def clean(self):
         run("rm **/*/sandbox -rf")
         run(f"rm **/*.pyi -f")
@@ -53,11 +53,11 @@ class EnvoCommEnv(Env, VirtualEnv):  # type: ignore
         run(f"rm **/*.egg-info -fr")
         run(f"rm **/*/__pycache__ -fr")
 
-    @pr.command
-    def bootstrap(self):
+    @p.command
+    def bootstrap(self, create_venv: bool = True):
         run(f"pip install pip=={self.e.pip_ver}")
         run(f"pip install poetry=={self.e.poetry_ver}")
-        run("poetry config virtualenvs.create true")
+        run(f"poetry config virtualenvs.create {str(create_venv).lower()}")
         run("poetry config virtualenvs.in-project true")
         run("poetry install")
 

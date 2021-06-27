@@ -6,7 +6,7 @@ from typing import List, Type
 
 import pytest
 
-from envo import Env, UserEnv
+from envo import Env
 from tests.utils import add_command  # noqa F401
 from tests.utils import add_declaration  # noqa F401
 from tests.utils import add_definition  # noqa F401
@@ -129,10 +129,3 @@ def strs_in_regex(strings: List[str]) -> str:
     ret = "".join([rf"(?=.*{s})" for s in strings])
     return ret
 
-
-def get_env_class(module_name = "env_test") -> Type[UserEnv]:
-    cwd = os.getcwd()
-    if cwd not in sys.path:
-        sys.path.insert(0, cwd)
-    env_class = reload(import_module("env_test")).Env
-    return env_class

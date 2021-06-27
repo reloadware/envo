@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
 
+from dataclasses import dataclass
+
 import envo  # noqa: F401
 root = Path(__file__).parent.absolute()
 envo.add_source_roots([root])
@@ -24,13 +26,14 @@ from envo import (  # noqa: F401,
     postcmd,
     precmd,
     run,
+    inject
 )
 
 # Declare your command namespaces here
 # like this:
 
 localci = Namespace(name="localci")
-pr = Namespace(name="pr")
+p = Namespace(name="p")
 
 from env_comm import ThisEnv as ParentEnv
 
@@ -55,12 +58,36 @@ class EnvoLocalEnv(ParentEnv):  # type: ignore
     def _dump_env(self) -> None:
         self.dump_dot_env()
 
+    @p.command
+    def bootstrap(self) -> None:
+        path_tmp = os.environ["PATH"]
+
+        @dataclass
+        class Version:
+            version: str
+            venv_name: str
+
+        versions = [
+            Version("3.6.13", ".venv36"),
+            Version("3.7.10", ".venv37"),
+            Version("3.8.10", ".venv38"),
+            Version("3.9.5", ".venv39")
+        ]
+
+        for v in versions:
+            run(f"rm {v.venv_name} -rf")
+            os.environ["PATH"] = f"/home/kwazar/.pyenv/versions/{v.version}/bin/:{os.environ['PATH']}"
+            run(f"python -m venv {v.venv_name}")
+            os.environ["PATH"] = f"{v.venv_name}/bin/:{os.environ['PATH']}"
+            super().bootstrap(create_venv=False)
+            os.environ["PATH"] = path_tmp
+
     @command
     def test(self) -> None:
         logger.info("Running tests", print_msg=True)
         run("pytest tests -v")
 
-    @pr.command
+    @p.command
     def verbose_test(self) -> None:
         run("echo verbose cmd")
         print("Output")
@@ -71,7 +98,7 @@ class EnvoLocalEnv(ParentEnv):  # type: ignore
         self.black()
         run("flake8")
 
-    @pr.command
+    @p.command
     def mypy(self, arg) -> None:
         logger.info("Running mypy")
         run("mypy envo")
@@ -88,7 +115,7 @@ class EnvoLocalEnv(ParentEnv):  # type: ignore
         self.mypy()
         self.test()
 
-    @pr.command
+    @p.command
     def long(self) -> None:
         run("sleep 5")
 
@@ -103,6 +130,10 @@ class EnvoLocalEnv(ParentEnv):  # type: ignore
     @localci.command
     def __flake(self) -> None:
         run("circleci local execute --job flake8")
+
+    @command
+    def hihi(self) -> None:
+        run('echo "test"')
 
 
 ThisEnv = EnvoLocalEnv

@@ -110,7 +110,7 @@ class TestCommands(utils.TestBase):
             """
             @command
             def flake(self) -> None:
-                run("flaake . | tee flake.txt")
+                run("bash flaake . | tee flake.txt")
             """
         )
 
@@ -119,7 +119,7 @@ class TestCommands(utils.TestBase):
 
         if facade.is_linux():
             assert e.value.returncode == 127
-            assert "flaake: command not found" in utils.clean_output(e.value.stdout)
+            assert "bash: flaake: No such file or directory" in utils.clean_output(e.value.stderr)
         if facade.is_windows():
             assert e.value.returncode == 255
             assert (

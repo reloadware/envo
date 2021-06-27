@@ -835,15 +835,16 @@ class ShellEnv:
 
             self._start_reloaders()
 
-            for h in functions:
-                try:
+            try:
+                for h in functions:
                     h()
-                except BaseException as e:
-                    # TODO: pass env code to exception to get relevant traceback?
-                    self._li.status.context_ready = True
-                    self._calls.on_error(e)
-                    self._exit()
-                    return
+                self._run_boot_codes()
+            except BaseException as e:
+                # TODO: pass env code to exception to get relevant traceback?
+                self._li.status.context_ready = True
+                self._calls.on_error(e)
+                self._exit()
+                return
 
             # declare commands
             for name, c in self.env.magic_functions["command"].items():
@@ -856,8 +857,6 @@ class ShellEnv:
 
             logger.debug("Finished load context thread")
             self._li.status.context_ready = True
-
-            self._run_boot_codes()
 
         if not self._se.blocking:
             Thread(target=thread, args=(self,)).start()
@@ -1032,11 +1031,7 @@ class ShellEnv:
             codes.extend(f())
 
         for c in codes:
-            try:
-                self._li.shell.run_code(c)
-            except Exception as e:
-                # TODO: make nice traceback?
-                self.request_reload(e)
+            self._li.shell.run_code(c)
 
         self._li.status.source_ready = True
 

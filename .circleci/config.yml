@@ -47,7 +47,7 @@ bootstrap: &bootstrap
   run:
     name: Bootstrap
     command: |
-      pip install poetry==1.0.5
+      pip install poetry==1.1.7
       poetry install
       poetry run envo ci run bootstrap
 
