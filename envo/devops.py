@@ -119,4 +119,4 @@ def run(
 
 
 def inject(command: str) -> None:
-    __xonsh__.execer.eval(command)
+    __xonsh__.shell.run_code(command)

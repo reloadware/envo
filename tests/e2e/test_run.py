@@ -129,3 +129,41 @@ class TestCommands(utils.TestBase):
 
         shell.exit()
         e.exit().eval()
+
+    def test_inject_fail(self, shell):
+        utils.add_command(
+            """
+        @command(in_root=False)
+        def cmd(self) -> str:
+            inject("failing")
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("cmd")
+        e.output(r".*failing: command not found.*")
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_inject_fail_dot(self, shell):
+        utils.add_command(
+            """
+        @command(in_root=False)
+        def cmd(self) -> str:
+            inject("failing .")
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("cmd")
+        e.output(r".*failing: command not found.*")
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
