@@ -180,7 +180,7 @@ bcrypt = ["bcrypt"]
 
 [[package]]
 name = "envium"
-version = "0.4.1"
+version = "0.5.0"
 description = ""
 category = "main"
 optional = false
@@ -756,7 +756,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=1.2.3)", "pytest-flake8", "pyt
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.6.2, <4.0"
-content-hash = "22a6fcea616d533cb8f6d8ce4f4d4b9a51e6e70008cbdf001811a8faee666252"
+content-hash = "d0c67449363054a4bf86eab5e6400f4046363f6a2a9dead89cbd4f86f5906f1d"
 
 [metadata.files]
 aiocontextvars = [
@@ -822,8 +822,8 @@ django = [
     {file = "Django-3.2.4.tar.gz", hash = "sha256:66c9d8db8cc6fe938a28b7887c1596e42d522e27618562517cc8929eb7e7f296"},
 ]
 envium = [
-    {file = "envium-0.4.1-py3-none-any.whl", hash = "sha256:f2efed31dfad47723d4c5b96b5a0e0cd787b3373d5af791c4289f5dca20b2197"},
-    {file = "envium-0.4.1.tar.gz", hash = "sha256:5a0f1893be87af098e30263bd31dd4311472619598f7a15e2e2078cb5a0b6316"},
+    {file = "envium-0.5.0-py3-none-any.whl", hash = "sha256:12e66357fca76c44d034427a22a78e54a7e7ebcafba85ca7b4abf3561b6fb099"},
+    {file = "envium-0.5.0.tar.gz", hash = "sha256:d7e889e9b6a736237554c6db0abbd93d0817b7ca4f085407c2c170a68a57043a"},
 ]
 filelock = [
     {file = "filelock-3.0.12-py3-none-any.whl", hash = "sha256:929b7d63ec5b7d6b71b0fa5ac14e030b3f70b75747cef1b10da9b879fef15836"},

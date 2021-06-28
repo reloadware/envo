@@ -60,6 +60,7 @@ class EnvoLocalEnv(ParentEnv):  # type: ignore
 
     @p.command
     def bootstrap(self) -> None:
+        super().bootstrap(create_venv=True)
         path_tmp = os.environ["PATH"]
 
         @dataclass

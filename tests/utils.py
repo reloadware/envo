@@ -21,11 +21,18 @@ __all__ = [
     "add_mypy_cmd",
     "replace_in_code",
     "add_context",
-    "add_plugins",
     "add_boot",
     "clean_output",
     "run",
+    "RunError"
 ]
+
+
+class RunError(Exception):
+    def __init__(self, stderr: str, stdout: str, return_code: int) -> None:
+        self.return_code = return_code
+        self.stderr = stderr
+        self.stdout = stdout
 
 
 def clean_output(output: str) -> str:
@@ -39,19 +46,19 @@ def clean_output(output: str) -> str:
     return ret
 
 
-def run(command: str, env: Optional[Dict[str, Any]] = None, pipe_stderr=True) -> str:
+def run(command: str, env: Optional[Dict[str, Any]] = None) -> str:
     kwargs = {}
     if env:
         kwargs["env"] = env
 
-    if pipe_stderr:
-        kwargs["stderr"] = subprocess.PIPE
-    else:
-        kwargs["stderr"] = subprocess.STDOUT
+    ret = subprocess.run(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, **kwargs)
 
-    ret = subprocess.check_output(command, shell=True, **kwargs).decode("utf-8")
-    ret = clean_output(ret)
-    return ret
+    if ret.stderr or ret.returncode != 0:
+        raise RunError(stdout=ret.stdout.decode("utf-8"),
+                       stderr=ret.stderr.decode("utf-8"),
+                       return_code=ret.returncode)
+
+    return ret.stdout.decode("utf-8")
 
 
 def change_file(file: Path, delay_s: float, new_content: str) -> None:

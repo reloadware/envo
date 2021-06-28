@@ -1,10 +1,10 @@
 import os
 from pathlib import Path
-from subprocess import CalledProcessError
 
 from pytest import raises
 
 from tests import facade
+from tests.utils import RunError
 from tests.e2e import utils
 
 
@@ -93,15 +93,15 @@ class TestCommands(utils.TestBase):
         assert s == "teest\n"
 
     def test_single_command_fail(self):
-        with raises(CalledProcessError) as e:
+        with raises(RunError) as e:
             utils.run("""envo test -c "import sys;print('some msg');sys.exit(2)" """)
-        assert e.value.returncode == 2
+        assert e.value.return_code == 2
         assert "some msg" in utils.clean_output(e.value.stdout)
         assert utils.clean_output(e.value.stderr) == ""
 
-        with raises(CalledProcessError) as e:
+        with raises(RunError) as e:
             utils.run("""envo test -c "cd /home/non_existend_file" """)
-        assert e.value.returncode == 1
+        assert e.value.return_code == 1
         assert utils.clean_output(e.value.stdout) == "\n"
         assert "no such file or directory" in utils.clean_output(e.value.stderr)
 
@@ -114,14 +114,14 @@ class TestCommands(utils.TestBase):
             """
         )
 
-        with raises(CalledProcessError) as e:
+        with raises(RunError) as e:
             utils.run("""envo test -c "flake" """)
 
         if facade.is_linux():
-            assert e.value.returncode == 127
+            assert e.value.return_code == 127
             assert "bash: flaake: No such file or directory" in utils.clean_output(e.value.stderr)
         if facade.is_windows():
-            assert e.value.returncode == 255
+            assert e.value.return_code == 255
             assert (
                 "'flaake' is not recognized as an internal or external command"
                 in utils.clean_output(e.value.stdout)
@@ -137,16 +137,16 @@ class TestCommands(utils.TestBase):
             """
         )
 
-        with raises(CalledProcessError) as e:
+        with raises(RunError) as e:
             utils.run("""envo test -c "some_cmd" """)
 
-        assert e.value.returncode == 1
+        assert e.value.return_code == 1
         assert "ZeroDivisionError" in utils.clean_output(e.value.stderr)
 
     def test_headless_error(self):
-        with raises(CalledProcessError) as e:
+        with raises(RunError) as e:
             utils.run("""envo some_env -c "print('test')" """)
-        assert e.value.returncode == 1
+        assert e.value.return_code == 1
         assert utils.clean_output(e.value.stdout) == ""
         assert "find any env" in utils.clean_output(e.value.stderr)
 
