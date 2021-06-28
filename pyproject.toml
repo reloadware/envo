@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "envo"
-version = "0.9.9.13"
+version = "0.9.9.14"
 description = "Smart Environments handling - Define command hooks, file hooks and env variables in python and activate hot reloaded shells."
 authors = ["Damian Krystkiewicz <damian.krystkiewicz@gmail.com>"]
 classifiers = [
@@ -25,7 +25,7 @@ include = ["envo/__version__.py"]
 homepage = "https://gitlab.com/plasma-opensource/envo"
 
 [tool.poetry.dependencies]
-python = ">=3.6.1, <4.0"
+python = ">=3.6.2, <4.0"
 dataclasses = { version = ">=0.7,<0.9", python = "~3.6" }
 typing-extensions = { version = "^3.7.4", python = "<3.8" }
 prompt_toolkit = "^3"
@@ -37,7 +37,7 @@ rich = "^9.6.1"
 fire = "^0.4.0"
 loguru = "^0.5"
 globmatch = "^2.0.0"
-envium = "^0.3"
+envium = "^0.4"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.4.1"
@@ -67,3 +67,5 @@ skip = ["__init__.py", ".venv"]
 requires = ["poetry>=0.12"]
 build-backend = "poetry.masonry.api"
 
+[tool.black]
+line-length = 120
