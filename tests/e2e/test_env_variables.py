@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from tests import facade
@@ -213,6 +214,26 @@ class TestEnvVariables(utils.TestBase):
         e = shell.start()
         e.output(f'{facade.RedefinedVarError("VERSION")}\n')
         e.prompt(utils.PromptState.EMERGENCY).eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_load_env_vars(self, shell, env_sandbox):
+        utils.replace_in_code("load_env_vars: bool = False", "load_env_vars: bool = True")
+
+        utils.add_declaration(
+            """
+            test_var: str = var() 
+            """
+        )
+
+        os.environ["SANDBOX_TESTVAR"] = "TestValue"
+
+        e = shell.start()
+        e.prompt().eval()
+        shell.sendline(f'env.e.test_var')
+        e.output(r"'TestValue'\n")
+        e.prompt().eval()
 
         shell.exit()
         e.exit().eval()

@@ -14,7 +14,7 @@ __all__ = [
 
 from envo.env import BaseEnv
 
-from envo.logging import Logger
+from envo.logs import Logger
 from envo.misc import is_windows
 import envium
 from envium import var

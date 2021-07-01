@@ -29,7 +29,7 @@ class TestLogger(utils.TestBase):
         assert (
             len(
                 logger().get_msgs(
-                    filter=facade.logging.MsgFilter(metadata_re={"type": "reload"})
+                    filter=facade.logs.MsgFilter(metadata_re={"type": "reload"})
                 )
             )
             == 0
@@ -41,7 +41,7 @@ class TestLogger(utils.TestBase):
         assert (
             len(
                 logger().get_msgs(
-                    filter=facade.logging.MsgFilter(metadata_re={"type": r"reload"})
+                    filter=facade.logs.MsgFilter(metadata_re={"type": r"reload"})
                 )
             )
             == 1
@@ -52,7 +52,7 @@ class TestLogger(utils.TestBase):
         e.prompt(utils.PromptState.MAYBE_LOADING).eval()
 
         assert (
-            len(logger().get_msgs(filter=facade.logging.MsgFilter(level=facade.logging.Level.ERROR)))
+            len(logger().get_msgs(filter=facade.logs.MsgFilter(level=facade.logs.Level.ERROR)))
             == 1
         )
 

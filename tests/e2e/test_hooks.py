@@ -267,3 +267,9 @@ class TestHooks(utils.TestBase):
 
         e.output(r"\non unload").eval()
         e.exit().eval()
+
+    def test_failing_precmd(self):
+        assert False
+
+    def test_inject_triggers_precmd(self):
+        assert False

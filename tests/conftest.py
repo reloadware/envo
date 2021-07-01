@@ -31,6 +31,14 @@ def sandbox(request) -> Path:
 
 
 @fixture
+def env_sandbox() -> Path:
+    environ_before = os.environ.copy()
+
+    yield
+    os.environ = environ_before
+
+
+@fixture
 def version() -> None:
     file = envo_root / "envo/__version__.py"
     file.touch()

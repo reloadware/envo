@@ -1,4 +1,4 @@
-from envo import const, logging
+from envo import const, logs
 from envo.e2e import ReloadTimeout
 from envium.environ import NoValueError, NoTypeError, RedefinedVarError
 from envo.misc import is_windows, is_linux, import_from_file

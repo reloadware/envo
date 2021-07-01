@@ -19,7 +19,7 @@ from stickybeak import Injector
 
 from envo import const
 from envo.e2e import STICKYBEAK_PORT
-from envo.logging import Logger
+from envo.logs import Logger
 from envo.shell import PromptBase
 from tests.utils import add_boot  # noqa F401
 from tests.utils import add_command  # noqa F401
@@ -166,7 +166,7 @@ class Expecter:
 class RemoteEnvo:
     @classmethod
     def get_logger(cls) -> "Logger":
-        from envo.logging import logger
+        from envo.logs import logger
 
         return logger
 
@@ -222,7 +222,7 @@ class RemoteEnvo:
         import re
         from time import sleep
 
-        from envo import logger, logging
+        from envo import logger, logs
         from envo.e2e import ReloadTimeout
 
         passed_time = 0.0
@@ -232,7 +232,7 @@ class RemoteEnvo:
             passed_time += sleep_time
 
             msgs = logger.get_msgs(
-                filter=logging.MsgFilter(metadata_re={"type": r"reload"})
+                filter=logs.MsgFilter(metadata_re={"type": r"reload"})
             )
             if number == 0 and len(msgs) == 0:
                 break
@@ -251,7 +251,7 @@ class RemoteEnvo:
     def assert_partially_reloaded(cls, number: int = 1, timeout=5) -> None:
         from time import sleep
 
-        from envo import logger, logging
+        from envo import logger, logs
         from envo.e2e import ReloadTimeout
 
         passed_time = 0.0
@@ -261,7 +261,7 @@ class RemoteEnvo:
             passed_time += sleep_time
 
             msgs = logger.get_msgs(
-                filter=logging.MsgFilter(metadata_re={"type": r"partial_reload"})
+                filter=logs.MsgFilter(metadata_re={"type": r"partial_reload"})
             )
             if number == 0 and len(msgs) == 0:
                 break

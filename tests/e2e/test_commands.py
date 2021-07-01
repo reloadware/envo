@@ -427,3 +427,6 @@ class TestCommands(utils.TestBase):
 
         shell.exit()
         e.exit().eval()
+
+    def test_detects_inherited_command_without_decorator(self, shell):
+        assert False

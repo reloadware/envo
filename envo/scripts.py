@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional, Type
 
 import envo.e2e
-from envo import const, logger, logging, misc, shell
+from envo import const, logger, logs, misc, shell
 from envo.env import ShellEnv, Env
 from envo.misc import Callback, EnvoError, FilesWatcher, import_env_from_file
 from envo.shell import FancyShell, PromptBase, PromptState, Shell
@@ -87,7 +87,7 @@ class HeadlessMode:
 
         self.li.shell.set_fulll_traceback_enabled(True)
 
-        logger.set_level(logging.Level.INFO)
+        logger.set_level(logs.Level.INFO)
 
         logger.debug("Creating Headless Mode")
 
@@ -186,7 +186,7 @@ class NormalMode(HeadlessMode):
 
         self.li.shell.set_fulll_traceback_enabled(False)
 
-        logger.set_level(logging.Level.ERROR)
+        logger.set_level(logs.Level.ERROR)
         logger.debug("Creating NormalMode")
 
     def stop(self) -> None:
@@ -216,7 +216,7 @@ class EmergencyMode(HeadlessMode):
         self.li = li
         self.calls = calls
 
-        logger.set_level(logging.Level.ERROR)
+        logger.set_level(logs.Level.ERROR)
         logger.debug("Creating EmergencyMode")
         self.li.shell.set_fulll_traceback_enabled(False)
 
@@ -256,7 +256,7 @@ class EnvoBase:
 
     def __init__(self, se: Sets):
         self.se = se
-        logger.set_level(logging.Level.INFO)
+        logger.set_level(logs.Level.INFO)
         self.mode = None
 
         self.env_dirs = self._get_env_dirs()
@@ -340,7 +340,7 @@ class EnvoHeadless(EnvoBase):
     def __init__(self, se: Sets):
         super().__init__(se)
         self.se = se
-        logger.set_level(logging.Level.INFO)
+        logger.set_level(logs.Level.INFO)
 
         if not self.env_dirs:
             raise CantFindEnvFile
@@ -411,7 +411,7 @@ class Envo(EnvoBase):
 
         self.quit: bool = False
         self.environ_before = os.environ.copy()  # type: ignore
-        logger.set_level(logging.Level.ERROR)
+        logger.set_level(logs.Level.ERROR)
 
     def init(self, *args: Any, **kwargs: Any) -> None:
         self.restart_count += 1

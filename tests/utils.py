@@ -34,6 +34,8 @@ class RunError(Exception):
         self.stderr = stderr
         self.stdout = stdout
 
+        super().__init__(stderr)
+
 
 def clean_output(output: str) -> str:
     ret = output
@@ -53,7 +55,7 @@ def run(command: str, env: Optional[Dict[str, Any]] = None) -> str:
 
     ret = subprocess.run(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, **kwargs)
 
-    if ret.stderr or ret.returncode != 0:
+    if ret.returncode != 0:
         raise RunError(stdout=ret.stdout.decode("utf-8"),
                        stderr=ret.stderr.decode("utf-8"),
                        return_code=ret.returncode)

@@ -32,7 +32,7 @@ from watchdog.events import FileModifiedEvent
 from envo.status import Status
 
 from envo import logger
-from envo.logging import Logger
+from envo.logs import Logger
 from envo.misc import Callback, EnvoError, FilesWatcher, import_env_from_file
 from envium import var, computed_var, VarGroup
 import envium
@@ -561,6 +561,7 @@ class Env(BaseEnv):
         watch_files: List[str] = []
         ignore_files: List[str] = []
         verbose_run: bool = True
+        load_env_vars: bool = False
 
     class Environ(envium.Environ):
         def pythonpath_get(self) -> str:
@@ -576,12 +577,12 @@ class Env(BaseEnv):
 
             self.pythonpath._value = value
 
-        pythonpath: str = computed_var(raw=True, fget=pythonpath_get, fset=pythonpath_set)
-        root: Path = var()
-        path: str = var(raw=True)
-        stage: str = var()
-        envo_stage: str = var(raw=True)
-        envo_name: str = var(raw=True)
+        pythonpath: Optional[str] = computed_var(raw=True, fget=pythonpath_get, fset=pythonpath_set)
+        root: Optional[Path] = var()
+        path: Optional[str] = var(raw=True)
+        stage: Optional[str] = var()
+        envo_stage: Optional[str] = var(raw=True)
+        envo_name: Optional[str] = var(raw=True)
 
     magic_functions: Dict[str, Any]
     meta: Meta
@@ -589,7 +590,7 @@ class Env(BaseEnv):
     def __init__(self):
         self.meta = self.Meta()
 
-        self.e = self.Environ(name=self.meta.name)
+        self.e = self.Environ(name=self.meta.name, load=self.meta.load_env_vars)
         self.e.envo_name = self.meta.name
 
         self.e.root = self.meta.root

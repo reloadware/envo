@@ -19,7 +19,7 @@ python-versions = "*"
 
 [[package]]
 name = "asgiref"
-version = "3.4.0"
+version = "3.4.1"
 description = "ASGI specs, helper code, and adapters"
 category = "dev"
 optional = false
@@ -163,7 +163,7 @@ python-versions = "*"
 
 [[package]]
 name = "django"
-version = "3.2.4"
+version = "3.2.5"
 description = "A high-level Python Web framework that encourages rapid development and clean, pragmatic design."
 category = "dev"
 optional = false
@@ -180,7 +180,7 @@ bcrypt = ["bcrypt"]
 
 [[package]]
 name = "envium"
-version = "0.5.0"
+version = "0.7.0"
 description = ""
 category = "main"
 optional = false
@@ -756,7 +756,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=1.2.3)", "pytest-flake8", "pyt
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.6.2, <4.0"
-content-hash = "d0c67449363054a4bf86eab5e6400f4046363f6a2a9dead89cbd4f86f5906f1d"
+content-hash = "2c7f465c0cb3a24ac6d6da6e2ae04aec0aeab26fa3d39a12f9f8060ff1550011"
 
 [metadata.files]
 aiocontextvars = [
@@ -768,8 +768,8 @@ appdirs = [
     {file = "appdirs-1.4.4.tar.gz", hash = "sha256:7d5d0167b2b1ba821647616af46a749d1c653740dd0d2415100fe26e27afdf41"},
 ]
 asgiref = [
-    {file = "asgiref-3.4.0-py3-none-any.whl", hash = "sha256:d36fa91dd90e3aa3c81a6bd426ccc8fb20bd3d22b0cf14a12800289e9c3e2563"},
-    {file = "asgiref-3.4.0.tar.gz", hash = "sha256:05914d0fa65a21711e732adc6572edad6c8da5f1435c3f0c060689ced5e85195"},
+    {file = "asgiref-3.4.1-py3-none-any.whl", hash = "sha256:ffc141aa908e6f175673e7b1b3b7af4fdb0ecb738fc5c8b88f69f055c2415214"},
+    {file = "asgiref-3.4.1.tar.gz", hash = "sha256:4ef1ab46b484e3c706329cedeff284a5d40824200638503f5768edb6de7d58e9"},
 ]
 atomicwrites = [
     {file = "atomicwrites-1.4.0-py2.py3-none-any.whl", hash = "sha256:6d1784dea7c0c8d4a5172b6c620f40b6e4cbfdf96d783691f2e1302a7b88e197"},
@@ -818,12 +818,12 @@ distlib = [
     {file = "distlib-0.3.2.zip", hash = "sha256:106fef6dc37dd8c0e2c0a60d3fca3e77460a48907f335fa28420463a6f799736"},
 ]
 django = [
-    {file = "Django-3.2.4-py3-none-any.whl", hash = "sha256:ea735cbbbb3b2fba6d4da4784a0043d84c67c92f1fdf15ad6db69900e792c10f"},
-    {file = "Django-3.2.4.tar.gz", hash = "sha256:66c9d8db8cc6fe938a28b7887c1596e42d522e27618562517cc8929eb7e7f296"},
+    {file = "Django-3.2.5-py3-none-any.whl", hash = "sha256:c58b5f19c5ae0afe6d75cbdd7df561e6eb929339985dbbda2565e1cabb19a62e"},
+    {file = "Django-3.2.5.tar.gz", hash = "sha256:3da05fea54fdec2315b54a563d5b59f3b4e2b1e69c3a5841dda35019c01855cd"},
 ]
 envium = [
-    {file = "envium-0.5.0-py3-none-any.whl", hash = "sha256:12e66357fca76c44d034427a22a78e54a7e7ebcafba85ca7b4abf3561b6fb099"},
-    {file = "envium-0.5.0.tar.gz", hash = "sha256:d7e889e9b6a736237554c6db0abbd93d0817b7ca4f085407c2c170a68a57043a"},
+    {file = "envium-0.7.0-py3-none-any.whl", hash = "sha256:1abb1327b44915a0f70954811a83c309ea5801f71163d208704aac0552c5419d"},
+    {file = "envium-0.7.0.tar.gz", hash = "sha256:8752c05ee0b4a24c03516f877e93b527c9fc9b1290793f9c155eb4cc8e9cdd7f"},
 ]
 filelock = [
     {file = "filelock-3.0.12-py3-none-any.whl", hash = "sha256:929b7d63ec5b7d6b71b0fa5ac14e030b3f70b75747cef1b10da9b879fef15836"},
