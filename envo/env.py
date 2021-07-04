@@ -33,7 +33,7 @@ from envo.status import Status
 
 from envo import logger
 from envo.logs import Logger
-from envo.misc import Callback, EnvoError, FilesWatcher, import_env_from_file
+from envo.misc import Callback, EnvoError, FilesWatcher, import_env_from_file, import_from_file
 from envium import var, computed_var, VarGroup
 import envium
 
@@ -612,6 +612,14 @@ class Env(BaseEnv):
 
         self.init()
 
+    @classmethod
+    def instantiate(cls, stage: Optional[str] = None) -> "Env":
+        if not stage:
+            stage = os.environ.get("ENVO_STAGE", "comm")
+
+        env_class = import_from_file(cls.Meta.root / f"env_{stage}.py").ThisEnv
+        return env_class()
+
     def init(self) -> None:
         super().init()
         pass
@@ -652,6 +660,7 @@ class Env(BaseEnv):
         env_file = directory / f"env_{self.meta.stage}.py"
 
         if not env_file.exists():
+            logger.traceback()
             raise EnvoError(f"{env_file} does not exit")
 
         env = import_env_from_file(env_file).ThisEnv()

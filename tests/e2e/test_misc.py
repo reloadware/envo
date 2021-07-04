@@ -160,3 +160,6 @@ class TestMisc(utils.TestBase):
 
         shell.exit()
         e.exit().eval()
+
+    def test_instanciate(self, shell):
+        assert False
