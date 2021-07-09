@@ -264,7 +264,7 @@ class Shell(BaseShell):  # type: ignore
             self.history.flush()
 
     def default(self, line: str, raw_line=None) -> Any:
-        logger.info("Executing command", {"command": line})
+        logger.debug("Executing command", {"command": line})
         self.cmd_lock.acquire()
 
         orig_std_out_write = sys.stdout.write

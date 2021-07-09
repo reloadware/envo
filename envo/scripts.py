@@ -114,7 +114,6 @@ class HeadlessMode:
         self.prompt.state = PromptState.LOADING
         self.prompt.emoji = self.shell_env.env.meta.emoji
         self.prompt.name = self.shell_env.get_name()
-        self.prompt.msg = self.se.msg
 
         self.li.shell.set_prompt(str(self.prompt))
 
@@ -393,7 +392,7 @@ class EnvoHeadless(EnvoBase):
         self.shell = Shell.create(Shell.Callbacks(), data_dir_name=self.data_dir_name)
         self.init()
         path = self.mode.shell_env.env.dump_dot_env()
-        logger.info(f"Saved envs to {str(path)} 💾", print_msg=True)
+        logger.info(f"Saved envs to {str(path)} 💾")
 
 
 class Envo(EnvoBase):
@@ -441,7 +440,7 @@ class Envo(EnvoBase):
     def on_error(self, exc: BaseException) -> None:
         msg = misc.get_envo_relevant_traceback(exc)
         msg = "".join(msg)
-        msg = msg.rstrip()
+        msg = "\n" + msg.rstrip()
 
         logger.error(msg)
 
@@ -519,12 +518,16 @@ class EnvoCreator:
             "name": env_dir.name,
             "stage": stage,
             "emoji": const.STAGES.get_stage_name_to_emoji().get(stage, "🙂"),
-            "parent_import": f"\nfrom {parent} import ThisEnv as ParentEnv\n" if parent else "",
             "base_class": "ParentEnv" if parent else Env.__name__,
             "this_env": const.THIS_ENV
         }
 
-        templ_file = Path("env.py.templ")
+        if stage == "comm":
+            templ_file = Path("comm_env.py.templ")
+        else:
+            context["parent_module"] = parent
+            templ_file = Path("env.py.templ")
+
         misc.render_py_file(
             templates_dir / templ_file, output=output_file, context=context
         )
@@ -627,7 +630,7 @@ def _main() -> None:
     try:
         option.run()
     except EnvoError as e:
-        logger.error(str(e), print_msg=True)
+        logger.error(str(e))
         if envo.e2e.enabled:
             envo.e2e.on_exit()
         sys.exit(1)

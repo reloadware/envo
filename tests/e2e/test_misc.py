@@ -9,6 +9,8 @@ from flaky import flaky
 from tests import facade
 from tests.e2e import utils
 
+from pytest import mark
+
 flaky = flaky(max_runs=3, min_passes=1)
 
 
@@ -42,7 +44,7 @@ class TestMisc(utils.TestBase):
         )
 
     def test_dump(self):
-        utils.add_declaration("test_var: str = var(default='test_value')")
+        utils.add_env_declaration("test_var: str = var(default='test_value')")
 
         ret = utils.run("envo test dump")
         assert "Saved envs to .env_test" in ret
@@ -161,5 +163,11 @@ class TestMisc(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    @mark.skip(reason="TODO")
     def test_instanciate(self, shell):
+        assert False
+
+    @mark.skip(reason="TODO")
+    def test_ctx(self, shell):
+        # TODO: change name? clashing with context decorator
         assert False

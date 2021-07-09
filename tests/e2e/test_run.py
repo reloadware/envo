@@ -4,7 +4,7 @@ from tests.e2e.utils import PromptState
 
 class TestCommands(utils.TestBase):
     def test_verbose(self, shell):
-        utils.replace_in_code("verbose_run: bool = False", "verbose_run: bool = True")
+        utils.add_meta("verbose_run: bool = True")
 
         utils.add_command(
             """

@@ -53,7 +53,7 @@ class EnvoCiEnv(ParentEnv):  # type: ignore
 
     @command
     def test(self) -> None:
-        logger.info("Running tests", print_msg=True)
+        logger.info("Running tests")
         # run(
         #     "pytest --reruns 3 -v tests --cov-report xml:workspace/cov.xml --cov=envo ./workspace"
         # )

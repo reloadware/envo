@@ -85,7 +85,7 @@ class EnvoLocalEnv(ParentEnv):  # type: ignore
 
     @command
     def test(self) -> None:
-        logger.info("Running tests", print_msg=True)
+        logger.info("Running tests")
         run("pytest tests -v")
 
     @p.command

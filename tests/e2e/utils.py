@@ -21,21 +21,7 @@ from envo import const
 from envo.e2e import STICKYBEAK_PORT
 from envo.logs import Logger
 from envo.shell import PromptBase
-from tests.utils import add_boot  # noqa F401
-from tests.utils import add_command  # noqa F401
-from tests.utils import add_context  # noqa F401
-from tests.utils import add_declaration  # noqa F401
-from tests.utils import add_method  # noqa F401
-from tests.utils import add_definition  # noqa F401
-from tests.utils import add_flake_cmd  # noqa F401
-from tests.utils import add_hook  # noqa F401
-from tests.utils import add_mypy_cmd  # noqa F401
-from tests.utils import add_namespace  # noqa F401
-from tests.utils import add_on_partial_reload  # noqa F401
-from tests.utils import change_file  # noqa F401
-from tests.utils import clean_output  # noqa F401
-from tests.utils import replace_in_code  # noqa F401
-from tests.utils import run  # noqa F401
+from tests.utils import *
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
@@ -78,7 +64,7 @@ class PromptRe(PromptBase):
 
 class TestBase:
     @pytest.fixture(autouse=True)
-    def setup(self, sandbox, init):
+    def setup(self, sandbox, init, envo_imports):
         pass
 
 
@@ -471,6 +457,29 @@ def init_child_env(child_dir: Path) -> None:
                     "env_test.py")
 
     os.chdir(str(cwd))
+
+
+def init_other_env():
+    cwd = Path(".").absolute()
+    other_dir = Path("other")
+    other_dir.mkdir()
+
+    os.chdir(other_dir)
+    run("envo test init")
+    add_command("""
+            @command()
+            def flake(self) -> str:
+                print("Flake other ok")
+            """)
+    os.chdir(cwd)
+
+    add_command("""
+        @command()
+        def flake_all(self) -> str:
+            print("Flake root ok")
+            other_env = self.get_env("other")
+            other_env.flake()
+        """)
 
 
 def replace_last_occurence(string: str, what: str, to_what: str) -> str:

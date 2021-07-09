@@ -767,7 +767,7 @@ class ShellEnv:
         self._environ_before = None
         self._shell_environ_before = None
 
-        self.logger.info(
+        self.logger.debug(
             "Starting env", metadata={"root": self.env.meta.root, "stage": self.env.meta.stage}
         )
 
@@ -800,7 +800,7 @@ class ShellEnv:
             self._sys_modules_snapshot = OrderedDict(sys.modules.copy())
 
     def _on_reload_start(self) -> None:
-        self.logger.info("Running reload, trying partial first")
+        self.logger.debug("Running reload, trying partial first")
         self._li.status.source_ready = False
 
     def _on_reload_error(self, error: Exception) -> None:
@@ -927,7 +927,7 @@ class ShellEnv:
 
         self._stop_reloaders()
 
-        self.logger.info(
+        self.logger.debug(
             "Reloading",
             metadata={"type": "reload", **metadata},
         )
@@ -942,7 +942,7 @@ class ShellEnv:
         self._reload_lock.release()
 
     def _exit(self) -> None:
-        self.logger.info("Exiting env")
+        self.logger.debug("Exiting env")
         self._stop_reloaders()
 
     def activate(self) -> None:
@@ -1029,7 +1029,7 @@ class ShellEnv:
         for n in to_remove:
             __import__(n)
 
-        self.logger.info(f"Full reload")
+        self.logger.debug(f"Full reload")
 
     def _run_boot_codes(self) -> None:
         self._li.status.source_ready = False

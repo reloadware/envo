@@ -1,3 +1,4 @@
+from pytest import mark
 from tests import facade
 from tests.e2e import utils
 from tests.e2e.utils import PromptState
@@ -268,8 +269,10 @@ class TestHooks(utils.TestBase):
         e.output(r"\non unload").eval()
         e.exit().eval()
 
+    @mark.skip(reason="TODO")
     def test_failing_precmd(self):
         assert False
 
+    @mark.skip(reason="TODO")
     def test_inject_triggers_precmd(self):
         assert False

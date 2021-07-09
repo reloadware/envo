@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 from pytest import fixture
+from tests import utils
 
 test_root = Path(os.path.realpath(__file__)).parent
 envo_root = test_root.parent
@@ -73,3 +74,8 @@ def is_linux():
     from envo.misc import is_linux
 
     return is_linux()
+
+
+@fixture
+def envo_imports():
+    utils.add_imports_in_envs_in_dir(Path("."))

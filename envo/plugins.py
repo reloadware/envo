@@ -180,7 +180,7 @@ class VirtualEnv(Plugin):
         self._possible_site_packages = []
         self._venv_dir_name = self.venv_name
 
-        self.__logger.info("VirtualEnv plugin init")
+        self.__logger.debug("VirtualEnv plugin init")
 
         try:
             self._venv = ExistingVenv(
@@ -190,7 +190,7 @@ class VirtualEnv(Plugin):
             )
 
         except CantFindEnv:
-            self.__logger.info("Couldn't find venv. Falling back to predicting")
+            self.__logger.debug("Couldn't find venv. Falling back to predicting")
             self._venv = PredictedVenv(root=venv_path, venv_name=self.venv_name)
 
         self._venv.activate(e)

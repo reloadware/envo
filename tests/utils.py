@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import textwrap
 import time
@@ -12,10 +13,13 @@ envo_root = test_root.parent
 
 __all__ = [
     "add_command",
-    "add_declaration",
+    "add_imports_in_envs_in_dir",
+    "add_env_declaration",
     "add_definition",
     "add_method",
     "add_hook",
+    "add_meta",
+    "add_namespace",
     "change_file",
     "add_flake_cmd",
     "add_mypy_cmd",
@@ -26,6 +30,11 @@ __all__ = [
     "run",
     "RunError"
 ]
+
+DECLARE_NAMESPACES = "# Declare your command namespaces here"
+DECLARE_ENV_VARIABLES = "# Declare your env variables here"
+DEFINE_VARIABLES = "# Define your variables here"
+DEFINE_COMMANDS = "# Define your commands, hooks and properties here"
 
 
 class RunError(Exception):
@@ -86,14 +95,14 @@ def replace_in_code(what: str, to_what: str, file: Union[Path, str] = "env_test.
     file.write_text(content)
 
 
-def add_declaration(code: str, file=Path("env_test.py")) -> None:
+def add_env_declaration(code: str, file=Path("env_test.py")) -> None:
     spaces = 4 * " "
     code = textwrap.dedent(code)
     replace_in_code(
-        f"{spaces}# Declare your variables here",
+        f"{spaces}{DECLARE_ENV_VARIABLES}",
         f"""
         {code}
-        # Declare your variables here
+        {DECLARE_ENV_VARIABLES}
         """,
         file=file,
         indent=8,
@@ -104,10 +113,10 @@ def add_definition(code: str, file=Path("env_test.py")) -> None:
     spaces = 8 * " "
     code = textwrap.dedent(code)
     replace_in_code(
-        f"{spaces}# Define your variables here",
+        f"{spaces}{DEFINE_VARIABLES}",
         f"""
         {code}
-        # Define your variables here
+        {DEFINE_VARIABLES}
         """,
         file=file,
         indent=8,
@@ -118,10 +127,10 @@ def add_command(code: str, file=Path("env_test.py")) -> None:
     spaces = 4 * " "
     code = textwrap.dedent(code)
     replace_in_code(
-        f"{spaces}# Define your commands, hooks and properties here",
+        f"{spaces}{DEFINE_COMMANDS}",
         f"""
         {code}
-        # Define your commands, hooks and properties here
+        {DEFINE_COMMANDS}
         """,
         file=file,
         indent=4,
@@ -182,7 +191,6 @@ def add_context(
     file=Path("env_test.py"),
 ) -> None:
     namespaced_context = f"{namespace}.context" if namespace else "context"
-
     context_str = json.dumps(context)
     add_command(
         f"""
@@ -209,6 +217,10 @@ def add_boot(
     )
 
 
+def add_meta(meta: str, file=Path("env_test.py")) -> None:
+    file.write_text(re.sub(fr"(class Meta\(.*\):)", fr"\1\n{' '*8 + meta}", file.read_text()))
+
+
 def add_on_partial_reload(code: str, file=Path("env_test.py")) -> None:
     add_command(code, file)
 
@@ -216,3 +228,11 @@ def add_on_partial_reload(code: str, file=Path("env_test.py")) -> None:
 def add_imports(code: str, file=Path("env_comm.py")) -> None:
     cleaned_code = textwrap.dedent(code)
     file.write_text(cleaned_code + file.read_text())
+
+
+def add_imports_in_envs_in_dir(directory = Path(".")) -> None:
+    for f in directory.glob("*"):
+        if f.is_dir():
+            add_imports_in_envs_in_dir(f)
+        elif f.glob("env_*.py"):
+            f.write_text("from envo import *\nimport os\n" + f.read_text())

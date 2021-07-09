@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from pytest import raises
+from pytest import raises, mark
 
 from tests import facade
 from tests.utils import RunError
@@ -169,7 +169,7 @@ class TestCommands(utils.TestBase):
         assert res == "Flake all good\nFlake return value\n"
 
     def test_env_variables_available_in_run(self, shell):
-        utils.add_declaration("test_var: str = var(raw=True)")
+        utils.add_env_declaration("test_var: str = var(raw=True)")
         utils.add_definition('self.e.test_var = "test_value"')
         if facade.is_linux():
             utils.add_command(
@@ -428,5 +428,6 @@ class TestCommands(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    @mark.skip(reason="TODO")
     def test_detects_inherited_command_without_decorator(self, shell):
         assert False

@@ -6,18 +6,22 @@ envo.add_source_roots([root])
 
 from typing import List, Dict, Any, Optional, Tuple
 
+from envo import Env
+
 # Declare your command namespaces here
 # like this:
 # my_namespace = Namespace("my_namespace")
-from {{ parent_module }} import ThisEnv as ParentEnv
 
 
-class {{ class_name }}(ParentEnv):
-    class Meta(ParentEnv.Meta):
-        stage: str = "{{ stage }}"
+class {{ class_name }}(Env):
+    class Meta(Env.Meta):
+        root: Path = root
+        name: str = "{{ name }}"
         emoji: str = "{{ emoji }}"
+        verbose_run: bool = False
+        load_env_vars: bool = False
 
-    class Environ(ParentEnv.Environ):
+    class Environ(Env.Environ):
         # Declare your env variables here
         ...
 

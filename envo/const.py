@@ -21,7 +21,7 @@ class STAGES:
     COMM = Stage("comm", 90, "👌")
     LOCAL = Stage("local", 100, "🐣")
     TEST = Stage("test", 80, "🛠")
-    CI = Stage("ci", 70, "🧪")
+    CI = Stage("ci", 70, "⚙")
     STAGE = Stage("stage", 60, "🤖")
     PROD = Stage("prod", 50, "🔥")
 

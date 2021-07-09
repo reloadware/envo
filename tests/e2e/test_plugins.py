@@ -1,8 +1,6 @@
 import os
 from pathlib import Path
 
-import pytest
-
 from tests.e2e import utils
 from tests import facade
 
@@ -86,6 +84,7 @@ class TestVenv(utils.TestBase):
         e.exit().eval()
 
     def test_autodiscovery(self, shell, init_child_env, sandbox):
+        utils.add_imports_in_envs_in_dir()
         venv_path = facade.VenvPath(root_path=sandbox, venv_name=".venv")
 
         utils.run("python -m venv .venv")
@@ -120,6 +119,7 @@ class TestVenv(utils.TestBase):
         e.exit().eval()
 
     def test_custom_venv_name(self, shell, sandbox, init_child_env):
+        utils.add_imports_in_envs_in_dir()
         venv_path = facade.VenvPath(root_path=sandbox, venv_name=".custom_venv")
 
         utils.run("python -m venv .custom_venv")

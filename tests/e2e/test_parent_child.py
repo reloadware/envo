@@ -19,7 +19,7 @@ class TestParentChild(utils.TestBase):
         e = shell.start()
         e.prompt(name=r"child").eval()
 
-        utils.replace_in_code('name: str = "child"', 'name: str = "ch"')
+        utils.replace_in_code('name: str = "child"', 'name: str = "ch"', file="env_comm.py")
 
         e.expected.pop()
         e.prompt(name=r"child").eval()
@@ -56,7 +56,6 @@ class TestParentChild(utils.TestBase):
         e.exit().eval()
 
     def test_super_uses_self(self, shell):
-        utils.add_declaration("var: str", Path("env_comm.py"))
         utils.add_definition("self.var = 'cake'", Path("env_comm.py"))
 
         utils.add_command(

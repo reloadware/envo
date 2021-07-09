@@ -62,3 +62,8 @@ def env_test_file() -> Path:
 @fixture
 def env_comm_file() -> Path:
     return Path("env_comm.py")
+
+
+@fixture
+def init_other_env() -> None:
+   utils.init_other_env()

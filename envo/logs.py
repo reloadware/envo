@@ -13,7 +13,7 @@ from rhei import Stopwatch
 from xonsh.pyghooks import XonshConsoleLexer
 
 
-class Level(Enum):
+class Level(int, Enum):
     DEBUG = 0
     INFO = 1
     WARNING = 2
@@ -174,32 +174,6 @@ class Logger:
         self.sw = Stopwatch()
         self.sw.start()
 
-        loguru.logger.remove()
-        loguru.logger.add(
-            sys.stdout,
-            format="<blue>{message}</blue>",
-            level="DEBUG",
-            filter=lambda x: x["level"].name == "DEBUG",
-        )
-        loguru.logger.add(
-            sys.stdout,
-            format="<bold>{message}</bold>",
-            level="INFO",
-            filter=lambda x: x["level"].name == "INFO",
-        )
-        loguru.logger.add(
-            sys.stderr,
-            format="<bold><yellow>{message}</yellow></bold>",
-            level="WARNING",
-            filter=lambda x: x["level"].name == "WARNING",
-        )
-        loguru.logger.add(
-            sys.stderr,
-            format="<bold><red>{message}</red></bold>",
-            level="ERROR",
-            filter=lambda x: x["level"].name == "ERROR",
-        )
-
     def create_child(self, name: str, descriptor: str) -> "Logger":
         logger = Logger(parent=self, name=name, descriptor=descriptor)
         logger.sw = self.sw
@@ -210,6 +184,36 @@ class Logger:
 
     def set_level(self, level: Level) -> None:
         self.level = level
+        loguru.logger.remove()
+
+        if self.level <= Level.DEBUG:
+            loguru.logger.add(
+                sys.stdout,
+                format="<blue>{message}</blue>",
+                level="DEBUG",
+                filter=lambda x: x["level"].name == "DEBUG",
+            )
+        if self.level <= Level.INFO:
+            loguru.logger.add(
+                sys.stdout,
+                format="<bold>{message}</bold>",
+                level="INFO",
+                filter=lambda x: x["level"].name == "INFO",
+            )
+        if self.level <= Level.WARNING:
+            loguru.logger.add(
+                sys.stderr,
+                format="<bold><yellow>{message}</yellow></bold>",
+                level="WARNING",
+                filter=lambda x: x["level"].name == "WARNING",
+            )
+        if self.level <= Level.ERROR:
+            loguru.logger.add(
+                sys.stderr,
+                format="<bold><red>{message}</red></bold>",
+                level="ERROR",
+                filter=lambda x: x["level"].name == "ERROR",
+            )
 
     def _log(self, msg: Msg) -> None:
         self.messages.append(msg)
@@ -219,7 +223,7 @@ class Logger:
         message: str,
         level: Level,
         metadata: Optional[Dict[str, Any]] = None,
-        print_msg=False,
+        loguru_disable=False
     ) -> None:
         msg = Msg(
             level,
@@ -228,7 +232,7 @@ class Logger:
             metadata=metadata or {},
             descriptor=self.descriptor,
         )
-        if print_msg:
+        if not loguru_disable:
             loguru.logger.log(level.name, message)
 
         self._log(msg)
@@ -237,24 +241,24 @@ class Logger:
             self.parent._log(msg)
 
     def debug(
-        self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False
+        self, message: str, metadata: Optional[Dict[str, Any]] = None, loguru_disable=False
     ) -> None:
-        self.log(message, Level.DEBUG, metadata, print_msg)
+        self.log(message, Level.DEBUG, metadata, loguru_disable)
 
     def info(
-        self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False
+        self, message: str, metadata: Optional[Dict[str, Any]] = None, loguru_disable=False
     ) -> None:
-        self.log(message, Level.INFO, metadata, print_msg)
+        self.log(message, Level.INFO, metadata, loguru_disable)
 
     def warning(
-        self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False
+        self, message: str, metadata: Optional[Dict[str, Any]] = None, loguru_disable=False
     ) -> None:
-        self.log(message, Level.WARNING, metadata, print_msg)
+        self.log(message, Level.WARNING, metadata, loguru_disable)
 
     def error(
-        self, message: str, metadata: Optional[Dict[str, Any]] = None, print_msg=False
+        self, message: str, metadata: Optional[Dict[str, Any]] = None, loguru_disable=False
     ) -> None:
-        self.log(message, Level.ERROR, metadata, print_msg)
+        self.log(message, Level.ERROR, metadata, loguru_disable)
 
     #
     # def get_user_code_exception(root: Path) -> str:
@@ -277,7 +281,7 @@ class Logger:
     def traceback(self) -> None:
         lines = traceback.format_exception(*sys.exc_info())
         text = "".join(lines).strip()
-        self.log(text, level=Level.ERROR, print_msg=True)
+        self.log(text, level=Level.ERROR)
 
     def get_msgs(self, filter: MsgFilter) -> List[Msg]:
         filtered: List[Msg] = []

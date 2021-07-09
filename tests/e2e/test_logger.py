@@ -49,6 +49,7 @@ class TestLogger(utils.TestBase):
 
         # Test filtering on levels
         shell.sendline("logger.error('test')")
+        e.output(r"test\n")
         e.prompt(utils.PromptState.MAYBE_LOADING).eval()
 
         assert (

@@ -4,7 +4,7 @@ from tests.e2e.utils import PromptState
 
 class TestComputedVars(utils.TestBase):
     def test_basic_with_declaration(self, shell):
-        utils.add_declaration(
+        utils.add_env_declaration(
         """
         def compute(self) -> int:
             return 10
@@ -22,7 +22,7 @@ class TestComputedVars(utils.TestBase):
         e.exit().eval()
 
     def test_basic_setter(self, shell):
-        utils.add_declaration(
+        utils.add_env_declaration(
         """
         def compute(self) -> int:
             return 10
@@ -42,7 +42,7 @@ class TestComputedVars(utils.TestBase):
         e.exit().eval()
 
     def test_error_in_property(self, shell):
-        utils.add_declaration("""
+        utils.add_env_declaration("""
         def compute(self) -> int:
             return 1 / 0
         def compute_set(self, value) -> int:

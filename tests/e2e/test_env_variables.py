@@ -8,7 +8,7 @@ from tests.e2e.utils import PromptState
 
 class TestEnvVariables(utils.TestBase):
     def test_nested(self, shell):
-        utils.add_declaration(
+        utils.add_env_declaration(
             """
             class Python(VarGroup):
                 version: str = var()
@@ -38,7 +38,7 @@ class TestEnvVariables(utils.TestBase):
         e.exit().eval()
 
     def test_raw_nested(self, shell):
-        utils.add_declaration(
+        utils.add_env_declaration(
             """
             class Python(VarGroup):
                 version: str = var()
@@ -68,7 +68,7 @@ class TestEnvVariables(utils.TestBase):
         e.exit().eval()
 
     def test_raw_double_nested(self, shell):
-        utils.add_declaration(
+        utils.add_env_declaration(
             """
             class Python(VarGroup):
                 class Version(VarGroup):
@@ -104,7 +104,7 @@ class TestEnvVariables(utils.TestBase):
         e.exit().eval()
 
     def test_validate_non_optional_var_not_set(self, shell):
-        utils.add_declaration("test_var: int = var()")
+        utils.add_env_declaration("test_var: int = var()")
 
         e = shell.start()
 
@@ -115,7 +115,7 @@ class TestEnvVariables(utils.TestBase):
         e.exit().eval()
 
     def test_optional(self, shell):
-        utils.add_declaration("test_var: Optional[int] = var()")
+        utils.add_env_declaration("test_var: Optional[int] = var()")
 
         e = shell.start()
 
@@ -128,7 +128,7 @@ class TestEnvVariables(utils.TestBase):
         e.exit().eval()
 
     def test_no_type(self, shell):
-        utils.add_declaration("test_var = var()")
+        utils.add_env_declaration("test_var = var()")
 
         e = shell.start()
 
@@ -139,7 +139,7 @@ class TestEnvVariables(utils.TestBase):
         e.exit().eval()
 
     def test_raw_in_nested(self, shell):
-        utils.add_declaration(
+        utils.add_env_declaration(
             """
             class Python(VarGroup):
                 version: str = var(raw=True)
@@ -162,7 +162,7 @@ class TestEnvVariables(utils.TestBase):
         e.exit().eval()
 
     def test_raw_in_double_nested(self, shell):
-        utils.add_declaration(
+        utils.add_env_declaration(
             """
             class Python(VarGroup):
                 class Version(VarGroup):
@@ -191,7 +191,7 @@ class TestEnvVariables(utils.TestBase):
         e.exit().eval()
 
     def test_raw_nested_redefined(self, shell):
-        utils.add_declaration(
+        utils.add_env_declaration(
             """
             class Python(VarGroup):
                 version: str = var(raw=True)
@@ -219,9 +219,9 @@ class TestEnvVariables(utils.TestBase):
         e.exit().eval()
 
     def test_load_env_vars(self, shell, env_sandbox):
-        utils.replace_in_code("load_env_vars: bool = False", "load_env_vars: bool = True")
+        utils.add_meta("load_env_vars: bool = True")
 
-        utils.add_declaration(
+        utils.add_env_declaration(
             """
             test_var: str = var() 
             """
