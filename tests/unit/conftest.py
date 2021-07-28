@@ -14,7 +14,6 @@ def init() -> None:
     init()
 
 
-
 @fixture
 def mock_shell(mocker) -> None:
     mocker.patch("envo.shell.Shell.create")

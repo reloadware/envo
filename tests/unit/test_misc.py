@@ -14,9 +14,7 @@ class TestMisc(utils.TestBase):
         utils.flake8()
         # utils.mypy()
 
-    @pytest.mark.parametrize(
-        "dir_name", ["my-sandbox", "my sandbox", ".sandbox", ".san.d- b  ox"]
-    )
+    @pytest.mark.parametrize("dir_name", ["my-sandbox", "my sandbox", ".sandbox", ".san.d- b  ox"])
     def test_init_weird_dir_name(self, dir_name):
         env_dir = Path(dir_name)
         env_dir.mkdir()

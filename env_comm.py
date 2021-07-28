@@ -1,49 +1,34 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
+from typing import Any, Dict, List, Optional, Tuple
 
-import envo  # noqa: F401
-from envo import (  # noqa: F401
-    Namespace,
-    Plugin,
-    VirtualEnv,
-    boot_code,
-    command,
-    context,
-    logger,
-    oncreate,
-    ondestroy,
-    onload,
-    onstderr,
-    onstdout,
-    onunload,
-    postcmd,
-    precmd,
-    run,
-    var,
-    Env
-)
+import envo
+from envo import Env, Namespace, VirtualEnv, boot_code, run, var
+
+root = Path(__file__).parent.absolute()
+envo.add_source_roots([root])
+
 
 # Declare your command namespaces here
 # like this:
 p = Namespace("p")
 
 
-class EnvoCommEnv(Env, VirtualEnv):  # type: ignore
-    class Meta(Env.Meta, VirtualEnv):  # type: ignore
+class EnvoCommEnv(Env, VirtualEnv):
+    class Meta(Env.Meta, VirtualEnv):
         root: str = Path(__file__).parent.absolute()
-        stage: str = "comm"
-        emoji: str = "👌"
         name: str = "env"
-        version: str = "0.1.0"
-        watch_files: List[str] = []
-        ignore_files: List[str] = []
         verbose_run = True
 
     class Environ(Env.Environ, VirtualEnv.Environ):
-        pip_ver: str = var(default="21.0.1")
-        poetry_ver: str = var(default="1.1.7")
+        ...
 
     e: Environ
+
+    def init(self) -> None:
+        super().init()
+
+        self.pip_ver = "21.0.1"
+        self.poetry_ver = "1.1.7"
 
     @p.command
     def clean(self):

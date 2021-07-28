@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
-from tests.e2e import utils
 
+from tests.e2e import utils
 from tests.utils import add_imports_in_envs_in_dir
 
 

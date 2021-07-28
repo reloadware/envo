@@ -45,9 +45,7 @@ class Msg:
             if tag not in {"lvl", "level"}:
                 ansi = parser._get_ansicode(tag)
                 if ansi is None:
-                    text = text.replace(
-                        markup, markup.replace("<", "< ").replace(">", " >")
-                    )
+                    text = text.replace(markup, markup.replace("<", "< ").replace(">", " >"))
 
         return text
 
@@ -67,9 +65,7 @@ class Msg:
 
         descriptor = ""
         if self.descriptor:
-            descriptor = (
-                f"{color('<green>')}({str(self.descriptor)}) {color('</green>')}"
-            )
+            descriptor = f"{color('<green>')}({str(self.descriptor)}) {color('</green>')}"
         msg = f"@{self.time:.4f}]{descriptor}{self.body}; {metadata}"
 
         if with_color:
@@ -218,13 +214,7 @@ class Logger:
     def _log(self, msg: Msg) -> None:
         self.messages.append(msg)
 
-    def log(
-        self,
-        message: str,
-        level: Level,
-        metadata: Optional[Dict[str, Any]] = None,
-        loguru_disable=False
-    ) -> None:
+    def log(self, message: str, level: Level, metadata: Optional[Dict[str, Any]] = None, loguru_disable=False) -> None:
         msg = Msg(
             level,
             message,
@@ -240,24 +230,16 @@ class Logger:
         if self.parent:
             self.parent._log(msg)
 
-    def debug(
-        self, message: str, metadata: Optional[Dict[str, Any]] = None, loguru_disable=False
-    ) -> None:
+    def debug(self, message: str, metadata: Optional[Dict[str, Any]] = None, loguru_disable=False) -> None:
         self.log(message, Level.DEBUG, metadata, loguru_disable)
 
-    def info(
-        self, message: str, metadata: Optional[Dict[str, Any]] = None, loguru_disable=False
-    ) -> None:
+    def info(self, message: str, metadata: Optional[Dict[str, Any]] = None, loguru_disable=False) -> None:
         self.log(message, Level.INFO, metadata, loguru_disable)
 
-    def warning(
-        self, message: str, metadata: Optional[Dict[str, Any]] = None, loguru_disable=False
-    ) -> None:
+    def warning(self, message: str, metadata: Optional[Dict[str, Any]] = None, loguru_disable=False) -> None:
         self.log(message, Level.WARNING, metadata, loguru_disable)
 
-    def error(
-        self, message: str, metadata: Optional[Dict[str, Any]] = None, loguru_disable=False
-    ) -> None:
+    def error(self, message: str, metadata: Optional[Dict[str, Any]] = None, loguru_disable=False) -> None:
         self.log(message, Level.ERROR, metadata, loguru_disable)
 
     #

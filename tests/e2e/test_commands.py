@@ -1,11 +1,11 @@
 import os
 from pathlib import Path
 
-from pytest import raises, mark
+from pytest import mark, raises
 
 from tests import facade
-from tests.utils import RunError
 from tests.e2e import utils
+from tests.utils import RunError
 
 
 class TestCommands(utils.TestBase):
@@ -122,10 +122,7 @@ class TestCommands(utils.TestBase):
             assert "bash: flaake: No such file or directory" in utils.clean_output(e.value.stderr)
         if facade.is_windows():
             assert e.value.return_code == 255
-            assert (
-                "'flaake' is not recognized as an internal or external command"
-                in utils.clean_output(e.value.stdout)
-            )
+            assert "'flaake' is not recognized as an internal or external command" in utils.clean_output(e.value.stdout)
 
     def test_single_command_command_fail_traceback(self):
         utils.add_command(
@@ -225,9 +222,7 @@ class TestCommands(utils.TestBase):
 
         shell.sendline("my_mypy")
         if facade.is_linux():
-            e.output(
-                r"xonsh: subprocess mode: command not found: my_mypy\nmy_mypy: command not found\n"
-            )
+            e.output(r"xonsh: subprocess mode: command not found: my_mypy\nmy_mypy: command not found\n")
         if facade.is_windows():
             e.output(r"xonsh: subprocess mode: command not found: my_mypy\n")
 
@@ -328,7 +323,7 @@ class TestCommands(utils.TestBase):
 
         shell.sendline("pwd")
 
-        e.output(r".*/sandbox/dir\n").prompt().eval()
+        e.output(r".*/sandbox_.*/dir\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()
@@ -355,7 +350,7 @@ class TestCommands(utils.TestBase):
 
         shell.sendline("pwd")
 
-        e.output(r".*/sandbox\n").prompt().eval()
+        e.output(r".*/sandbox_.*\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()

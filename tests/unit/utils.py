@@ -11,8 +11,8 @@ from tests.utils import add_command  # noqa F401
 from tests.utils import add_declaration  # noqa F401
 from tests.utils import add_definition  # noqa F401
 from tests.utils import add_flake_cmd  # noqa F401
-from tests.utils import add_method  # noqa F401
 from tests.utils import add_imports  # noqa F401
+from tests.utils import add_method  # noqa F401
 from tests.utils import add_mypy_cmd  # noqa F401
 from tests.utils import change_file  # noqa F401
 from tests.utils import clean_output  # noqa F401
@@ -128,4 +128,3 @@ def strs_in_regex(strings: List[str]) -> str:
     """
     ret = "".join([rf"(?=.*{s})" for s in strings])
     return ret
-

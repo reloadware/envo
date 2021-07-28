@@ -1,6 +1,6 @@
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
-import os
 
 import envo  # noqa: F401
 from envo import (  # noqa: F401
@@ -24,7 +24,7 @@ from envo import (  # noqa: F401
 
 # Declare your command namespaces here
 # like this:
-# my_namespace = command(namespace="my_namespace")
+p = Namespace("p")
 
 
 from env_comm import ThisEnv as ParentEnv
@@ -46,47 +46,44 @@ class EnvoCiEnv(ParentEnv):  # type: ignore
 
     e: Environ
 
-    @command
+    @p.command
     def bootstrap(self) -> None:
-        run("mkdir -p workspace")
-        super().bootstrap()
+        raise NotImplementedError
 
-    @command
+    @p.command
     def test(self) -> None:
         logger.info("Running tests")
-        # run(
-        #     "pytest --reruns 3 -v tests --cov-report xml:workspace/cov.xml --cov=envo ./workspace"
-        # )
+        run("pytest tests -v -n auto")
 
-    @command
+    @p.command
     def build(self) -> None:
         run("poetry build")
 
-    @command
+    @p.command
     def publish(self) -> None:
         run("poetry publish --username $PYPI_USERNAME --password $PYPI_PASSWORD")
 
-    @command
+    @p.command
     def rstcheck(self) -> None:
         pass
         # run("rstcheck README.rst | tee ./workspace/rstcheck.txt")
 
-    @command
+    @p.command
     def flake(self) -> None:
         pass
         # run("flake8 . | tee ./workspace/flake8.txt")
 
-    @command
+    @p.command
     def check_black(self) -> None:
         pass
         # run("black --check . | tee ./workspace/black.txt")
 
-    @command
+    @p.command
     def mypy(self) -> None:
         pass
         # run("mypy . | tee ./workspace/mypy.txt")
 
-    @command
+    @p.command
     def generate_version(self) -> None:
         import toml
 

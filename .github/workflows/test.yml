@@ -1,0 +1,64 @@
+name: "test"
+
+on:
+  push:
+    branches:
+    - master
+  pull_request:
+    branches:
+    - master
+
+jobs:
+  check-black:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+      - uses: gerbal/always-cache@v1.0.3
+        id: check-black-pip-cache
+        with:
+          path: ~/.cache/pip
+          key: check-black-pip-cache-21.7b0
+          restore-keys: check-black-pip-cache-
+      - run: pip install black==21.7b0
+      - run: black --check .
+
+  publish:
+    env:
+      PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
+      PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+    runs-on: ubuntu-latest
+    needs: [check-black]
+    if: github.ref == 'refs/heads/master'
+    steps:      
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python_version }}
+      - uses: gerbal/always-cache@v1.0.3
+        id: pip-cache
+        with:
+          path: ~/.cache/pip
+          key: pip-cache-21.0.1-1.1.7
+          restore-keys: pip-cache-
+      - uses: gerbal/always-cache@v1.0.3
+        id: root-venv-cache
+        with:
+          path: .venv
+          key: root-venv-${{ hashFiles('poetry.lock') }}
+          restore-keys: root-venv-
+      - run: pip install pip==21.0.1
+      - run: pip install poetry==1.1.7
+      - run: poetry config virtualenvs.create true
+      - run: poetry config virtualenvs.in-project true
+      - run: poetry install
+      - name: Generate version
+        run: poetry run envo ci run p.generate_version
+      - name: Build
+        run: poetry run envo ci run p.build
+      - name: Publish
+        run: poetry run envo ci run p.publish

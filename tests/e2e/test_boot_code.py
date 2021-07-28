@@ -27,7 +27,7 @@ class TestBootCode(utils.TestBase):
 
         e.prompt().eval()
         shell.sendline("pwd")
-        e.output(r".*sandbox/dir\n")
+        e.output(r".*sandbox_.*/dir\n")
         e.prompt().eval()
 
         shell.exit()

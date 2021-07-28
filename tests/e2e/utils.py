@@ -14,6 +14,7 @@ import pyte
 import pyte.modes
 import pytest
 import requests
+from flaky import flaky
 from rhei import Stopwatch
 from stickybeak import Injector
 
@@ -111,9 +112,7 @@ class Expecter:
         self.expected.append(re.escape(raw))
         return self
 
-    def prompt(
-        self, state=PromptState.NORMAL, name="sandbox", emoji: Optional[str] = None
-    ) -> "Expecter":
+    def prompt(self, state=PromptState.NORMAL, name="sandbox", emoji: Optional[str] = None) -> "Expecter":
         if not emoji:
             emoji = const.STAGES.get_stage_name_to_emoji()[self.stage]
         self.expected.append(str(PromptRe(state=state, name=name, emoji=emoji)))
@@ -133,9 +132,7 @@ class Expecter:
 
     def eval(self, timeout: int = ASSERT_TIMEOUT) -> None:
         def condition():
-            assert re.fullmatch(
-                self.expected_regex, self._spawn.get_cleaned_display(), re.DOTALL
-            )
+            assert re.fullmatch(self.expected_regex, self._spawn.get_cleaned_display(), re.DOTALL)
 
         AssertInTime(condition, timeout)
 
@@ -199,12 +196,10 @@ class RemoteEnvo:
             if mode.status.ready:
                 break
 
-        sleep(0.5)
+        sleep(1)
 
     @classmethod
-    def assert_reloaded(
-        cls, number: int = 1, path=r".*env_test\.py", timeout=5.0
-    ) -> None:
+    def assert_reloaded(cls, number: int = 1, path=r".*env_test\.py", timeout=5.0) -> None:
         import re
         from time import sleep
 
@@ -217,15 +212,11 @@ class RemoteEnvo:
             sleep(sleep_time)
             passed_time += sleep_time
 
-            msgs = logger.get_msgs(
-                filter=logs.MsgFilter(metadata_re={"type": r"reload"})
-            )
+            msgs = logger.get_msgs(filter=logs.MsgFilter(metadata_re={"type": r"reload"}))
             if number == 0 and len(msgs) == 0:
                 break
 
-            if len(msgs) == number and re.findall(
-                path, str(msgs[-1].metadata["path"]).replace("\\", "/")
-            ):
+            if len(msgs) == number and re.findall(path, str(msgs[-1].metadata["path"]).replace("\\", "/")):
                 break
 
             if passed_time >= timeout:
@@ -246,9 +237,7 @@ class RemoteEnvo:
             sleep(sleep_time)
             passed_time += sleep_time
 
-            msgs = logger.get_msgs(
-                filter=logs.MsgFilter(metadata_re={"type": r"partial_reload"})
-            )
+            msgs = logger.get_msgs(filter=logs.MsgFilter(metadata_re={"type": r"partial_reload"}))
             if number == 0 and len(msgs) == 0:
                 break
 
@@ -438,23 +427,23 @@ def init_child_env(child_dir: Path) -> None:
     assert "Created test environment" in result
 
     comm_file = Path("env_comm.py")
-    replace_in_code("# Declare your command namespaces here",
-                              "from env_comm import ThisEnv as ParentEnv", "env_comm.py")
+    replace_in_code(
+        "# Declare your command namespaces here", "from env_comm import ThisEnv as ParentEnv", "env_comm.py"
+    )
     replace_in_code("(Env)", "(ParentEnv)", "env_comm.py")
     replace_in_code("(Env.Environ)", "(ParentEnv.Environ)", "env_comm.py")
 
     test_file = Path("env_test.py")
 
-    replace_in_code("envo.add_source_roots([root])",
-                    "envo.add_source_roots([root.parent])", "env_comm.py")
-    replace_in_code("envo.add_source_roots([root])",
-                    "envo.add_source_roots([root.parent])", "env_test.py")
-    replace_in_code("from env_comm import ThisEnv as ParentEnv",
-                    "from child.env_comm import ThisEnv as ParentEnv\nfrom env_test import ThisEnv as ParentTestEnv", "env_test.py")
+    replace_in_code("envo.add_source_roots([root])", "envo.add_source_roots([root.parent])", "env_comm.py")
+    replace_in_code("envo.add_source_roots([root])", "envo.add_source_roots([root.parent])", "env_test.py")
+    replace_in_code(
+        "from env_comm import ThisEnv as ParentEnv",
+        "from child.env_comm import ThisEnv as ParentEnv\nfrom env_test import ThisEnv as ParentTestEnv",
+        "env_test.py",
+    )
 
-    replace_in_code("(ParentEnv)",
-                    "(ParentEnv, ParentTestEnv)",
-                    "env_test.py")
+    replace_in_code("(ParentEnv)", "(ParentEnv, ParentTestEnv)", "env_test.py")
 
     os.chdir(str(cwd))
 
@@ -466,20 +455,24 @@ def init_other_env():
 
     os.chdir(other_dir)
     run("envo test init")
-    add_command("""
+    add_command(
+        """
             @command()
             def flake(self) -> str:
                 print("Flake other ok")
-            """)
+            """
+    )
     os.chdir(cwd)
 
-    add_command("""
+    add_command(
+        """
         @command()
         def flake_all(self) -> str:
             print("Flake root ok")
             other_env = self.get_env("other")
             other_env.flake()
-        """)
+        """
+    )
 
 
 def replace_last_occurence(string: str, what: str, to_what: str) -> str:
@@ -493,3 +486,6 @@ def replace_last_occurence(string: str, what: str, to_what: str) -> str:
 
 def trigger_reload(file: Path = Path("env_test.py")) -> None:
     file.write_text(file.read_text() + "\n")
+
+
+flaky = flaky(max_runs=3, min_passes=1)

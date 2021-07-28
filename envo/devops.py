@@ -6,14 +6,12 @@ from subprocess import Popen
 
 __all__ = ["CommandError", "run", "inject", "run_get"]
 
-from textwrap import dedent
-
-from typing import Optional, List, Union
-
 from dataclasses import dataclass
+from textwrap import dedent
+from typing import List, Optional, Union
 
-from envo.misc import is_linux, is_windows
 from envo import console
+from envo.misc import is_linux, is_windows
 
 
 class CommandError(RuntimeError):
@@ -54,12 +52,14 @@ def run_get(command: str) -> Output:
     return output
 
 
-def _run(command: str,
-         raise_on_error=True,
-         print_output=True,
-         print_errors=True,
-         verbose: Optional[bool]=None,
-         background=False) -> Optional[str]:
+def _run(
+    command: str,
+    raise_on_error=True,
+    print_output=True,
+    print_errors=True,
+    verbose: Optional[bool] = None,
+    background=False,
+) -> Optional[str]:
 
     if verbose is None:
         verbose = os.environ.get("ENVO_VERBOSE_RUN", False)
@@ -89,13 +89,13 @@ def _run(command: str,
 
 
 def run(
-        command: Union[str, List[str]],
-        raise_on_error=True,
-        print_output=True,
-        print_errors=True,
-        verbose: Optional[bool]=None,
-        background=False,
-        progress_bar: Optional[str] = None
+    command: Union[str, List[str]],
+    raise_on_error=True,
+    print_output=True,
+    print_errors=True,
+    verbose: Optional[bool] = None,
+    background=False,
+    progress_bar: Optional[str] = None,
 ) -> None:
     # join multilines
     if not isinstance(command, list):
@@ -103,19 +103,26 @@ def run(
 
     if progress_bar is not None:
         from rich.progress import track
+
         for c in track(command, description=progress_bar):
-            _run(command=c, raise_on_error=raise_on_error,
-                            print_output=print_output,
-                            print_errors=print_errors,
-                            verbose=verbose,
-                            background=background)
+            _run(
+                command=c,
+                raise_on_error=raise_on_error,
+                print_output=print_output,
+                print_errors=print_errors,
+                verbose=verbose,
+                background=background,
+            )
     else:
         for c in command:
-            _run(command=c, raise_on_error=raise_on_error,
-                            print_output=print_output,
-                            print_errors=print_errors,
-                            verbose=verbose,
-                            background=background)
+            _run(
+                command=c,
+                raise_on_error=raise_on_error,
+                print_output=print_output,
+                print_errors=print_errors,
+                verbose=verbose,
+                background=background,
+            )
 
 
 def inject(command: str) -> None:

@@ -54,9 +54,7 @@ class InotifyPath:
             self.relative_str += "/"
 
     def match(self, include: List[str], exclude: List[str]) -> bool:
-        return not glob_match(self.relative_str, exclude) and glob_match(
-            self.relative_str, include
-        )
+        return not glob_match(self.relative_str, exclude) and glob_match(self.relative_str, include)
 
     def is_dir(self) -> bool:
         return self.absolute.is_dir()
@@ -85,9 +83,7 @@ class FilesWatcher(FileSystemEventHandler):
         self.se = se
         self.calls = calls
 
-        self.logger = logger.create_child(
-            f"{self.se.name} Inotify", descriptor=f"{self.se.name} Inotify"
-        )
+        self.logger = logger.create_child(f"{self.se.name} Inotify", descriptor=f"{self.se.name} Inotify")
 
         self.logger.debug("Starting Inotify")
         self.observer = Observer()
@@ -320,14 +316,10 @@ class EnvParser:
         parents_str = re.search(r"parents.*=.*\[(.*)]", self.source)[1]
         if not parents_str:
             return []
-        parents_paths_relative = (
-            parents_str.replace("'", "").replace('"', "").split(",")
-        )
+        parents_paths_relative = parents_str.replace("'", "").replace('"', "").split(",")
         parents_paths_relative = [p.strip() for p in parents_paths_relative]
 
-        parents_paths = [
-            Path(self.path.parent / p).resolve() for p in parents_paths_relative
-        ]
+        parents_paths = [Path(self.path.parent / p).resolve() for p in parents_paths_relative]
         ret = [EnvParser(p) for p in parents_paths]
         return ret
 

@@ -2,6 +2,9 @@ import inspect
 import os
 import re
 import sys
+
+# Python >= 3.8
+import typing
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy, deepcopy
@@ -9,11 +12,12 @@ from dataclasses import dataclass, field, is_dataclass
 from pathlib import Path
 from threading import Lock, Thread
 from time import sleep
-from types import ModuleType, MethodType
+from types import MethodType, ModuleType
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    ClassVar,
     Dict,
     Generic,
     List,
@@ -21,21 +25,19 @@ from typing import (
     Tuple,
     Type,
     TypeVar,
-    Union, ClassVar
+    Union,
 )
 
-# Python >= 3.8
-import typing
+import envium
+from envium import VarGroup, computed_var, var
 from rhei import Stopwatch
 from watchdog import events
 from watchdog.events import FileModifiedEvent
-from envo.status import Status
 
 from envo import logger
 from envo.logs import Logger
 from envo.misc import Callback, EnvoError, FilesWatcher, import_env_from_file, import_from_file
-from envium import var, computed_var, VarGroup
-import envium
+from envo.status import Status
 
 __all__ = [
     "Env",
@@ -129,9 +131,7 @@ class MagicFunction:
             )
 
         if missing_args:
-            raise EnvoError(
-                f"Missing magic function args {list(missing_args)}:\n" f"{func_info}"
-            )
+            raise EnvoError(f"Missing magic function args {list(missing_args)}:\n" f"{func_info}")
 
     @property
     def namespaced_name(self):
@@ -223,6 +223,7 @@ class command(magic_function):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def command(cd_back: bool = True, in_root: bool = True):
         return MagicFunction()
 
@@ -237,6 +238,7 @@ class boot_code(magic_function):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def boot_code(func):
         return MagicFunction()
 
@@ -248,6 +250,7 @@ class event(magic_function):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def event(func):
         return MagicFunction()
 
@@ -258,6 +261,7 @@ class onload(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def onload(func):
         return MagicFunction()
 
@@ -268,6 +272,7 @@ class oncreate(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def oncreate(func):
         return MagicFunction()
 
@@ -278,6 +283,7 @@ class ondestroy(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def ondestroy(func):
         return MagicFunction()
 
@@ -288,6 +294,7 @@ class onunload(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def onunload(func):
         return MagicFunction()
 
@@ -299,6 +306,7 @@ class on_partial_reload(event):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def on_partial_reload(func):
         return MagicFunction()
 
@@ -324,6 +332,7 @@ class precmd(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def precmd(cmd_regex: str = ".*"):
         return MagicFunction()
 
@@ -335,6 +344,7 @@ class onstdout(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def onstdout(func):
         return MagicFunction()
 
@@ -346,6 +356,7 @@ class onstderr(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def onstderr(func):
         return MagicFunction()
 
@@ -357,8 +368,10 @@ class postcmd(cmd_hook):  # noqa: N801
 
 # Just to satistfy pycharm
 if False:
+
     def postcmd(func):
         return MagicFunction()
+
 
 @dataclass
 class Context(MagicFunction):
@@ -376,12 +389,14 @@ class context(magic_function):  # noqa: N801
     type: str = "context"
 
     klass = Context
+
     def __init__(self) -> None:
         super().__init__()
 
 
 # Just to satistfy pycharm
 if False:
+
     def context(func):
         return MagicFunction()
 
@@ -443,19 +458,11 @@ class Field:
         if self.raw:
             return self.cleaned_name
         else:
-            return (
-                f"{self.namespace}_{self.cleaned_name}"
-                if self.namespace
-                else self.cleaned_name
-            )
+            return f"{self.namespace}_{self.cleaned_name}" if self.namespace else self.cleaned_name
 
     @property
     def full_name(self) -> str:
-        return (
-            f"{self.namespace}.{self.cleaned_name}"
-            if self.namespace
-            else self.cleaned_name
-        )
+        return f"{self.namespace}.{self.cleaned_name}" if self.namespace else self.cleaned_name
 
 
 @dataclass
@@ -513,8 +520,7 @@ class EnvReloader:
                 FilesWatcher.Sets(
                     root=p.Meta.root,
                     include=self.se.watch_files + ["env_*.py"],
-                    exclude=self.se.ignore_files
-                    + [r"**/.*", r"**/*~", r"**/__pycache__"],
+                    exclude=self.se.ignore_files + [r"**/.*", r"**/*~", r"**/__pycache__"],
                     name=p.__name__,
                 ),
                 calls=FilesWatcher.Callbacks(on_event=self.calls.on_env_edit),
@@ -550,6 +556,7 @@ class Env(BaseEnv):
         """
         Environment metadata.
         """
+
         root: Path
         name: Optional[str] = None
         version: str = "0.1.0"
@@ -604,9 +611,20 @@ class Env(BaseEnv):
         else:
             self.e.pythonpath = os.environ["PYTHONPATH"]
 
-        self.magic_functions = {"context": {}, "precmd": {}, "onstdout": {}, "onstderr": {}, "postcmd": {},
-                                "onload": {}, "oncreate": {}, "ondestroy": {}, "onunload": {}, "boot_code": {},
-                                "command": {}, "on_partial_reload": {}}
+        self.magic_functions = {
+            "context": {},
+            "precmd": {},
+            "onstdout": {},
+            "onstderr": {},
+            "postcmd": {},
+            "onload": {},
+            "oncreate": {},
+            "ondestroy": {},
+            "onunload": {},
+            "boot_code": {},
+            "command": {},
+            "on_partial_reload": {},
+        }
 
         self._collect_magic_functions()
 
@@ -634,6 +652,7 @@ class Env(BaseEnv):
             raise EnvoError("\n".join([str(e) for e in errors]))
 
     def get_env_vars(self) -> Dict[str, str]:
+        self.e.pythonpath = self.e.pythonpath.strip(":")
         ret = self.e.get_env_vars()
         return ret
 
@@ -674,7 +693,8 @@ class Env(BaseEnv):
         """
         Go through fields and transform decorated functions to commands.
         """
-        def hasattr_static(obj:Any, field: str) -> bool:
+
+        def hasattr_static(obj: Any, field: str) -> bool:
             try:
                 inspect.getattr_static(obj, field)
             except AttributeError:
@@ -709,9 +729,7 @@ class Env(BaseEnv):
         File name follows env_{env_name} format.
         """
         path = Path(f".env_{self.meta.stage}")
-        content = "\n".join(
-            [f'{key}="{value}"' for key, value in self.e.get_env_vars().items()]
-        )
+        content = "\n".join([f'{key}="{value}"' for key, value in self.e.get_env_vars().items()])
         path.write_text(content, "utf-8")
         return path
 
@@ -767,9 +785,7 @@ class ShellEnv:
         self._environ_before = None
         self._shell_environ_before = None
 
-        self.logger.debug(
-            "Starting env", metadata={"root": self.env.meta.root, "stage": self.env.meta.stage}
-        )
+        self.logger.debug("Starting env", metadata={"root": self.env.meta.root, "stage": self.env.meta.stage})
 
         self._li.shell.calls.pre_cmd = Callback(self._on_precmd)
         self._li.shell.calls.on_stdout = Callback(self._on_stdout)
@@ -783,9 +799,7 @@ class ShellEnv:
 
         if self._se.reloader_enabled:
             self.reloader = EnvReloader(
-                li=EnvReloader.Links(
-                    shell_env=self, status=self._li.status, logger=self.logger
-                ),
+                li=EnvReloader.Links(shell_env=self, status=self._li.status, logger=self.logger),
                 se=EnvReloader.Sets(
                     extra_watchers=se.extra_watchers,
                     watch_files=self.env.meta.watch_files,
@@ -907,13 +921,9 @@ class ShellEnv:
         ]
 
         if any([s in event.event_type for s in subscribe_events]):
-            self.request_reload(
-                metadata={"event": event.event_type, "path": event.src_path}
-            )
+            self.request_reload(metadata={"event": event.event_type, "path": event.src_path})
 
-    def request_reload(
-        self, exc: Optional[Exception] = None, metadata: Optional[Dict] = None
-    ) -> None:
+    def request_reload(self, exc: Optional[Exception] = None, metadata: Optional[Dict] = None) -> None:
         if not metadata:
             metadata = {}
 
@@ -1073,9 +1083,7 @@ class ShellEnv:
                     out = ret
         return out
 
-    def _on_postcmd(
-        self, command: str, stdout: str, stderr: str
-    ) -> None:
+    def _on_postcmd(self, command: str, stdout: str, stderr: str) -> None:
         self._post_cmd(command, stdout, stderr)
         functions = self.env.magic_functions["postcmd"]
         for f in functions.values():

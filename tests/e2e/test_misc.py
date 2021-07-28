@@ -5,13 +5,10 @@ from time import sleep
 
 import pytest
 from flaky import flaky
+from pytest import mark
 
 from tests import facade
 from tests.e2e import utils
-
-from pytest import mark
-
-flaky = flaky(max_runs=3, min_passes=1)
 
 
 class TestMisc(utils.TestBase):
@@ -37,7 +34,7 @@ class TestMisc(utils.TestBase):
                 r'export ENVO_STAGE="test"\n'
                 r'export PATH=".*"\n'
                 r'export PYTHONPATH=".*"\n'
-                r'export SANDBOX_ROOT=".*sandbox"\n'
+                r'export SANDBOX_ROOT=".*sandbox_.*"\n'
                 r'export SANDBOX_STAGE="test"\n'
             ),
             ret,
@@ -61,16 +58,14 @@ class TestMisc(utils.TestBase):
                 r'ENVO_STAGE="test"\n'
                 r'PATH=".*"\n'
                 r'PYTHONPATH=".*"\n'
-                r'SANDBOX_ROOT=".*sandbox"\n'
+                r'SANDBOX_ROOT=".*sandbox_.*"\n'
                 r'SANDBOX_STAGE="test"\n'
                 r'SANDBOX_TESTVAR="test_value"'
             ),
             content,
         )
 
-    @pytest.mark.parametrize(
-        "dir_name", ["my-sand-box", "my sandbox", ".sandbox", ".san.d- b  ox"]
-    )
+    @pytest.mark.parametrize("dir_name", ["my-sand-box", "my sandbox", ".sandbox", ".san.d- b  ox"])
     def test_init_weird_dir_name(self, shell, dir_name):
         env_dir = Path(dir_name)
         env_dir.mkdir()

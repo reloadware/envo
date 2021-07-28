@@ -66,4 +66,4 @@ def env_comm_file() -> Path:
 
 @fixture
 def init_other_env() -> None:
-   utils.init_other_env()
+    utils.init_other_env()

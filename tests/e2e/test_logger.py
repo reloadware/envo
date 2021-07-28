@@ -26,36 +26,19 @@ class TestLogger(utils.TestBase):
         def logger():
             return shell.envo.get_logger()
 
-        assert (
-            len(
-                logger().get_msgs(
-                    filter=facade.logs.MsgFilter(metadata_re={"type": "reload"})
-                )
-            )
-            == 0
-        )
+        assert len(logger().get_msgs(filter=facade.logs.MsgFilter(metadata_re={"type": "reload"}))) == 0
 
         # Test filtering on metadata
         shell.trigger_reload()
         sleep(0.5)
-        assert (
-            len(
-                logger().get_msgs(
-                    filter=facade.logs.MsgFilter(metadata_re={"type": r"reload"})
-                )
-            )
-            == 1
-        )
+        assert len(logger().get_msgs(filter=facade.logs.MsgFilter(metadata_re={"type": r"reload"}))) == 1
 
         # Test filtering on levels
         shell.sendline("logger.error('test')")
         e.output(r"test\n")
         e.prompt(utils.PromptState.MAYBE_LOADING).eval()
 
-        assert (
-            len(logger().get_msgs(filter=facade.logs.MsgFilter(level=facade.logs.Level.ERROR)))
-            == 1
-        )
+        assert len(logger().get_msgs(filter=facade.logs.MsgFilter(level=facade.logs.Level.ERROR))) == 1
 
         shell.exit()
         e.exit().eval()
