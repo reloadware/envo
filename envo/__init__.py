@@ -24,3 +24,4 @@ from envo.env import *
 from envo.plugins import *
 from envo.misc import EnvoError, import_from_file, add_source_roots
 from envium import var, computed_var, VarGroup
+from envo.context import *

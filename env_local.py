@@ -67,8 +67,8 @@ class EnvoLocalEnv(ParentEnv):
         run(f"rm {v.venv_name} -rf")
         os.environ["PATH"] = f"{Path.home()}/.pyenv/versions/{v.version}/bin/:{os.environ['PATH']}"
         run(f"python -m venv {v.venv_name}")
-        run(f"{v.venv_name}/bin/pip install pip=={self.pip_ver}")
-        run(f"{v.venv_name}/bin/pip install poetry=={self.poetry_ver}")
+        run(f"{v.venv_name}/bin/pip install pip=={self.ctx.pip_ver}")
+        run(f"{v.venv_name}/bin/pip install poetry=={self.ctx.poetry_ver}")
         run(f"source {v.venv_name}/bin/activate && poetry config virtualenvs.create false")
         run(f"source {v.venv_name}/bin/activate && poetry config virtualenvs.in-project false")
         run(f"source {v.venv_name}/bin/activate && poetry install")
@@ -110,8 +110,8 @@ class EnvoLocalEnv(ParentEnv):
         )
 
         ctx = {
-            "pip_ver": self.pip_ver,
-            "poetry_ver": self.poetry_ver,
+            "pip_ver": self.ctx.pip_ver,
+            "poetry_ver": self.ctx.poetry_ver,
         }
 
         bootstrap_code = Template(bootstrap_code, undefined=StrictUndefined).render(**ctx)

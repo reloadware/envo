@@ -1,4 +1,4 @@
-from envium.environ import NoTypeError, NoValueError, RedefinedVarError
+from envium.environ import NoTypeError, NoValueError, RedefinedVarError, WrongTypeError
 
 from envo import const, logs
 from envo.e2e import ReloadTimeout

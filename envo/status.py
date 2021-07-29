@@ -22,16 +22,16 @@ class Status:
 
     def __repr__(self) -> str:
         return (
-            f"Status (context_ready={self.context_ready},"
+            f"Status (context_ready={self.shell_context_ready},"
             f" reloader_ready={self._reloader_ready}, source_ready={self._source_ready})"
         )
 
     @property
-    def context_ready(self) -> bool:
+    def shell_context_ready(self) -> bool:
         return self._context_ready
 
-    @context_ready.setter
-    def context_ready(self, value: bool) -> None:
+    @shell_context_ready.setter
+    def shell_context_ready(self, value: bool) -> None:
         self._context_ready = value
         logger.debug("Context", {"ready": value})
         self._on_status_change()
@@ -58,7 +58,7 @@ class Status:
 
     @property
     def ready(self) -> bool:
-        return self.context_ready and self.reloader_ready and self.source_ready
+        return self.shell_context_ready and self.reloader_ready and self.source_ready
 
     def _on_status_change(self) -> None:
         if self.ready:

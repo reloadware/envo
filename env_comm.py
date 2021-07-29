@@ -2,7 +2,18 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import envo
-from envo import Env, Namespace, VirtualEnv, boot_code, run, var
+from envo import (
+    CtxGroup,
+    Env,
+    Namespace,
+    SecretsGroup,
+    VirtualEnv,
+    boot_code,
+    ctx_var,
+    run,
+    secret_var,
+    var,
+)
 
 root = Path(__file__).parent.absolute()
 envo.add_source_roots([root])
@@ -22,13 +33,19 @@ class EnvoCommEnv(Env, VirtualEnv):
     class Environ(Env.Environ, VirtualEnv.Environ):
         ...
 
+    class Ctx(Env.Ctx):
+        pip_ver: str = ctx_var(default="21.0.1")
+        poetry_ver: Optional[str] = ctx_var()
+
+    class Secrets(Env.Secrets):
+        ...
+        # password: str = secret_var()
+
     e: Environ
+    ctx: Ctx
 
     def init(self) -> None:
         super().init()
-
-        self.pip_ver = "21.0.1"
-        self.poetry_ver = "1.1.7"
 
     @p.command
     def clean(self):
@@ -39,12 +56,8 @@ class EnvoCommEnv(Env, VirtualEnv):
         run(f"rm **/*/__pycache__ -fr")
 
     @p.command
-    def bootstrap(self, create_venv: bool = True):
-        run(f"pip install pip=={self.e.pip_ver}")
-        run(f"pip install poetry=={self.e.poetry_ver}")
-        run(f"poetry config virtualenvs.create {str(create_venv).lower()}")
-        run("poetry config virtualenvs.in-project true")
-        run("poetry install")
+    def bootstrap(self):
+        raise NotImplementedError
 
     @boot_code
     def __boot(self) -> List[str]:

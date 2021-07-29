@@ -25,7 +25,17 @@ class {{ class_name }}(Env):
         # Declare your env variables here
         ...
 
+    class Ctx(Env.Ctx):
+        # Declare your context here
+        ...
+
+    class Secrets(Env.Secrets):
+        # Declare your secrets here
+        ...
+
     e: Environ
+    ctx: Ctx
+    secrets: Secrets
 
     # Declare your variables here
     def init(self) -> None:

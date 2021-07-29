@@ -20,11 +20,13 @@ __all__ = [
     "add_hook",
     "add_meta",
     "add_namespace",
+    "add_ctx_declaration",
+    "add_secret_declaration",
     "change_file",
     "add_flake_cmd",
     "add_mypy_cmd",
     "replace_in_code",
-    "add_context",
+    "add_shell_context",
     "add_boot",
     "clean_output",
     "run",
@@ -33,6 +35,8 @@ __all__ = [
 
 DECLARE_NAMESPACES = "# Declare your command namespaces here"
 DECLARE_ENV_VARIABLES = "# Declare your env variables here"
+DECLARE_CTX = "# Declare your context here"
+DECLARE_SECRETS = "# Declare your secrets here"
 DEFINE_VARIABLES = "# Define your variables here"
 DEFINE_COMMANDS = "# Define your commands, hooks and properties here"
 
@@ -114,6 +118,34 @@ def add_env_declaration(code: str, file=Path("env_test.py")) -> None:
     )
 
 
+def add_ctx_declaration(code: str, file=Path("env_test.py")) -> None:
+    spaces = 4 * " "
+    code = textwrap.dedent(code)
+    replace_in_code(
+        f"{spaces}{DECLARE_CTX}",
+        f"""
+        {code}
+        {DECLARE_CTX}
+        """,
+        file=file,
+        indent=8,
+    )
+
+
+def add_secret_declaration(code: str, file=Path("env_test.py")) -> None:
+    spaces = 4 * " "
+    code = textwrap.dedent(code)
+    replace_in_code(
+        f"{spaces}{DECLARE_SECRETS}",
+        f"""
+        {code}
+        {DECLARE_SECRETS}
+        """,
+        file=file,
+        indent=8,
+    )
+
+
 def add_definition(code: str, file=Path("env_test.py")) -> None:
     spaces = 8 * " "
     code = textwrap.dedent(code)
@@ -185,13 +217,13 @@ def add_mypy_cmd(file=Path("env_test.py"), namespace=None, message="Mypy all goo
     )
 
 
-def add_context(
+def add_shell_context(
     context: Dict[str, Any],
     name: str = "some_context",
     namespace=None,
     file=Path("env_test.py"),
 ) -> None:
-    namespaced_context = f"{namespace}.context" if namespace else "context"
+    namespaced_context = f"{namespace}.shell_context" if namespace else "shell_context"
     context_str = json.dumps(context)
     add_command(
         f"""

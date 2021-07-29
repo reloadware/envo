@@ -35,6 +35,7 @@ from watchdog import events
 from watchdog.events import FileModifiedEvent
 
 from envo import logger
+from envo.context import Ctx, Secrets
 from envo.logs import Logger
 from envo.misc import Callback, EnvoError, FilesWatcher, import_env_from_file, import_from_file
 from envo.status import Status
@@ -42,7 +43,7 @@ from envo.status import Status
 __all__ = [
     "Env",
     "command",
-    "context",
+    "shell_context",
     "precmd",
     "postcmd",
     "onstdout",
@@ -374,7 +375,7 @@ if False:
 
 
 @dataclass
-class Context(MagicFunction):
+class ShellContext(MagicFunction):
     def call(self, *args, **kwargs) -> Dict[str, Any]:
         try:
             ret = self.func(*args, **kwargs)
@@ -385,10 +386,10 @@ class Context(MagicFunction):
         return ret
 
 
-class context(magic_function):  # noqa: N801
-    type: str = "context"
+class shell_context(magic_function):  # noqa: N801
+    type: str = "shell_context"
 
-    klass = Context
+    klass = ShellContext
 
     def __init__(self) -> None:
         super().__init__()
@@ -397,13 +398,13 @@ class context(magic_function):  # noqa: N801
 # Just to satistfy pycharm
 if False:
 
-    def context(func):
+    def shell_context(func):
         return MagicFunction()
 
 
 magic_functions = {
     "command": command,
-    "context": context,
+    "shell_context": shell_context,
     "boot_code": boot_code,
     "onload": onload,
     "onunload": onunload,
@@ -418,7 +419,7 @@ magic_functions = {
 
 class Namespace:
     command: Type[Callable]
-    context: Type[Callable]
+    shell_context: Type[Callable]
     boot_code: Type[Callable]
     onload: Type[Callable]
     onunload: Type[Callable]
@@ -591,8 +592,18 @@ class Env(BaseEnv):
         envo_stage: Optional[str] = var(raw=True)
         envo_name: Optional[str] = var(raw=True)
 
+    class Ctx(Ctx):
+        pass
+
+    class Secrets(Secrets):
+        pass
+
+    ctx: Ctx
+    secrets: Secrets
     magic_functions: Dict[str, Any]
     meta: Meta
+
+    env_id_to_secrets: ClassVar[Dict[str, Secrets]] = {}
 
     def __init__(self):
         self.meta = self.Meta()
@@ -612,7 +623,7 @@ class Env(BaseEnv):
             self.e.pythonpath = os.environ["PYTHONPATH"]
 
         self.magic_functions = {
-            "context": {},
+            "shell_context": {},
             "precmd": {},
             "onstdout": {},
             "onstderr": {},
@@ -627,8 +638,15 @@ class Env(BaseEnv):
         }
 
         self._collect_magic_functions()
+        self.ctx = self.Ctx(self.meta.name)
+
+        secrets = Env.env_id_to_secrets.get(self.id, self.Secrets(self.meta.name))
+        self.secrets = Env.env_id_to_secrets[self.id] = secrets
 
         self.init()
+
+        self.ctx._validate()
+        self.secrets._validate()
 
     @classmethod
     def instantiate(cls, stage: Optional[str] = None) -> "Env":
@@ -641,6 +659,10 @@ class Env(BaseEnv):
     def init(self) -> None:
         super().init()
         pass
+
+    @property
+    def id(self) -> str:
+        return f"{self.__class__.__module__}:{self.__class__.__name__}"
 
     def validate(self) -> None:
         """
@@ -865,7 +887,7 @@ class ShellEnv:
                 self._run_boot_codes()
             except BaseException as e:
                 # TODO: pass env code to exception to get relevant traceback?
-                self._li.status.context_ready = True
+                self._li.status.shell_context_ready = True
                 self._calls.on_error(e)
                 self._exit()
                 return
@@ -875,26 +897,26 @@ class ShellEnv:
                 self._li.shell.set_variable(name, c)
 
             # set context
-            self._li.shell.set_context(self._get_context())
+            self._li.shell.set_context(self._get_shell_context())
             while sw.value <= 0.5:
                 sleep(0.1)
 
             logger.debug("Finished load context thread")
-            self._li.status.context_ready = True
+            self._li.status.shell_context_ready = True
 
         if not self._se.blocking:
             Thread(target=thread, args=(self,)).start()
         else:
             thread(self)
 
-    def _get_context(self) -> Dict[str, Any]:
-        context = {}
-        for c in self.env.magic_functions["context"].values():
+    def _get_shell_context(self) -> Dict[str, Any]:
+        shell_context = {}
+        for c in self.env.magic_functions["shell_context"].values():
             for k, v in c().items():
                 namespaced_name = f"{c.namespace}.{k}" if c.namespace else k
-                context[namespaced_name] = v
+                shell_context[namespaced_name] = v
 
-        return context
+        return shell_context
 
     def on_shell_create(self) -> None:
         """

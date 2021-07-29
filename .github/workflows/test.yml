@@ -43,7 +43,7 @@ jobs:
         id: pip-cache
         with:
           path: ~/.cache/pip
-          key: pip-cache-21.0.1-1.1.7
+          key: pip-cache-21.0.1-None
           restore-keys: pip-cache-
       - uses: gerbal/always-cache@v1.0.3
         id: root-venv-cache
@@ -52,7 +52,7 @@ jobs:
           key: root-venv-${{ hashFiles('poetry.lock') }}
           restore-keys: root-venv-
       - run: pip install pip==21.0.1
-      - run: pip install poetry==1.1.7
+      - run: pip install poetry==None
       - run: poetry config virtualenvs.create true
       - run: poetry config virtualenvs.in-project true
       - run: poetry install
