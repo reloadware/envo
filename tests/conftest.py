@@ -2,8 +2,10 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 from pytest import fixture
+
 from tests import utils
 
 test_root = Path(os.path.realpath(__file__)).parent
@@ -12,7 +14,10 @@ envo_root = test_root.parent
 
 @fixture
 def sandbox(request) -> Path:
-    sandbox_dir = Path(request.module.__file__).parent / "sandbox"
+    name = f"sandbox_{uuid4()}"
+    cwd = os.getcwd()
+
+    sandbox_dir = Path(request.module.__file__).parent / name
 
     if sandbox_dir.exists():
         for f in sandbox_dir.glob("*"):
@@ -28,7 +33,11 @@ def sandbox(request) -> Path:
 
     os.chdir(str(sandbox_dir))
 
-    return sandbox_dir
+    yield sandbox_dir
+
+    shutil.rmtree(sandbox_dir)
+
+    os.chdir(cwd)
 
 
 @fixture

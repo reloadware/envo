@@ -231,7 +231,7 @@ class TestEnvVariables(utils.TestBase):
 
         e = shell.start()
         e.prompt().eval()
-        shell.sendline(f'env.e.test_var')
+        shell.sendline(f"env.e.test_var")
         e.output(r"'TestValue'\n")
         e.prompt().eval()
 

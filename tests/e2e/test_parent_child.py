@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from tests.e2e import utils
+from tests.e2e.utils import flaky
 
 
 class TestParentChild(utils.TestBase):
@@ -30,13 +31,16 @@ class TestParentChild(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    @flaky
     def test_hot_reload_parent(self, shell, init_child_env):
         utils.add_definition("self.attr = 'Cake'")
-        utils.add_command("""
+        utils.add_command(
+            """
         @command
         def get_attr(self):
             print(self.attr)
-        """)
+        """
+        )
 
         os.chdir("child")
 

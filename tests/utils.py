@@ -28,7 +28,7 @@ __all__ = [
     "add_boot",
     "clean_output",
     "run",
-    "RunError"
+    "RunError",
 ]
 
 DECLARE_NAMESPACES = "# Declare your command namespaces here"
@@ -57,6 +57,11 @@ def clean_output(output: str) -> str:
     return ret
 
 
+def fix_env_name(path: Path):
+    fixed_content = re.sub(r'"sandbox_.*?"', '"sandbox"', path.read_text())
+    path.write_text(fixed_content)
+
+
 def run(command: str, env: Optional[Dict[str, Any]] = None) -> str:
     kwargs = {}
     if env:
@@ -64,10 +69,10 @@ def run(command: str, env: Optional[Dict[str, Any]] = None) -> str:
 
     ret = subprocess.run(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, **kwargs)
 
+    fix_env_name(Path("env_comm.py"))
+
     if ret.returncode != 0:
-        raise RunError(stdout=ret.stdout.decode("utf-8"),
-                       stderr=ret.stderr.decode("utf-8"),
-                       return_code=ret.returncode)
+        raise RunError(stdout=ret.stdout.decode("utf-8"), stderr=ret.stderr.decode("utf-8"), return_code=ret.returncode)
 
     return ret.stdout.decode("utf-8")
 
@@ -153,9 +158,7 @@ def add_namespace(name: str, file=Path("env_test.py")) -> None:
     )
 
 
-def add_flake_cmd(
-    file=Path("env_test.py"), namespace=None, message="Flake all good"
-) -> None:
+def add_flake_cmd(file=Path("env_test.py"), namespace=None, message="Flake all good") -> None:
     namespaced_command = f"{namespace}.command" if namespace else "command"
 
     add_command(
@@ -169,9 +172,7 @@ def add_flake_cmd(
     )
 
 
-def add_mypy_cmd(
-    file=Path("env_test.py"), namespace=None, message="Mypy all good"
-) -> None:
+def add_mypy_cmd(file=Path("env_test.py"), namespace=None, message="Mypy all good") -> None:
     namespaced_command = f"{namespace}.command" if namespace else "command"
 
     add_command(
@@ -202,9 +203,7 @@ def add_context(
     )
 
 
-def add_boot(
-    boot_codes: List[str], name: str = "some_boot", file=Path("env_test.py")
-) -> None:
+def add_boot(boot_codes: List[str], name: str = "some_boot", file=Path("env_test.py")) -> None:
     lines = ",".join([f'"{c}"' for c in boot_codes])
 
     add_command(
@@ -230,7 +229,7 @@ def add_imports(code: str, file=Path("env_comm.py")) -> None:
     file.write_text(cleaned_code + file.read_text())
 
 
-def add_imports_in_envs_in_dir(directory = Path(".")) -> None:
+def add_imports_in_envs_in_dir(directory=Path(".")) -> None:
     for f in directory.glob("*"):
         if f.is_dir():
             add_imports_in_envs_in_dir(f)

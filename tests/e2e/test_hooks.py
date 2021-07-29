@@ -1,4 +1,5 @@
 from pytest import mark
+
 from tests import facade
 from tests.e2e import utils
 from tests.e2e.utils import PromptState
@@ -137,9 +138,7 @@ class TestHooks(utils.TestBase):
         if facade.is_linux():
             e.output(r" sweet pancake sweet\n sweet banana sweet\n").prompt().eval()
         if facade.is_windows():
-            e.output(
-                r" sweet pancake sweet\n sweet banana sweet\n sweet\n sweet "
-            ).prompt().eval()
+            e.output(r" sweet pancake sweet\n sweet banana sweet\n sweet\n sweet ").prompt().eval()
 
         shell.exit()
         e.exit().eval()
@@ -165,9 +164,7 @@ class TestHooks(utils.TestBase):
         e.prompt().eval()
 
         shell.sendline("print(1/0)")
-        e.output(
-            r"not good :/\nZeroDivisionError: division by zero\npost command test\n"
-        ).prompt().eval()
+        e.output(r"not good :/\nZeroDivisionError: division by zero\npost command test\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()

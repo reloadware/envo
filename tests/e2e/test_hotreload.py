@@ -3,19 +3,13 @@ import shutil
 from pathlib import Path
 from time import sleep
 
-from flaky import flaky
-
 import pytest
-
+from flaky import flaky
 from pytest import mark
 
 from tests import facade
-
 from tests.e2e import utils
-from tests.e2e.utils import PromptState
-
-
-flaky = flaky(max_runs=3, min_passes=1)
+from tests.e2e.utils import PromptState, flaky
 
 
 class TestHotReload(utils.TestBase):
@@ -159,13 +153,15 @@ class TestHotReload(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    @flaky
     def test_ignored_files(self, shell):
         e = shell.start()
         e.prompt(PromptState.MAYBE_LOADING).eval()
 
         Path("./test_dir").mkdir()
 
-        utils.add_meta('watch_files: List[str] = ["test_dir/**/*.py", "test_dir/*.py"]',
+        utils.add_meta(
+            'watch_files: List[str] = ["test_dir/**/*.py", "test_dir/*.py"]',
         )
         shell.envo.assert_reloaded(1)
 

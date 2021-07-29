@@ -9,7 +9,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Type
 
 import envo.e2e
 from envo import const, logger, logs, misc, shell
-from envo.env import ShellEnv, Env
+from envo.env import Env, ShellEnv
 from envo.misc import Callback, EnvoError, FilesWatcher, import_env_from_file
 from envo.shell import FancyShell, PromptBase, PromptState, Shell
 from envo.status import Status
@@ -227,14 +227,15 @@ class EmergencyMode(HeadlessMode):
         if self.li.previous_env:
             for w in self.li.previous_env.reloader.env_watchers:
                 self.extra_watchers.append(
-                FilesWatcher(
-                    FilesWatcher.Sets(
-                        root=w.root,
-                        include=["env_*.py"],
-                        exclude=[],
-                    ),
-                    calls=FilesWatcher.Callbacks(on_event=Callback(None)),
-                ))
+                    FilesWatcher(
+                        FilesWatcher.Sets(
+                            root=w.root,
+                            include=["env_*.py"],
+                            exclude=[],
+                        ),
+                        calls=FilesWatcher.Callbacks(on_event=Callback(None)),
+                    )
+                )
 
         # remove duplicates
         self.extra_watchers = list({obj.se.root: obj for obj in self.extra_watchers}.values())
@@ -298,9 +299,7 @@ class EnvoBase:
                     if stage:
                         matches[p] = stage
 
-                results = sorted(
-                    matches.items(), key=lambda x: x[1].priority, reverse=True
-                )
+                results = sorted(matches.items(), key=lambda x: x[1].priority, reverse=True)
                 if results:
                     return results[0][0]
 
@@ -360,9 +359,7 @@ class EnvoHeadless(EnvoBase):
                 msg="",
                 env_path=self.find_env(),
             ),
-            calls=HeadlessMode.Callbacks(
-                restart=Callback(self.restart), on_error=Callback(self.on_error)
-            ),
+            calls=HeadlessMode.Callbacks(restart=Callback(self.restart), on_error=Callback(self.on_error)),
             li=HeadlessMode.Links(shell=self.shell),
         )
         self.mode.init()
@@ -383,9 +380,7 @@ class EnvoHeadless(EnvoBase):
     def dry_run(self) -> None:
         self.shell = Shell.create(Shell.Callbacks(), data_dir_name=self.data_dir_name)
         self.init()
-        content = "\n".join(
-            [f'export {k}="{v}"' for k, v in self.mode.shell_env.env.get_env_vars().items()]
-        )
+        content = "\n".join([f'export {k}="{v}"' for k, v in self.mode.shell_env.env.get_env_vars().items()])
         print(content)
 
     def dump(self) -> None:
@@ -428,9 +423,7 @@ class Envo(EnvoBase):
                     env_path=self.find_env(),
                 ),
                 li=NormalMode.Links(shell=self.shell),
-                calls=NormalMode.Callbacks(
-                    restart=Callback(self.restart), on_error=Callback(self.on_error)
-                ),
+                calls=NormalMode.Callbacks(restart=Callback(self.restart), on_error=Callback(self.on_error)),
             )
             self.mode.init()
 
@@ -455,9 +448,7 @@ class Envo(EnvoBase):
                 env_path=self.find_env(),
             ),
             li=EmergencyMode.Links(shell=self.shell, previous_env=self.mode.shell_env),
-            calls=EmergencyMode.Callbacks(
-                restart=Callback(self.restart), on_error=Callback(None)
-            ),
+            calls=EmergencyMode.Callbacks(restart=Callback(self.restart), on_error=Callback(None)),
         )
 
         self.mode.init()
@@ -509,9 +500,7 @@ class EnvoCreator:
 
         env_dir = Path(".").absolute()
         package_name = misc.dir_name_to_pkg_name(env_dir.name)
-        class_name = (
-            f"{misc.dir_name_to_class_name(package_name)}{stage.capitalize()}Env"
-        )
+        class_name = f"{misc.dir_name_to_class_name(package_name)}{stage.capitalize()}Env"
 
         context = {
             "class_name": class_name,
@@ -519,7 +508,7 @@ class EnvoCreator:
             "stage": stage,
             "emoji": const.STAGES.get_stage_name_to_emoji().get(stage, "🙂"),
             "base_class": "ParentEnv" if parent else Env.__name__,
-            "this_env": const.THIS_ENV
+            "this_env": const.THIS_ENV,
         }
 
         if stage == "comm":
@@ -528,9 +517,7 @@ class EnvoCreator:
             context["parent_module"] = parent
             templ_file = Path("env.py.templ")
 
-        misc.render_py_file(
-            templates_dir / templ_file, output=output_file, context=context
-        )
+        misc.render_py_file(templates_dir / templ_file, output=output_file, context=context)
 
     def create(self) -> None:
         if not self.se.stage:

@@ -119,11 +119,7 @@ class Shell(BaseShell):  # type: ignore
 
         max_lenght = 50
         try:
-            log_value = (
-                str(value)
-                if len(str(value)) < max_lenght
-                else f"{str(value)[0:max_lenght]}(...)"
-            )
+            log_value = str(value) if len(str(value)) < max_lenght else f"{str(value)[0:max_lenght]}(...)"
             log_value = log_value.replace("{", "{{")
             log_value = log_value.replace("}", "}}")
         except Exception as e:
@@ -149,7 +145,9 @@ class Shell(BaseShell):  # type: ignore
             sys.argv = argv_before
 
     def add_namespace_if_not_exists(self, name: str) -> None:
-        exec(f'class Namespace: pass\n{name} = Namespace() if "{name}" not in globals() else {name}\n', builtins.__dict__)
+        exec(
+            f'class Namespace: pass\n{name} = Namespace() if "{name}" not in globals() else {name}\n', builtins.__dict__
+        )
 
     def set_context(self, context: Dict[str, Any]) -> None:
         for k, v in context.items():
@@ -164,6 +162,7 @@ class Shell(BaseShell):  # type: ignore
             return
 
         from xonsh.codecache import run_compiled_code
+
         run_compiled_code(c, self.ctx, None, "single")
 
     def run_code(self, code: str) -> None:
@@ -306,9 +305,7 @@ class Shell(BaseShell):  # type: ignore
                 sys.stderr.write = orig_std_err_write
 
             if self.calls.post_cmd:
-                self.calls.post_cmd(
-                    command=line, stdout=std_out_content, stderr=std_err_content
-                )
+                self.calls.post_cmd(command=line, stdout=std_out_content, stderr=std_err_content)
 
             self.cmd_lock.release()
 

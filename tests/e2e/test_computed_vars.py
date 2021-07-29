@@ -5,11 +5,12 @@ from tests.e2e.utils import PromptState
 class TestComputedVars(utils.TestBase):
     def test_basic_with_declaration(self, shell):
         utils.add_env_declaration(
-        """
+            """
         def compute(self) -> int:
             return 10
         computed: int = computed_var(fget=compute)
-        """)
+        """
+        )
 
         e = shell.start()
         e.prompt().eval()
@@ -23,13 +24,14 @@ class TestComputedVars(utils.TestBase):
 
     def test_basic_setter(self, shell):
         utils.add_env_declaration(
-        """
+            """
         def compute(self) -> int:
             return 10
         def compute_set(self, value) -> int:
             self.computed = value * 2
         computed: int = computed_var(fget=compute, fset=compute_set)
-        """)
+        """
+        )
 
         e = shell.start()
         e.prompt().eval()
@@ -42,13 +44,15 @@ class TestComputedVars(utils.TestBase):
         e.exit().eval()
 
     def test_error_in_property(self, shell):
-        utils.add_env_declaration("""
+        utils.add_env_declaration(
+            """
         def compute(self) -> int:
             return 1 / 0
         def compute_set(self, value) -> int:
             self.computed = value * 2
         computed: int = computed_var(fget=compute)
-        """)
+        """
+        )
 
         e = shell.start()
         e.output(r".*ZeroDivisionError.*")

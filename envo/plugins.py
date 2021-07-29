@@ -5,19 +5,19 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 import envo
-from envo import Env, Namespace, logger, Env
+from envo import Env, Namespace, logger
 
 __all__ = [
     "Plugin",
     "VirtualEnv",
 ]
 
-from envo.env import BaseEnv
-
-from envo.logs import Logger
-from envo.misc import is_windows
 import envium
 from envium import var
+
+from envo.env import BaseEnv
+from envo.logs import Logger
+from envo.misc import is_windows
 
 
 class Plugin(BaseEnv):
@@ -154,6 +154,7 @@ class VirtualEnv(Plugin):
     """
     Env that activates virtual environment.
     """
+
     class Environ(envium.Environ):
         path: str = var(raw=True)
 

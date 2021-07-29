@@ -18,9 +18,7 @@ class TestActivating:
         result = utils.run("envo init")
         assert "Created comm environment" in result
 
-    def assert_healthy_and_correct_files_in_dir(
-        self, dir: Path, files_n: int = 2, stage: str = "comm"
-    ) -> None:
+    def assert_healthy_and_correct_files_in_dir(self, dir: Path, files_n: int = 2, stage: str = "comm") -> None:
         self.shell.start()
 
         e = self.shell.expecter
