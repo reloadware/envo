@@ -4,14 +4,14 @@ from time import sleep
 from tests.e2e import utils
 
 
-class TestContext(utils.TestBase):
+class TestShellContext(utils.TestBase):
     def test_simple_context(self, shell):
         context = {
             "str_var": "str test value",
             "int_var": 8,
             "dict_var": {"nested_var": "some nested value"},
         }
-        utils.add_context(context)
+        utils.add_shell_context(context)
         e = shell.start()
 
         e.prompt().eval()
@@ -33,13 +33,13 @@ class TestContext(utils.TestBase):
             "str_var1": "str test1 value",
             "int_var1": 8,
         }
-        utils.add_context(context1, name="context1")
+        utils.add_shell_context(context1, name="context1")
 
         context2 = {
             "str_var2": "str test2 value",
             "int_var2": 28,
         }
-        utils.add_context(context2, name="context2")
+        utils.add_shell_context(context2, name="context2")
 
         e = shell.start()
 
@@ -66,14 +66,14 @@ class TestContext(utils.TestBase):
             "int_var1": 8,
             "other_var": "other var value",
         }
-        utils.add_context(context1, name="context1")
+        utils.add_shell_context(context1, name="context1")
 
         context2 = {
             "str_var2": "str test2 value",
             "str_var1": "str test1 new value",
             "int_var2": 28,
         }
-        utils.add_context(context2, name="context2", file=Path("env_test.py"))
+        utils.add_shell_context(context2, name="context2", file=Path("env_test.py"))
         e = shell.start()
 
         e.prompt().eval()
@@ -99,7 +99,7 @@ class TestContext(utils.TestBase):
     def test_slow_context(self, shell):
         utils.add_command(
             """
-            @context
+            @shell_context
             def some_context(self) -> Dict[str, Any]:
                 from time import sleep
                 sleep(4.0)
@@ -127,7 +127,7 @@ class TestContext(utils.TestBase):
     def test_error_in_context(self, shell):
         utils.add_command(
             """
-            @context
+            @shell_context
             def some_context(self) -> Dict[str, Any]:
                 return {"var": 1/0}
             """
