@@ -647,6 +647,12 @@ class Env(BaseEnv):
         self.ctx._validate()
         self.secrets._validate()
 
+        for c in self.__class__.__mro__:
+            if not issubclass(c, Env):
+                continue
+
+            getattr(c, "post_init")(self)
+
     @classmethod
     def instantiate(cls, stage: Optional[str] = None) -> "Env":
         if not stage:
@@ -657,6 +663,9 @@ class Env(BaseEnv):
 
     def init(self) -> None:
         super().init()
+        pass
+
+    def post_init(self) -> None:
         pass
 
     @property

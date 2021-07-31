@@ -2,11 +2,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import envo
-from envo import (
-    Namespace,
-    logger,
-    run,
-)
+from envo import Namespace, logger, run
 
 # Declare your command namespaces here
 # like this:

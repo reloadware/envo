@@ -90,3 +90,24 @@ class TestParentChild(utils.TestBase):
 
         shell.exit()
         e.exit().eval()
+
+    @flaky
+    def test_post_init(self, shell, init_child_env):
+        utils.add_ctx_declaration("var = ctx_var()")
+        utils.add_definition("self.ctx.var = 'Cake'")
+
+        os.chdir("child")
+
+        utils.add_method(
+            """
+        def post_init(self):
+            print(self.ctx.var)
+        """
+        )
+
+        e = shell.start()
+        e.output(r"Cake\n")
+        e.prompt(name=r"child").eval()
+
+        shell.exit()
+        e.exit().eval()
