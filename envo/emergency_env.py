@@ -1,30 +1,11 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
+from typing import Any, Dict, List, Optional, Tuple
 
-import envo  # noqa: F401
-from envo import (  # noqa: F401
-    Env,
-    Plugin,
-    VirtualEnv,
-    boot_code,
-    command,
-    const,
-    context,
-    logger,
-    oncreate,
-    ondestroy,
-    onload,
-    onstderr,
-    onstdout,
-    onunload,
-    postcmd,
-    precmd,
-    run,
-)
+from envo import Env, Plugin, const
 
 
-class EmergencyEnv(Env):  # type: ignore
-    class Meta(Env.Meta):  # type: ignore
+class EmergencyEnv(Env):
+    class Meta(Env.Meta):
         root = Path(__file__).parent.absolute()
         stage: str = "emergency"
         emoji: str = const.emojis["emergency"]

@@ -13,7 +13,7 @@ __all__ = [
 ]
 
 import envium
-from envium import var
+from envium import env_var
 
 from envo.env import BaseEnv
 from envo.logs import Logger
@@ -156,7 +156,7 @@ class VirtualEnv(Plugin):
     """
 
     class Environ(envium.Environ):
-        path: str = var(raw=True)
+        path: str = env_var(raw=True)
 
     e: Environ
 

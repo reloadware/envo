@@ -29,13 +29,12 @@ from typing import (
 )
 
 import envium
-from envium import VarGroup, computed_var, var
+from envium import computed_env_var, env_var
 from rhei import Stopwatch
 from watchdog import events
 from watchdog.events import FileModifiedEvent
 
 from envo import logger
-from envo.context import Ctx, Secrets
 from envo.logs import Logger
 from envo.misc import Callback, EnvoError, FilesWatcher, import_env_from_file, import_from_file
 from envo.status import Status
@@ -585,17 +584,17 @@ class Env(BaseEnv):
 
             self.pythonpath._value = value
 
-        pythonpath: Optional[str] = computed_var(raw=True, fget=pythonpath_get, fset=pythonpath_set)
-        root: Optional[Path] = var()
-        path: Optional[str] = var(raw=True)
-        stage: Optional[str] = var()
-        envo_stage: Optional[str] = var(raw=True)
-        envo_name: Optional[str] = var(raw=True)
+        pythonpath: Optional[str] = computed_env_var(raw=True, fget=pythonpath_get, fset=pythonpath_set)
+        root: Optional[Path] = env_var()
+        path: Optional[str] = env_var(raw=True)
+        stage: Optional[str] = env_var()
+        envo_stage: Optional[str] = env_var(raw=True)
+        envo_name: Optional[str] = env_var(raw=True)
 
-    class Ctx(Ctx):
+    class Ctx(envium.Ctx):
         pass
 
-    class Secrets(Secrets):
+    class Secrets(envium.Secrets):
         pass
 
     ctx: Ctx

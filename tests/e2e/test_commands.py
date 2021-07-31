@@ -166,7 +166,7 @@ class TestCommands(utils.TestBase):
         assert res == "Flake all good\nFlake return value\n"
 
     def test_env_variables_available_in_run(self, shell):
-        utils.add_env_declaration("test_var: str = var(raw=True)")
+        utils.add_env_declaration("test_var: str = env_var(raw=True)")
         utils.add_definition('self.e.test_var = "test_value"')
         if facade.is_linux():
             utils.add_command(

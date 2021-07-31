@@ -8,7 +8,7 @@ class TestComputedVars(utils.TestBase):
             """
         def compute(self) -> int:
             return 10
-        computed: int = computed_var(fget=compute)
+        computed: int = computed_env_var(fget=compute)
         """
         )
 
@@ -29,7 +29,7 @@ class TestComputedVars(utils.TestBase):
             return 10
         def compute_set(self, value) -> int:
             self.computed = value * 2
-        computed: int = computed_var(fget=compute, fset=compute_set)
+        computed: int = computed_env_var(fget=compute, fset=compute_set)
         """
         )
 
@@ -50,7 +50,7 @@ class TestComputedVars(utils.TestBase):
             return 1 / 0
         def compute_set(self, value) -> int:
             self.computed = value * 2
-        computed: int = computed_var(fget=compute)
+        computed: int = computed_env_var(fget=compute)
         """
         )
 

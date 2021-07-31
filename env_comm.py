@@ -10,9 +10,9 @@ from envo import (
     VirtualEnv,
     boot_code,
     ctx_var,
+    env_var,
     run,
-    secret_var,
-    var,
+    secret,
 )
 
 root = Path(__file__).parent.absolute()
@@ -49,7 +49,7 @@ class EnvoCommEnv(Env, VirtualEnv):
 
     @p.command
     def clean(self):
-        run("rm **/*/sandbox -rf")
+        run("rm **/*/sandbox_* -rf")
         run(f"rm **/*.pyi -f")
         run(f"rm **/.pytest_cache -fr")
         run(f"rm **/*.egg-info -fr")

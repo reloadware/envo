@@ -1,24 +1,10 @@
-import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
+from typing import Any, Dict, List, Optional, Tuple
 
-import envo  # noqa: F401
-from envo import (  # noqa: F401
+import envo
+from envo import (
     Namespace,
-    Plugin,
-    VirtualEnv,
-    boot_code,
-    command,
-    context,
     logger,
-    oncreate,
-    ondestroy,
-    onload,
-    onstderr,
-    onstdout,
-    onunload,
-    postcmd,
-    precmd,
     run,
 )
 
@@ -30,8 +16,8 @@ p = Namespace("p")
 from env_comm import ThisEnv as ParentEnv
 
 
-class EnvoCiEnv(ParentEnv):  # type: ignore
-    class Meta(ParentEnv.Meta):  # type: ignore
+class EnvoCiEnv(ParentEnv):
+    class Meta(ParentEnv.Meta):
         root: str = Path(__file__).parent.absolute()
         stage: str = "ci"
         emoji: str = "🧪"
