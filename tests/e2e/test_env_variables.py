@@ -10,9 +10,9 @@ class TestEnvVariables(utils.TestBase):
     def test_nested(self, shell):
         utils.add_env_declaration(
             """
-            class Python(VarGroup):
-                version: str = var()
-                name: str = var()
+            class Python(EnvGroup):
+                version: str = env_var()
+                name: str = env_var()
 
             python = Python()
             """
@@ -40,9 +40,9 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_nested(self, shell):
         utils.add_env_declaration(
             """
-            class Python(VarGroup):
-                version: str = var()
-                name: str = var()
+            class Python(EnvGroup):
+                version: str = env_var()
+                name: str = env_var()
 
             python = Python(raw=True)
             """
@@ -70,13 +70,13 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_double_nested(self, shell):
         utils.add_env_declaration(
             """
-            class Python(VarGroup):
-                class Version(VarGroup):
-                    major: str = var()
-                    minor: str = var()
+            class Python(EnvGroup):
+                class Version(EnvGroup):
+                    major: str = env_var()
+                    minor: str = env_var()
 
                 version = Version()
-                name: str = var()
+                name: str = env_var()
 
             python = Python(raw=True)
             """
@@ -104,7 +104,7 @@ class TestEnvVariables(utils.TestBase):
         e.exit().eval()
 
     def test_validate_non_optional_var_not_set(self, shell):
-        utils.add_env_declaration("test_var: int = var()")
+        utils.add_env_declaration("test_var: int = env_var()")
 
         e = shell.start()
 
@@ -115,7 +115,7 @@ class TestEnvVariables(utils.TestBase):
         e.exit().eval()
 
     def test_optional(self, shell):
-        utils.add_env_declaration("test_var: Optional[int] = var()")
+        utils.add_env_declaration("test_var: Optional[int] = env_var()")
 
         e = shell.start()
 
@@ -128,7 +128,7 @@ class TestEnvVariables(utils.TestBase):
         e.exit().eval()
 
     def test_no_type(self, shell):
-        utils.add_env_declaration("test_var = var()")
+        utils.add_env_declaration("test_var = env_var()")
 
         e = shell.start()
 
@@ -141,8 +141,8 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_in_nested(self, shell):
         utils.add_env_declaration(
             """
-            class Python(VarGroup):
-                version: str = var(raw=True)
+            class Python(EnvGroup):
+                version: str = env_var(raw=True)
 
             python: Python = Python()
             """
@@ -164,14 +164,14 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_in_double_nested(self, shell):
         utils.add_env_declaration(
             """
-            class Python(VarGroup):
-                class Version(VarGroup):
-                    major: Optional[str] = var()
-                    minor: Optional[str] = var()
-                    raw_var: str = var(raw=True)
+            class Python(EnvGroup):
+                class Version(EnvGroup):
+                    major: Optional[str] = env_var()
+                    minor: Optional[str] = env_var()
+                    raw_var: str = env_var(raw=True)
 
                 version = Version()
-                name: Optional[str] = var()
+                name: Optional[str] = env_var()
 
             python = Python()
             """
@@ -193,11 +193,11 @@ class TestEnvVariables(utils.TestBase):
     def test_raw_nested_redefined(self, shell):
         utils.add_env_declaration(
             """
-            class Python(VarGroup):
-                version: str = var(raw=True)
+            class Python(EnvGroup):
+                version: str = env_var(raw=True)
 
-            class Javascript(VarGroup):
-                version: str = var(raw=True)
+            class Javascript(EnvGroup):
+                version: str = env_var(raw=True)
 
             python = Python()
             javascript = Javascript()
@@ -223,7 +223,7 @@ class TestEnvVariables(utils.TestBase):
 
         utils.add_env_declaration(
             """
-            test_var: str = var() 
+            test_var: str = env_var() 
             """
         )
 

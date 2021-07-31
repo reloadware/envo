@@ -8,7 +8,7 @@ from tests.e2e.utils import PromptState
 
 class TestSecret(utils.TestBase):
     def test_basic(self, shell):
-        utils.add_secret_declaration("cake: str = secret_var()")
+        utils.add_secret_declaration("cake: str = secret()")
         utils.add_command(
             """
         @command

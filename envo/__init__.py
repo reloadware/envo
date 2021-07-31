@@ -23,5 +23,14 @@ from envo.devops import *
 from envo.env import *
 from envo.plugins import *
 from envo.misc import EnvoError, import_from_file, add_source_roots
-from envium import var, computed_var, VarGroup
-from envo.context import *
+from envium import (
+    env_var,
+    ctx_var,
+    computed_env_var,
+    computed_secret,
+    computed_ctx_var,
+    EnvGroup,
+    CtxGroup,
+    SecretsGroup,
+    secret,
+)
