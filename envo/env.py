@@ -647,7 +647,7 @@ class Env(BaseEnv):
         self.ctx._validate()
         self.secrets._validate()
 
-        for c in self.__class__.__mro__:
+        for c in reversed(self.__class__.__mro__):
             if not issubclass(c, Env):
                 continue
 
