@@ -26,6 +26,17 @@ jobs:
       - run: pip install black=={{ black_ver }}
       - run: black --check .
 
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python_version: {{ python_versions }}
+    steps:
+      {{- bootstrap_code | indent(6, True) }}
+      - name: test
+        run: poetry run envo ci run p.unit_test
+
   publish:
   {%- raw %}
     env:
@@ -33,7 +44,7 @@ jobs:
       PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
   {%- endraw %}
     runs-on: ubuntu-latest
-    needs: [check-black]
+    needs: [test, check-black]
     if: github.ref == 'refs/heads/master'
     steps:
       {{- bootstrap_code | indent(6, True) }}

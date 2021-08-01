@@ -38,6 +38,10 @@ class EnvoCiEnv(ParentEnv):
         run("pytest tests -v -n auto")
 
     @p.command
+    def unit_test(self) -> None:
+        run("pytest tests/unit -v")
+
+    @p.command
     def build(self) -> None:
         run("poetry build")
 

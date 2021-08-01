@@ -1,7 +1,7 @@
 import pytest
 from pytest import raises
 
-from envo import run
+from tests.facade import run, run_get
 from envo.misc import is_linux, is_windows
 
 
@@ -11,36 +11,35 @@ class TestLinuxRun:
     def setup(self, sandbox):
         pass
 
-    def test_print_output_false(self, capsys):
-        run('echo "test"', print_output=True, raise_on_error=False, verbose=False)
-        assert capsys.readouterr().out == ""
-        assert capsys.readouterr().err == ""
+    def test_print_output_false(self, capfd):
+        run('echo "test"', print_output=False, raise_on_error=False, verbose=False)
+        read = capfd.readouterr()
+        assert read.out == ""
+        assert read.err == ""
 
-    def test_run_simple_echo_print(self, capsys):
-        result = run("python -c \"print('hihi')\"", print_output=True)
-        # assert capsys.readouterr().err == ""
-        assert capsys.readouterr().out == "test\n"
-        assert result == ["test\n"]
+    def test_run_simple_echo_print(self, capfd):
+        run('echo "test"', print_output=True, verbose=False)
+        read = capfd.readouterr()
+        assert read.err == ""
+        assert read.out == "test\n"
 
-    def test_print_error_false(self, capsys):
+    def test_print_error_false(self, capfd):
         with raises(SystemExit):
-            run('echo "test" && sth', print_errors=False)
-        assert capsys.readouterr().out == "test\n"
-        assert capsys.readouterr().err == ""
+            run('echo "test" && sth', print_errors=False, verbose=False)
+        assert capfd.readouterr().out == "test\n"
+        assert capfd.readouterr().err == ""
 
-    def test_run_multiple_results(self, capsys):
-        result = run(
+    def test_run_multiple_results(self, capfd):
+        result = run_get(
             """
         export VAR1=123
         echo "test"
         echo "test$VAR1"
         """
         )
-        assert result == ["test\ntest123\n"]
+        assert result.stdout == "test\ntest123\n"
 
-        assert capsys.readouterr().out == "test\ntest123\n"
-
-    def test_exceptions(self, capsys):
+    def test_exceptions(self, capfd):
         with pytest.raises(SystemExit) as e:
             run(
                 """
@@ -50,13 +49,13 @@ class TestLinuxRun:
                 """
             )
 
-        out, err = capsys.readouterr()
+        out, err = capfd.readouterr()
 
         assert "missing_command: command not found\n" in err
         assert e.value.code == 127
 
     def test_multine_command(self):
-        result = run(
+        result = run_get(
             """
             export VAR1=123
             echo "test \\
@@ -65,12 +64,10 @@ class TestLinuxRun:
              $VAR1"
             """
         )
-        assert result == ["test blabla\ntest123\n"]
+        assert result.stdout == "test blabla\ntest123\n"
 
     def test_ignore_errors(self):
-        result = run("""non_existend_command""", ignore_errors=True)
-        assert "non_existend_command: command not found" in result[0]
-        assert len(result) == 1
+        run("""non_existend_command""", raise_on_error=False)
 
     def test_pipefail(self):
         with pytest.raises(SystemExit) as e:
@@ -85,17 +82,17 @@ class TestWindowsRun:
     def setup(self, sandbox):
         pass
 
-    def test_run_simple_echo(self, capsys):
+    def test_run_simple_echo(self, capfd):
         result = run('echo "test"', print_output=False)
         assert result == '\\"test\\"\r\n'
-        assert capsys.readouterr().out == ""
+        assert capfd.readouterr().out == ""
 
-    def test_run_simple_echo_print(self, capsys):
+    def test_run_simple_echo_print(self, capfd):
         result = run('echo "test"', print_output=True)
-        assert capsys.readouterr().out == '\\"test\\"\r\n'
+        assert capfd.readouterr().out == '\\"test\\"\r\n'
         assert result == '\\"test\\"\r\n'
 
-    def test_run_multiple_results(self, capsys):
+    def test_run_multiple_results(self, capfd):
         result = run(
             """
             ECHO "test"
@@ -103,13 +100,13 @@ class TestWindowsRun:
         """
         )
         assert result == '\\"test\\" \r\n\\"test2\\"\r\n'
-        assert capsys.readouterr().out == '\\"test\\" \r\n\\"test2\\"\r\n'
+        assert capfd.readouterr().out == '\\"test\\" \r\n\\"test2\\"\r\n'
 
-    def test_exceptions(self, capsys):
+    def test_exceptions(self, capfd):
         with pytest.raises(SystemExit) as e:
             run("missing_command")
 
-        out, err = capsys.readouterr()
+        out, err = capfd.readouterr()
 
         assert "'missing_command' is not recognized" in out
         assert e.value.code == 1

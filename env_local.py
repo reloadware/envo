@@ -118,7 +118,7 @@ class EnvoLocalEnv(ParentEnv):
 
         ctx = {
             "black_ver": self.black_ver,
-            "python_versions": [3.6, 3.7, 3.8, 3.9],
+            "python_versions": [v for v in self.python_versions.keys()],
             "bootstrap_code": bootstrap_code,
         }
 

@@ -399,9 +399,11 @@ def add_source_roots(paths: List[Union[Path, str]]) -> None:
 
 
 def get_repo_root() -> Path:
-    path = Path(__file__).parent
+    path = Path(".").absolute()
 
     while not list(path.glob("*.git")):
+        if path == path.parent:
+            raise RuntimeError("Can't find repo root (missing .git directory?)")
         path = path.parent
 
     return path
