@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.facade import get_repo_root
 from tests.unit import utils
 
 
@@ -11,7 +12,7 @@ class TestMisc(utils.TestBase):
         assert Path("env_comm.py").exists()
         assert Path("env_test.py").exists()
 
-        utils.flake8()
+        # utils.flake8()
         # utils.mypy()
 
     @pytest.mark.parametrize("dir_name", ["my-sandbox", "my sandbox", ".sandbox", ".san.d- b  ox"])
@@ -25,7 +26,7 @@ class TestMisc(utils.TestBase):
         assert Path("env_test.py").exists()
         utils.command("test")
 
-        utils.flake8()
+        # utils.flake8()
 
     def test_version(self, capsys):
         utils.command("version")
@@ -38,3 +39,7 @@ class TestMisc(utils.TestBase):
         Path("sandbox").mkdir()
         Path("sandbox/__init__.py").touch()
         utils.command("test")
+
+    def test_get_repo_root(self):
+        assert str(get_repo_root()).endswith("/envo")
+        assert get_repo_root().glob(".git")

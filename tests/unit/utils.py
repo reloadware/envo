@@ -8,7 +8,6 @@ import pytest
 
 from envo import Env
 from tests.utils import add_command  # noqa F401
-from tests.utils import add_declaration  # noqa F401
 from tests.utils import add_definition  # noqa F401
 from tests.utils import add_flake_cmd  # noqa F401
 from tests.utils import add_imports  # noqa F401

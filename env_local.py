@@ -172,5 +172,9 @@ class EnvoLocalEnv(ParentEnv):
         inject("git commit --amend --no-edit")
         inject("git push -f")
 
+    @p.command
+    def test_echo(self) -> None:
+        run('echo "test"', verbose=False)
+
 
 ThisEnv = EnvoLocalEnv

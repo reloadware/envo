@@ -17,7 +17,8 @@ class TestLinuxRun:
         assert capsys.readouterr().err == ""
 
     def test_run_simple_echo_print(self, capsys):
-        result = run('echo "test"', print_output=True)
+        result = run("python -c \"print('hihi')\"", print_output=True)
+        # assert capsys.readouterr().err == ""
         assert capsys.readouterr().out == "test\n"
         assert result == ["test\n"]
 

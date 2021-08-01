@@ -396,3 +396,12 @@ def is_windows():
 def add_source_roots(paths: List[Union[Path, str]]) -> None:
     for p in paths:
         sys.path.insert(0, str(p))
+
+
+def get_repo_root() -> Path:
+    path = Path(__file__).parent
+
+    while not list(path.glob("*.git")):
+        path = path.parent
+
+    return path
