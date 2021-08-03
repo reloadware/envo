@@ -173,8 +173,8 @@ class EnvoLocalEnv(ParentEnv):
         inject("git push -f")
 
     @p.command
-    def test_echo(self) -> None:
-        run('echo "test"', verbose=False)
+    def test_debug(self) -> None:
+        run("llfdsfasfsfdsfadfsafa")
 
 
 ThisEnv = EnvoLocalEnv

@@ -1,8 +1,10 @@
+import os
+
 import pytest
 from pytest import raises
 
-from tests.facade import run, run_get
 from envo.misc import is_linux, is_windows
+from tests.facade import run, run_get
 
 
 @pytest.mark.skipif(not is_linux(), reason="Platform specific")
@@ -22,6 +24,13 @@ class TestLinuxRun:
         read = capfd.readouterr()
         assert read.err == ""
         assert read.out == "test\n"
+
+    def test_with_debug(self, capfd, env_sandbox):
+        os.environ["ENVO_DEBUG"] = "True"
+        run('echo "test"', print_output=True, verbose=False)
+        read = capfd.readouterr()
+        assert read.err == ""
+        assert read.out == '\x1b[34m\x1b[1mecho "test"\x1b[0m\ntest\n'
 
     def test_print_error_false(self, capfd):
         with raises(SystemExit):

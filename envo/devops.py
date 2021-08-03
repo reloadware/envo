@@ -10,7 +10,9 @@ from dataclasses import dataclass
 from textwrap import dedent
 from typing import List, Optional, Union
 
-from envo import console
+from colorama import Fore, Style
+
+from envo import console, logger
 from envo.misc import is_linux, is_windows
 
 
@@ -61,14 +63,19 @@ def _run(
     background=False,
 ) -> Optional[str]:
 
+    debug = os.environ.get("ENVO_DEBUG", False)
+
     if verbose is None:
         verbose = os.environ.get("ENVO_VERBOSE_RUN", False)
 
     popen_cmd = _get_popen_cmd(command)
 
+    dedent_cmd = dedent(command.strip())
     if verbose:
-        dedent_cmd = dedent(command.strip())
         console.rule(f"[bold rgb(225,221,0)]{dedent_cmd}", align="center", style="rgb(255,0,255)")
+
+    if debug:
+        print(f"{Fore.BLUE}{Style.BRIGHT}{dedent_cmd}{Style.RESET_ALL}")
 
     kwargs = {}
     if not print_output:

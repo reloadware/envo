@@ -2,25 +2,21 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import envo
-from envo import Namespace, logger, run
 
-# Declare your command namespaces here
-# like this:
-p = Namespace("p")
-
+root = Path(__file__).parent.absolute()
+envo.add_source_roots([root])
 
 from env_comm import ThisEnv as ParentEnv
+from envo import Namespace, logger, run
+
+p = Namespace("p")
 
 
 class EnvoCiEnv(ParentEnv):
     class Meta(ParentEnv.Meta):
-        root: str = Path(__file__).parent.absolute()
+        root: str = root
         stage: str = "ci"
         emoji: str = "🧪"
-        name: str = "env"
-        version: str = "0.1.0"
-        watch_files: List[str] = []
-        ignore_files: List[str] = []
         verbose_run = True
 
     class Environ(ParentEnv.Environ):
