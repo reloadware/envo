@@ -75,7 +75,7 @@ def _run(
         console.rule(f"[bold rgb(225,221,0)]{dedent_cmd}", align="center", style="rgb(255,0,255)")
 
     if debug:
-        print(f"{Fore.BLUE}{Style.BRIGHT}{dedent_cmd}{Style.RESET_ALL}")
+        print(f"Run: {Fore.BLUE}{Style.BRIGHT}{dedent_cmd}{Style.RESET_ALL}")
 
     kwargs = {}
     if not print_output:

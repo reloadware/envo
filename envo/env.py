@@ -704,9 +704,10 @@ class Env(BaseEnv):
 
         return ret
 
-    def get_env(self, directory: Union[Path, str]) -> "Env":
+    def get_env(self, directory: Union[Path, str], stage: Optional[str] = None) -> "Env":
+        stage = stage or self.meta.stage
         directory = Path(directory)
-        env_file = directory / f"env_{self.meta.stage}.py"
+        env_file = directory / f"env_{stage}.py"
 
         if not env_file.exists():
             logger.traceback()

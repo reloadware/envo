@@ -30,7 +30,7 @@ class TestLinuxRun:
         run('echo "test"', print_output=True, verbose=False)
         read = capfd.readouterr()
         assert read.err == ""
-        assert read.out == '\x1b[34m\x1b[1mecho "test"\x1b[0m\ntest\n'
+        assert read.out == 'Run: \x1b[34m\x1b[1mecho "test"\x1b[0m\ntest\n'
 
     def test_print_error_false(self, capfd):
         with raises(SystemExit):
