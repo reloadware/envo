@@ -33,7 +33,7 @@ class EnvoCommEnv(Env, VirtualEnv):
     class Environ(Env.Environ, VirtualEnv.Environ):
         ...
 
-    class Ctx(Env.Ctx):
+    class Ctx(Env.Ctx, VirtualEnv.Ctx):
         pip_ver: str = ctx_var(default="21.0.1")
         poetry_ver: str = ctx_var(default="1.1.7")
 

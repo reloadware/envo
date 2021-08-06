@@ -93,15 +93,14 @@ class TestParentChild(utils.TestBase):
 
     @flaky
     def test_post_init(self, shell, init_child_env):
-        utils.add_ctx_declaration("var = ctx_var()")
-        utils.add_definition("self.ctx.var = 'Cake'")
+        utils.add_definition("self.var = 'Cake'")
 
         os.chdir("child")
 
         utils.add_method(
             """
         def post_init(self):
-            print(self.ctx.var)
+            print(self.var)
         """
         )
 

@@ -17,6 +17,6 @@ class TestVenvUtils(utils.TestBase):
 
         assert not re.match(activated_python_bin_path_re, python_bin_path)
 
-        with venv_utils.venv(".venv"):
+        with venv_utils.Venv(path=".venv"):
             activated_python_bin_path = run_get("which python").stdout
             assert re.match(activated_python_bin_path_re, activated_python_bin_path)

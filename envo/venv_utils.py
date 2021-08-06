@@ -1,7 +1,7 @@
 import os
 import sys
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Union
 
@@ -60,74 +60,80 @@ class VenvPath:
         return ret
 
 
+@dataclass
 class BaseVenv:
-    venv_path: VenvPath
+    venv_path: VenvPath = field(init=False)
 
-    def __init__(self, root: Path, venv_dir_name: str) -> None:
-        self.root = root
-        self.venv_dir_name = venv_dir_name
+    class Environ(envium.Environ):
+        path: str = env_var(raw=True)
+
+    def __post_init__(self) -> None:
         self._path_delimiter = ";" if is_windows() else ":"
+
+        self.e = self.Environ(name="envo", load=True)
 
     def _get_path(self):
         path = f"""{str(self.venv_path.bin_path)}"""
         return path
 
-    def activate(self, e: Env.Environ) -> None:
-        e.path = f"""{self._get_path()}{self._path_delimiter}{e.path}"""
+    def activate(self, e: Optional[Env.Environ] = None) -> None:
+        environ = e or self.e
 
-    def deactivate(self, e: Env.Environ) -> None:
-        if self._get_path() in e.path:
-            e.path = e.path.replace(self._get_path() + self._path_delimiter, "")
+        path = self._get_path()
+
+        if path not in environ.path.split(self._path_delimiter):
+            environ.path = f"""{path}{self._path_delimiter}{environ.path}"""
+
+        if not e:
+            self.e.save_to_os_environ()
+
+    def deactivate(self, e: Optional[Env.Environ] = None) -> None:
+        environ = e or self.e
+        if self._get_path() in environ.path:
+            environ.path = environ.path.replace(self._get_path() + self._path_delimiter, "")
+
+        if not e:
+            self.e.save_to_os_environ()
+
+    def __enter__(self) -> None:
+        self.activate()
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.deactivate()
 
 
+@dataclass
 class PredictedVenv(BaseVenv):
-    def __init__(self, root: Path, venv_name: str) -> None:
-        super().__init__(root, venv_name)
+    root: Path
+    venv_name: str
 
-        self.venv_path = VenvPath(root_path=root, venv_name=venv_name)
+    def __post_init__(self) -> None:
+        super().__post_init__()
 
-    def activate(self, e: Env.Environ) -> None:
+        self.venv_path = VenvPath(root_path=self.root, venv_name=self.venv_name)
+
+    def activate(self, e: Optional[Env.Environ] = None) -> None:
         super().activate(e)
         for d in self.venv_path.possible_site_packages:
             if str(d) not in sys.path:
                 sys.path.insert(0, str(d))
 
-    def deactivate(self, e: Env.Environ) -> None:
+    def deactivate(self, e: Optional[Env.Environ] = None) -> None:
         super().deactivate(e)
         for d in self.venv_path.possible_site_packages:
             if str(d) in sys.path:
                 sys.path.remove(str(d))
 
 
+@dataclass
 class ExistingVenv(BaseVenv):
-    def __init__(self, root: Path, venv_name: str, discover: bool = False) -> None:
-        super().__init__(root, venv_name)
-        self.discover = discover
-
-        root_path = self._get_venv_dir() if discover else root
-
-        self.venv_path = VenvPath(root_path=root_path, venv_name=venv_name)
-
-        if not self.venv_path.path.exists():
-            raise CantFindVenv
-
-    def _get_venv_dir(self) -> Optional[Path]:
-        path = self.root
-
-        while path.parent != path:
-            if (path / self.venv_dir_name).exists():
-                return path
-            path = path.parent
-
-        raise CantFindVenv()
-
-    def activate(self, e: Env.Environ) -> None:
+    def activate(self, e: Optional[Env.Environ] = None) -> None:
         super().activate(e)
 
         if str(self.venv_path.site_packages_path) not in sys.path:
             sys.path.insert(0, str(self.venv_path.site_packages_path))
 
-    def deactivate(self, e: Env.Environ) -> None:
+    def deactivate(self, e: Optional[Env.Environ] = None) -> None:
         super().deactivate(e)
 
         try:
@@ -137,19 +143,38 @@ class ExistingVenv(BaseVenv):
             pass
 
 
-@contextmanager
-def venv(path: Union[Path, str]) -> None:
-    path = Path(path).absolute()
+@dataclass
+class Venv(ExistingVenv):
+    path: Union[Path, str]
 
-    class Environ(envium.Environ):
-        path: str = env_var(raw=True)
+    def __post_init__(self) -> None:
+        super().__post_init__()
 
-    e = Environ(name="envo", load=True)
+        self.path = Path(self.path).absolute()
+        self.venv_path = VenvPath(root_path=self.path.parent, venv_name=self.path.stem)
 
-    venv_obj = ExistingVenv(root=path.parent, venv_name=path.stem)
 
-    venv_obj.activate(e)
-    os.environ.update(e.get_env_vars())
-    yield
-    venv_obj.deactivate(e)
-    os.environ.update(e.get_env_vars())
+@dataclass
+class DiscoveredVenv(ExistingVenv):
+    root: Path
+    venv_name: str
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+
+        root_path = self._get_venv_dir()
+
+        self.venv_path = VenvPath(root_path=root_path, venv_name=self.venv_name)
+
+        if not self.venv_path.path.exists():
+            raise CantFindVenv
+
+    def _get_venv_dir(self) -> Optional[Path]:
+        path = self.root
+
+        while path.parent != path:
+            if (path / self.venv_name).exists():
+                return path
+            path = path.parent
+
+        raise CantFindVenv()

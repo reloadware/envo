@@ -432,6 +432,7 @@ def init_child_env(child_dir: Path) -> None:
     )
     replace_in_code("(Env)", "(ParentEnv)", "env_comm.py")
     replace_in_code("(Env.Environ)", "(ParentEnv.Environ)", "env_comm.py")
+    replace_in_code("(Env.Ctx)", "(ParentEnv.Ctx)", "env_comm.py")
 
     test_file = Path("env_test.py")
 

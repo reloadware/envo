@@ -550,6 +550,10 @@ class BaseEnv(ABC):
     def init(self) -> None:
         pass
 
+    @abstractmethod
+    def post_init(self) -> None:
+        pass
+
 
 class Env(BaseEnv):
     class Meta:
@@ -648,7 +652,7 @@ class Env(BaseEnv):
         self.secrets._validate()
 
         for c in reversed(self.__class__.__mro__):
-            if not issubclass(c, Env):
+            if not issubclass(c, BaseEnv):
                 continue
 
             getattr(c, "post_init")(self)

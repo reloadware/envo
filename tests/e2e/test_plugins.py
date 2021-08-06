@@ -8,6 +8,14 @@ from tests.e2e.utils import PromptState, flaky
 
 def add_venv_plugin(parent_env: str = "Env"):
     utils.replace_in_code(f"({parent_env})", f"({parent_env}, VirtualEnv)", file="env_comm.py")
+    utils.replace_in_code(
+        f"class Ctx({parent_env}.Ctx)", f"class Ctx({parent_env}.Ctx, VirtualEnv.Ctx)", file="env_comm.py"
+    )
+    utils.replace_in_code(
+        f"class Environ({parent_env}.Environ)",
+        f"class Environ({parent_env}.Environ, VirtualEnv.Environ)",
+        file="env_comm.py",
+    )
 
 
 class TestVenv(utils.TestBase):
@@ -19,10 +27,7 @@ class TestVenv(utils.TestBase):
         venv_name=".venv",
     ) -> None:
         e = shell.expecter
-        shell.sendline("import url_regex")
-
-        e.prompt(name=activated_from, state=PromptState.MAYBE_LOADING)
-        shell.sendline("print(url_regex.UrlRegex)")
+        shell.sendline("import url_regex;print(url_regex.UrlRegex)")
         e.output(r"<class 'url_regex\.url_regex\.UrlRegex'>\n")
         e.prompt(name=activated_from).eval()
 
@@ -67,10 +72,7 @@ class TestVenv(utils.TestBase):
         venv_path = facade.VenvPath(root_path=sandbox, venv_name=".venv")
 
         add_venv_plugin()
-        utils.replace_in_code(
-            "# Declare your command namespaces here",
-            "VirtualEnv.customise(venv_path=root)",
-        )
+        utils.add_definition("self.ctx.venv.dir = self.meta.root")
 
         e = shell.start()
         e.prompt().eval()
@@ -86,7 +88,7 @@ class TestVenv(utils.TestBase):
         e.exit().eval()
 
     @flaky
-    def test_autodiscovery(self, shell, init_child_env, sandbox):
+    def test_discover(self, shell, init_child_env, sandbox):
         utils.add_imports_in_envs_in_dir()
         venv_path = facade.VenvPath(root_path=sandbox, venv_name=".venv")
 
@@ -96,6 +98,7 @@ class TestVenv(utils.TestBase):
         os.chdir("child")
 
         add_venv_plugin("ParentEnv")
+        utils.add_definition("self.ctx.venv.discover = True")
 
         e = shell.start()
         e.prompt(name="child", state=utils.PromptState.MAYBE_LOADING).eval()
@@ -109,10 +112,8 @@ class TestVenv(utils.TestBase):
     def test_autodiscovery_cant_find(self, sandbox, shell):
         add_venv_plugin()
 
-        utils.replace_in_code(
-            "# Declare your command namespaces here",
-            'VirtualEnv.customise(venv_name=".some_venv")',
-        )
+        utils.add_definition('self.ctx.venv.name=".some_venv"')
+        utils.add_definition("self.ctx.venv.discover = True")
 
         e = shell.start()
         e.prompt().eval()
@@ -133,10 +134,8 @@ class TestVenv(utils.TestBase):
         os.chdir("child")
 
         add_venv_plugin("ParentEnv")
-        utils.replace_in_code(
-            "# Declare your command namespaces here",
-            'VirtualEnv.customise(venv_name=".custom_venv")',
-        )
+        utils.add_definition('self.ctx.venv.name=".custom_venv"')
+        utils.add_definition("self.ctx.venv.discover = True")
 
         e = shell.start()
         e.prompt(name="child").eval()
@@ -152,7 +151,9 @@ class TestVenv(utils.TestBase):
         utils.run("python -m venv .venv")
         utils.run(f"{str(venv_path.bin_path / 'pip')} install url-regex")
 
-        utils.replace_in_code("# Declare your command namespaces here", "VirtualEnv().init()", file="env_comm.py")
+        utils.replace_in_code(
+            "# Declare your command namespaces here", "venv_utils.Venv('.venv').activate()", file="env_comm.py"
+        )
 
         e = shell.start()
         e.prompt().eval()

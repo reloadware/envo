@@ -11,7 +11,7 @@ __all__ = [
 ]
 
 import envium
-from envium import env_var
+from envium import Ctx, CtxGroup, Environ, ctx_var, env_var
 
 from envo import venv_utils
 from envo.env import BaseEnv
@@ -20,8 +20,11 @@ from envo.misc import is_windows
 
 
 class Plugin(BaseEnv):
-    class Environ:
-        pass
+    class Environ(Environ):
+        ...
+
+    class Ctx(Ctx):
+        ...
 
 
 class VirtualEnv(Plugin):
@@ -29,47 +32,37 @@ class VirtualEnv(Plugin):
     Env that activates virtual environment.
     """
 
-    class Environ(envium.Environ):
+    class Environ(Plugin.Environ):
         path: str = env_var(raw=True)
 
-    e: Environ
+    class Ctx(Plugin.Ctx):
+        class Venv(CtxGroup):
+            dir: Optional[Path] = ctx_var()
+            name: str = ctx_var(".venv")
+            discover: bool = ctx_var(False)
 
-    @classmethod
-    def customise(cls, venv_path: Optional[Union[Path, str]] = None, venv_name: str = ".venv"):
-        cls.venv_path = Path(venv_path).absolute() if venv_path else None
-        cls.venv_name = venv_name
+        venv = Venv()
+
+    ctx: Ctx
+    e: Environ
 
     def init(self):
         super().init()
 
-        root = Path(".").absolute()
-        # Handle standalone and inherited case
-        if hasattr(self, "e"):
-            e = self.e
-        else:
-            e = VirtualEnv.Environ(name="envo", load=True)
         self.__logger: Logger = logger.create_child("venv", descriptor="VirtualEnv")
-
-        venv_path = root if not self.venv_path else self.venv_path
-
-        self._possible_site_packages = []
-        self._venv_dir_name = self.venv_name
-
         self.__logger.debug("VirtualEnv plugin init")
 
-        try:
-            self._venv = venv_utils.ExistingVenv(
-                root=venv_path,
-                venv_name=self.venv_name,
-                discover=self.venv_path is None,
-            )
+    def post_init(self) -> None:
+        if not self.ctx.venv.dir:
+            self.ctx.venv.dir = self.meta.root
 
+        try:
+            if self.ctx.venv.discover:
+                self._venv = venv_utils.DiscoveredVenv(root=self.meta.root, venv_name=self.ctx.venv.name)
+            else:
+                self._venv = venv_utils.Venv(self.ctx.venv.dir / self.ctx.venv.name)
+            self._venv.activate(self.e)
         except venv_utils.CantFindVenv:
             self.__logger.debug("Couldn't find venv. Falling back to predicting")
-            self._venv = venv_utils.PredictedVenv(root=venv_path, venv_name=self.venv_name)
-
-        self._venv.activate(e)
-        os.environ["PATH"] = e.path
-
-
-VirtualEnv.customise()
+            self._venv = venv_utils.PredictedVenv(root=self.meta.root, venv_name=self.ctx.venv.name)
+            self._venv.activate(self.e)
