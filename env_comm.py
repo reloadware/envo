@@ -18,6 +18,7 @@ from envo import (
 root = Path(__file__).parent.absolute()
 envo.add_source_roots([root])
 
+import urllib3
 
 # Declare your command namespaces here
 # like this:
@@ -62,6 +63,12 @@ class EnvoCommEnv(Env, VirtualEnv):
     @boot_code
     def __boot(self) -> List[str]:
         return []
+
+    @p.command
+    def test_sth(self) -> None:
+        import requests
+
+        pass
 
 
 ThisEnv = EnvoCommEnv

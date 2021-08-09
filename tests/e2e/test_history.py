@@ -24,6 +24,36 @@ class TestHistory(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    def test_added_on_precmd_fail(self, shell):
+        utils.add_hook(
+            r"""
+            @precmd
+            def pre_print(self, command: str) -> str:
+                a = 1/0
+            """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("echo 'cake'")
+        e.output(r".*ZeroDivisionError: division by zero\n")
+        e.prompt().eval()
+
+        shell.send(UP_KEY, expect=False)
+        e.output(r"echo 'cake'").eval()
+
+        shell.exit()
+        e.exit(return_code=None).eval()
+
+        e = shell.start()
+        e.prompt().eval()
+        shell.send(UP_KEY, expect=False)
+        e.output(r"echo 'cake'").eval()
+
+        shell.exit()
+        e.exit(return_code=None).eval()
+
     def test_separate_histories(self, shell, comm_shell):
         e = shell.start()
         e.prompt().eval()

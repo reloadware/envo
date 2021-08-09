@@ -51,6 +51,21 @@ class PromptBase:
         return self.state_prefix_map[self.state]()
 
 
+# Dirty hack warning
+# Sometimes this crashes on shell exit
+old_flush = _TeeStd.flush
+
+
+def safe_flush(self):
+    try:
+        old_flush(self)
+    except:
+        pass
+
+
+_TeeStd.flush = safe_flush
+
+
 class Shell(BaseShell):  # type: ignore
     """
     Xonsh shell extension.
@@ -239,28 +254,8 @@ class Shell(BaseShell):  # type: ignore
     def set_fulll_traceback_enabled(self, enabled: bool = True):
         self.environ["XONSH_SHOW_TRACEBACK"] = enabled
 
-    def execute(self, line: str, history_line: str) -> Any:
-        self.append_history = BaseShell._append_history
-        BaseShell._append_history = lambda self, inp, ts, spc, tee_out: None
-
-        ts0 = time.time()
-
-        if history_line:
-            self.append_history(
-                self,
-                inp=history_line,
-                ts=[ts0, ts0],
-                spc=self.src_starts_with_space,
-                tee_out="",
-            )
-
+    def execute(self, line: str) -> Any:
         BaseShell.default(self, line)
-
-        BaseShell._append_history = self.append_history
-
-        if self.history and self.history.buffer:
-            self.last_return_code = self.history.last_cmd_rtn
-            self.history.flush()
 
     def default(self, line: str, raw_line=None) -> Any:
         logger.debug("Executing command", {"command": line})
@@ -274,9 +269,25 @@ class Shell(BaseShell):  # type: ignore
 
         try:
             # W want to catch all exceptions just in case the command fails so we can handle std_err and post_cmd
-            hist_line = line
+            self.append_history = BaseShell._append_history
+            BaseShell._append_history = lambda self, inp, ts, spc, tee_out: None
+            ts0 = time.time()
+
+            if line:
+                self.append_history(
+                    self,
+                    inp=line,
+                    ts=[ts0, ts0],
+                    spc=self.src_starts_with_space,
+                    tee_out="",
+                )
+
             if self.calls.pre_cmd:
-                line = self.calls.pre_cmd(line)
+                try:
+                    line = self.calls.pre_cmd(line)
+                except Exception as e:
+                    logger.traceback()
+                    return
 
             if self.calls.on_stdout:
 
@@ -296,7 +307,7 @@ class Shell(BaseShell):  # type: ignore
 
                 sys.stderr.write = stderr_write
 
-            ret = self.execute(line, hist_line)
+            ret = self.execute(line)
         finally:
             if self.calls.on_stdout:
                 sys.stdout.write = orig_std_out_write
@@ -308,6 +319,11 @@ class Shell(BaseShell):  # type: ignore
                 self.calls.post_cmd(command=line, stdout=std_out_content, stderr=std_err_content)
 
             self.cmd_lock.release()
+
+            BaseShell._append_history = self.append_history
+            if self.history and self.history.buffer:
+                self.last_return_code = self.history.last_cmd_rtn
+                self.history.flush()
 
         return ret
 

@@ -20,7 +20,7 @@ class TestCommands(utils.TestBase):
         shell.sendline("cmd")
         e.output(r"─+ echo test output ─+\n")
         e.output(r"test output\n")
-        e.prompt().eval(PromptState.MAYBE_LOADING)
+        e.prompt(PromptState.MAYBE_LOADING).eval()
 
         # remove
         utils.replace_in_code("verbose_run: bool = True", "verbose_run: bool = False")
