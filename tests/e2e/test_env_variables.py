@@ -108,8 +108,29 @@ class TestEnvVariables(utils.TestBase):
 
         e = shell.start()
 
+        e.output(rf"Environ errors:\n")
         e.output(f"{facade.NoValueError(type_=int, var_name='sandbox.test_var')}\n")
         e.prompt(utils.PromptState.EMERGENCY).eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_available_in_post_init(self, shell):
+        utils.add_env_declaration("test_var: str = env_var('Cake', raw=True)")
+
+        utils.add_method(
+            """
+            def post_init(self):
+                import os
+                env = os.environ["TEST_VAR"]
+                print(env)
+            """
+        )
+
+        e = shell.start()
+
+        e.output(fr"Cake\n")
+        e.prompt().eval()
 
         shell.exit()
         e.exit().eval()
@@ -131,8 +152,8 @@ class TestEnvVariables(utils.TestBase):
         utils.add_env_declaration("test_var = env_var()")
 
         e = shell.start()
-
-        e.output(f'{facade.NoTypeError(var_name="sandbox.test_var")}\n')
+        e.output(rf"Environ errors:\n")
+        e.output(rf'{facade.NoTypeError(var_name="sandbox.test_var")}\n')
         e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         shell.exit()
@@ -212,6 +233,7 @@ class TestEnvVariables(utils.TestBase):
         )
 
         e = shell.start()
+        e.output(rf"Environ errors:\n")
         e.output(f'{facade.RedefinedVarError("VERSION")}\n')
         e.prompt(utils.PromptState.EMERGENCY).eval()
 

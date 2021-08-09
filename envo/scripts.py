@@ -120,7 +120,6 @@ class HeadlessMode:
         self.li.shell.set_variable("env", self.shell_env.env)
         self.li.shell.set_variable("environ", os.environ)
 
-        self.shell_env.validate()
         self.shell_env.activate()
 
         self.shell_env.load()

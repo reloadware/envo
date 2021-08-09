@@ -52,7 +52,8 @@ class TestCtx(utils.TestBase):
         utils.add_ctx_declaration("cake: str = ctx_var()")
 
         e = shell.start()
-        e.output(rf".*{facade.NoValueError.__name__}.*{facade.NoValueError(var_name='sandbox.cake', type_=str)}.*\n")
+        e.output(rf"Context errors:\n")
+        e.output(rf"{facade.NoValueError(var_name='sandbox.cake', type_=str)}.*\n")
         e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         shell.exit()
@@ -62,7 +63,8 @@ class TestCtx(utils.TestBase):
         utils.add_ctx_declaration("cake = ctx_var()")
 
         e = shell.start()
-        e.output(rf".*{facade.NoTypeError.__name__}.*{facade.NoTypeError(var_name='sandbox.cake')}.*\n")
+        e.output(rf"Context errors:\n")
+        e.output(rf"{facade.NoTypeError(var_name='sandbox.cake')}.*\n")
         e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         shell.exit()
@@ -72,9 +74,8 @@ class TestCtx(utils.TestBase):
         utils.add_ctx_declaration("cake_n: int = ctx_var(default='5')")
 
         e = shell.start()
-        e.output(
-            rf".*{facade.WrongTypeError.__name__}.*{facade.WrongTypeError(var_name='sandbox.cake_n', type_=int, got_type=str)}.*\n"
-        )
+        e.output(rf"Context errors:\n")
+        e.output(rf"{facade.WrongTypeError(var_name='sandbox.cake_n', type_=int, got_type=str)}.*\n")
         e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
 
         shell.exit()

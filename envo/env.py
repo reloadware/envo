@@ -606,9 +606,12 @@ class Env(BaseEnv):
     magic_functions: Dict[str, Any]
     meta: Meta
 
+    _environ_before: Optional[Dict[str, str]]
+
     env_id_to_secrets: ClassVar[Dict[str, Secrets]] = {}
 
     def __init__(self):
+        self._environ_before = os.environ.copy()
         self.meta = self.Meta()
 
         self.e = self.Environ(name=self.meta.name, load=self.meta.load_env_vars)
@@ -648,8 +651,8 @@ class Env(BaseEnv):
 
         self.init()
 
-        self.ctx._validate()
-        self.secrets._validate()
+        self.validate()
+        self.activate()
 
         for c in reversed(self.__class__.__mro__):
             if not issubclass(c, BaseEnv):
@@ -680,10 +683,21 @@ class Env(BaseEnv):
         """
         Validate env
         """
-        errors = self.e.errors
 
-        if errors:
-            raise EnvoError("\n".join([str(e) for e in errors]))
+        msgs = []
+        if self.ctx.errors:
+            msgs.append("Context errors:\n" + f"\n".join([str(e) for e in self.ctx.errors]))
+
+        if self.e.errors:
+            msgs.append("Environ errors:\n" + f"\n".join([str(e) for e in self.e.errors]))
+
+        if self.secrets.errors:
+            msgs.append("Secrets errors:\n" + f"\n".join([str(e) for e in self.e.errors]))
+
+        msg = "\n".join(msgs)
+
+        if msg:
+            raise EnvoError(msg)
 
     def get_env_vars(self) -> Dict[str, str]:
         self.e.pythonpath = self.e.pythonpath.strip(":")
@@ -768,6 +782,16 @@ class Env(BaseEnv):
         path.write_text(content, "utf-8")
         return path
 
+    def activate(self) -> None:
+        if not self._environ_before:
+            self._environ_before = os.environ.copy()
+
+        os.environ.update(**self.get_env_vars())
+
+    def deactivate(self) -> None:
+        if self._environ_before:
+            os.environ = self._environ_before.copy()
+
 
 class ShellEnv:
     """
@@ -809,7 +833,6 @@ class ShellEnv:
         self._exiting = False
         self._executing_cmd = False
 
-        self._environ_before = None
         self._shell_environ_before = None
 
         self._files_watchers = self._se.extra_watchers
@@ -996,17 +1019,9 @@ class ShellEnv:
 
         :param owner_namespace:
         """
-        if not self._environ_before:
-            self._environ_before = os.environ.copy()
-
         if not self._shell_environ_before:
             self._shell_environ_before = dict(self._li.shell.environ.items())
         self._li.shell.environ.update(**self.env.get_env_vars())
-
-        os.environ.update(**self.env.get_env_vars())
-
-    def validate(self) -> None:
-        self.env.validate()
 
     def _deactivate(self) -> None:
         """
@@ -1014,9 +1029,7 @@ class ShellEnv:
 
         :param owner_namespace:
         """
-        if self._environ_before:
-            os.environ = self._environ_before.copy()
-
+        if self._shell_environ_before:
             if self._li.shell:
                 tmp_environ = copy(self._li.shell.environ)
                 for i, v in tmp_environ.items():
@@ -1025,6 +1038,8 @@ class ShellEnv:
                     if v is None:
                         continue
                     self._li.shell.environ[k] = v
+
+        self.env.deactivate()
 
     def _is_python_fire_cmd(self, cmd: str) -> bool:
         # validate if it's a correct format
