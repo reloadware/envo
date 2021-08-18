@@ -84,16 +84,14 @@ class BaseVenv:
         if path not in environ.path.split(self._path_delimiter):
             environ.path = f"""{path}{self._path_delimiter}{environ.path}"""
 
-        if not e:
-            self.e.save_to_os_environ()
+        environ.save_to_os_environ()
 
     def deactivate(self, e: Optional[Env.Environ] = None) -> None:
         environ = e or self.e
         if self._get_path() in environ.path:
             environ.path = environ.path.replace(self._get_path() + self._path_delimiter, "")
 
-        if not e:
-            self.e.save_to_os_environ()
+        environ.save_to_os_environ()
 
     def __enter__(self) -> None:
         self.activate()
