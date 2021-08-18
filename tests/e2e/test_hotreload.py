@@ -72,7 +72,7 @@ class TestHotReload(utils.TestBase):
         Path("./test_dir").mkdir()
 
         utils.add_meta(
-            'watch_files: List[str] = ["test_dir/**/*.py", "test_dir/*.py"]',
+            'watch_files: List[str] = ["test_dir/*.py"]',
         )
         shell.envo.assert_reloaded(1)
 
@@ -116,7 +116,7 @@ class TestHotReload(utils.TestBase):
         some_file.touch()
 
         utils.add_meta(
-            'watch_files: List[str] = ["test_dir/**/*.py", "test_dir/*.py"]',
+            'watch_files: List[str] = ["test_dir/*.py"]',
         )
 
         shell.envo.assert_reloaded(1)
@@ -130,14 +130,14 @@ class TestHotReload(utils.TestBase):
         e.exit().eval()
 
     def test_delete_dir_with_file_inside(self, shell):
+        directory = Path("./test_dir")
+        directory.mkdir()
+
         e = shell.start()
         e.prompt(PromptState.MAYBE_LOADING).eval()
 
         utils.add_meta('watch_files: List[str] = ["*.py", "./test_dir/*.py"]')
         shell.envo.assert_reloaded(1)
-
-        directory = Path("./test_dir")
-        directory.mkdir()
 
         file1 = Path("./test_dir/some_src_file.py")
         file1.touch()
@@ -161,7 +161,7 @@ class TestHotReload(utils.TestBase):
         Path("./test_dir").mkdir()
 
         utils.add_meta(
-            'watch_files: List[str] = ["test_dir/**/*.py", "test_dir/*.py"]',
+            'watch_files: List[str] = ["test_dir/*.py"]',
         )
         shell.envo.assert_reloaded(1)
 

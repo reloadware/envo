@@ -89,7 +89,12 @@ class FilesWatcher(FileSystemEventHandler):
         self.logger.debug("Starting Inotify")
         self.observer = Observer()
 
-        self.observer.schedule(self, str(self.se.root), recursive=True)
+        for p in self.se.include:
+            path = (self.se.root / p).parent
+            if not path.exists():
+                continue
+            self.observer.schedule(self, str(path), recursive=False)
+        self.observer.schedule(self, str(self.se.root), recursive=False)
 
     def on_any_event(self, event: FileSystemEvent):
         kwargs = event.__dict__
@@ -106,44 +111,8 @@ class FilesWatcher(FileSystemEventHandler):
     def match(self, path: str, include: List[str], exclude: List[str]) -> bool:
         return not glob_match(path, exclude) and glob_match(path, include)
 
-    def walk_dirs(self, on_match: Callable) -> None:
-        def walk(path: Path):
-            for p in path.iterdir():
-                if glob_match(path, self.exclude):
-                    continue
-                on_match(str(p).encode("utf-8"))
-                if p.is_dir():
-                    walk(p)
-
-        walk(self.root)
-
     def start(self) -> None:
         self.logger.debug("Starting observer")
-
-        if is_linux():
-
-            def _add_dir_watch(self2, path, recursive, mask):
-                """
-                Adds a watch (optionally recursively) for the given directory path
-                to monitor events specified by the mask.
-
-                :param path:
-                    Path to monitor
-                :param recursive:
-                    ``True`` to monitor recursively.
-                :param mask:
-                    Event bit mask.
-                """
-                if not os.path.isdir(path):
-                    raise OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), path)
-                self2._add_watch(path, mask)
-                if recursive:
-                    self.walk_dirs(on_match=lambda p: self2._add_watch(p, mask))
-
-            from watchdog.observers.inotify_c import Inotify
-
-            Inotify._add_dir_watch = _add_dir_watch
-
         self.observer.start()
         self.logger.debug("Observer started")
 
