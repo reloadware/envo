@@ -108,6 +108,31 @@ class TestVenv(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    # @flaky
+    def test_binary(self, shell, sandbox):
+        venv_path = facade.VenvPath(root_path=sandbox, venv_name=".venv")
+        utils.run("python -m venv .venv")
+        utils.run(f"{str(venv_path.bin_path / 'pip')} install twine")
+
+        add_venv_plugin()
+
+        utils.add_command(
+            """
+        @command
+        def run_bin(self):
+            run("twine -h")
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline("run_bin")
+        e.output(r".*usage: twine.*").eval()
+
+        shell.exit()
+        e.exit().eval()
+
     @flaky
     def test_autodiscovery_cant_find(self, sandbox, shell):
         add_venv_plugin()
