@@ -61,7 +61,48 @@ class InotifyPath:
         return self.absolute.is_dir()
 
 
-class FilesWatcher(FileSystemEventHandler):
+class EventDispatcher(FileSystemEventHandler):
+    observer: Observer
+    watchers: List["FilesWatcher"]
+    paths: List[Path]
+
+    def __init__(self) -> None:
+        self.observer = Observer()
+        self.observer.start()
+        self.paths = []
+        self.watchers = []
+
+    def add(self, watcher: "FilesWatcher") -> None:
+        self.watchers.append(watcher)
+
+        for p in watcher.paths:
+            if p not in self.paths:
+                self.observer.schedule(self, str(p), recursive=False)
+                self.paths.append(p)
+
+    def flush(self) -> None:
+        self.observer.event_queue.queue.clear()
+
+    def remove(self, watcher: "FilesWatcher") -> None:
+        for i, w in enumerate(self.watchers):
+            if w is watcher:
+                self.watchers.pop(i)
+                return
+
+    def on_any_event(self, event: FileSystemEvent):
+        for w in self.watchers.copy():
+            try:
+                relative = Path(event.src_path).relative_to(w.root)
+            except ValueError:
+                continue
+            if w.match(relative):
+                w.on_any_event(event)
+
+
+event_dispatcher = EventDispatcher()
+
+
+class FilesWatcher:
     @dataclass
     class Sets:
         include: List[str]
@@ -73,9 +114,9 @@ class FilesWatcher(FileSystemEventHandler):
     class Callbacks:
         on_event: Callback
 
-    def __init__(self, se: Sets, calls: Callbacks):
-        from envo import logger
+    paths: List[Path]
 
+    def __init__(self, se: Sets, calls: Callbacks):
         self.include = [p.lstrip("./") for p in se.include]
         self.exclude = [p.lstrip("./") for p in se.exclude]
         self.root = se.root
@@ -84,67 +125,33 @@ class FilesWatcher(FileSystemEventHandler):
         self.se = se
         self.calls = calls
 
-        self.logger = logger.create_child(f"{self.se.name} Inotify", descriptor=f"{self.se.name} Inotify")
-
-        self.logger.debug("Starting Inotify")
-        self.observer = Observer()
+        self.paths = []
+        self.enabled = True
 
         for p in self.se.include:
             path = (self.se.root / p).parent
             if not path.exists():
                 continue
-            self.observer.schedule(self, str(path), recursive=False)
-        self.observer.schedule(self, str(self.se.root), recursive=False)
+
+            if path not in self.paths:
+                self.paths.append(path)
+
+        if self.se.root not in self.paths:
+            self.paths.append(self.se.root)
+
+        event_dispatcher.add(self)
 
     def on_any_event(self, event: FileSystemEvent):
-        kwargs = event.__dict__
-
-        for k in list(kwargs.keys()):
-            kwargs[k.lstrip("_")] = Path(kwargs.pop(k)).resolve()
-
-        event = event.__class__(**kwargs)
+        if not self.enabled:
+            return
         self.calls.on_event(event)
 
-    def flush(self) -> None:
-        self.observer.event_queue.queue.clear()
-
-    def match(self, path: str, include: List[str], exclude: List[str]) -> bool:
-        return not glob_match(path, exclude) and glob_match(path, include)
-
-    def start(self) -> None:
-        self.logger.debug("Starting observer")
-        self.observer.start()
-        self.logger.debug("Observer started")
-
-    def clone(self) -> "FilesWatcher":
-        return FilesWatcher(se=self.se, calls=self.calls)
+    def match(self, path: Path) -> bool:
+        return not glob_match(str(path), self.exclude) and glob_match(str(path), self.include)
 
     def stop(self) -> None:
-        self.observer.stop()
-
-    def dispatch(self, event: FileSystemEvent):
-        """Dispatches events to the appropriate methods.
-
-        :param event:
-            The event object representing the file system event.
-        :type event:
-            :class:`FileSystemEvent`
-        """
-        paths = []
-        if hasattr(event, "dest_path"):
-            paths.append(str(event.dest_path))
-        if event.src_path:
-            paths.append(str(event.src_path))
-
-        if any(
-            self.match(
-                str(Path(p).relative_to(self.root)),
-                include=self.include,
-                exclude=self.exclude,
-            )
-            for p in paths
-        ):
-            super().dispatch(event)
+        self.enabled = False
+        event_dispatcher.remove(self)
 
 
 def dir_name_to_class_name(dir_name: str) -> str:

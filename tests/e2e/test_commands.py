@@ -168,7 +168,7 @@ class TestCommands(utils.TestBase):
     def test_env_variables_available_in_run(self, shell):
         utils.add_env_declaration("test_var: str = env_var(raw=True)")
         utils.add_definition('self.e.test_var = "test_value"')
-        if facade.is_linux():
+        if facade.is_linux() or facade.is_darwin():
             utils.add_command(
                 """
                 @command
@@ -223,7 +223,9 @@ class TestCommands(utils.TestBase):
         shell.sendline("my_mypy")
         if facade.is_linux():
             e.output(r"xonsh: subprocess mode: command not found: my_mypy\nmy_mypy: command not found\n")
-        if facade.is_windows():
+        elif facade.is_darwin():
+            e.output(r"xonsh: subprocess mode: command not found: my_mypy\n")
+        elif facade.is_windows():
             e.output(r"xonsh: subprocess mode: command not found: my_mypy\n")
 
         e.prompt().eval()
