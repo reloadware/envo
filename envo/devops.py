@@ -13,7 +13,7 @@ from typing import List, Optional, Union
 from colorama import Fore, Style
 
 from envo import console, logger
-from envo.misc import is_linux, is_windows
+from envo.misc import is_darwin, is_linux, is_windows
 
 
 class CommandError(RuntimeError):
@@ -32,6 +32,10 @@ def _get_popen_cmd(command: str) -> List[str]:
         options = ["set -uoe pipefail", "shopt -s globstar"]
         command_extra = "\n".join(options) + "\n" + command_extra
         popen_cmd = ["/bin/bash", "--rcfile", "/dev/null", "-c", command_extra]
+    elif is_darwin():
+        options = ["set -uo pipefail"]
+        command_extra = "\n".join(options) + "\n" + command_extra
+        popen_cmd = ["/bin/zsh", "-c", command_extra]
     else:
         raise NotImplementedError()
 

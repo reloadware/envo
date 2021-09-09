@@ -36,7 +36,14 @@ from watchdog.events import FileModifiedEvent
 
 from envo import logger
 from envo.logs import Logger
-from envo.misc import Callback, EnvoError, FilesWatcher, import_env_from_file, import_from_file
+from envo.misc import (
+    Callback,
+    EnvoError,
+    FilesWatcher,
+    event_dispatcher,
+    import_env_from_file,
+    import_from_file,
+)
 from envo.status import Status
 
 __all__ = [
@@ -528,18 +535,11 @@ class EnvReloader:
             self.env_watchers.append(watcher)
 
     def start(self) -> None:
-        for w in self.env_watchers:
-            w.start()
-
         self.li.status.reloader_ready = True
 
     def stop(self):
-        def fun():
-            for w in self.env_watchers:
-                w.flush()
-                w.stop()
-
-        Thread(target=fun).start()
+        for w in self.env_watchers:
+            w.stop()
 
 
 class BaseEnv(ABC):
@@ -835,7 +835,6 @@ class ShellEnv:
 
         self._shell_environ_before = None
 
-        self._files_watchers = self._se.extra_watchers
         self._reload_lock = Lock()
 
         self.logger: Logger = logger.create_child("envo", descriptor=self.env.meta.name)
@@ -971,6 +970,9 @@ class ShellEnv:
         self._exit()
 
     def _on_env_edit(self, event: FileModifiedEvent) -> None:
+        if not self._li.status.ready:
+            return
+
         subscribe_events = [
             events.EVENT_TYPE_MOVED,
             events.EVENT_TYPE_MODIFIED,
@@ -982,16 +984,18 @@ class ShellEnv:
             self.request_reload(metadata={"event": event.event_type, "path": event.src_path})
 
     def request_reload(self, exc: Optional[Exception] = None, metadata: Optional[Dict] = None) -> None:
+        event_dispatcher.flush()
+
+        if self._exiting:
+            return
+
+        self._exiting = True
+
         if not metadata:
             metadata = {}
 
         while self._executing_cmd:
             sleep(0.2)
-        self._reload_lock.acquire()
-
-        if self._exiting:
-            self._reload_lock.release()
-            return
 
         self._stop_reloaders()
 
@@ -1004,10 +1008,6 @@ class ShellEnv:
             self._calls.on_error(exc)
         else:
             self._calls.restart()
-
-        self._exiting = True
-
-        self._reload_lock.release()
 
     def _exit(self) -> None:
         self.logger.debug("Exiting env")

@@ -135,7 +135,7 @@ class TestHooks(utils.TestBase):
         e.prompt().eval()
 
         shell.sendline('print("pancake");print("banana")')
-        if facade.is_linux():
+        if facade.is_linux() or facade.is_darwin():
             e.output(r" sweet pancake sweet\n sweet banana sweet\n").prompt().eval()
         if facade.is_windows():
             e.output(r" sweet pancake sweet\n sweet banana sweet\n sweet\n sweet ").prompt().eval()

@@ -1,3 +1,4 @@
+from tests import facade
 from tests.e2e import utils
 from tests.e2e.utils import PromptState
 
@@ -143,7 +144,11 @@ class TestCommands(utils.TestBase):
         e.prompt().eval()
 
         shell.sendline("cmd")
-        e.output(r".*failing: command not found.*")
+        if facade.is_linux():
+            e.output(r".*failing: command not found.*")
+        elif facade.is_darwin():
+            e.output(r"xonsh: subprocess mode: command not found: failing\n")
+
         e.prompt().eval()
 
         shell.exit()
@@ -162,7 +167,10 @@ class TestCommands(utils.TestBase):
         e.prompt().eval()
 
         shell.sendline("cmd")
-        e.output(r".*failing: command not found.*")
+        if facade.is_linux():
+            e.output(r".*failing: command not found.*")
+        elif facade.is_darwin():
+            e.output(r"xonsh: subprocess mode: command not found: failing\n")
         e.prompt().eval()
 
         shell.exit()

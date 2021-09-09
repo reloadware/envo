@@ -120,7 +120,7 @@ class TestMisc(utils.TestBase):
         e = shell.start()
         e.prompt().eval()
 
-        if facade.is_linux():
+        if facade.is_linux() or facade.is_darwin():
             file = Path("script.sh")
             file.touch()
             file.write_text("echo $SANDBOX_ROOT\n")
