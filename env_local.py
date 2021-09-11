@@ -5,6 +5,9 @@ from textwrap import dedent
 from typing import Any, Dict, List, Optional, Tuple
 
 import envo
+import shutil
+
+from envo.misc import is_linux, is_darwin, is_windows
 
 root = Path(__file__).parent.absolute()
 envo.add_source_roots([root])
@@ -49,30 +52,14 @@ class EnvoLocalEnv(ParentEnv):
 
         self.black_ver = "21.7b0"
 
-        self.python_versions = {
-            "3.6": Version("3.6.13", ".venv36"),
-            "3.7": Version("3.7.10", ".venv37"),
-            "3.8": Version("3.8.10", ".venv38"),
-            "3.9": Version("3.9.5", ".venv39"),
-        }
-
     @p.command
-    def bootstrap(self, version="3.9") -> None:
-        v = self.python_versions[version]
-        v.venv_name = ".venv"
-        self.bootstrap_python_version(v)
-
-    def bootstrap_python_version(self, v: Version) -> None:
-        path_tmp = os.environ["PATH"]
-        run(f"rm {v.venv_name} -rf")
-        os.environ["PATH"] = f"{Path.home()}/.pyenv/versions/{v.version}/bin/:{os.environ['PATH']}"
-        run(f"python -m venv {v.venv_name}")
-        run(f"{v.venv_name}/bin/pip install pip=={self.ctx.pip_ver}")
-        run(f"{v.venv_name}/bin/pip install poetry=={self.ctx.poetry_ver}")
-        run(f"source {v.venv_name}/bin/activate && poetry config virtualenvs.create false")
-        run(f"source {v.venv_name}/bin/activate && poetry config virtualenvs.in-project false")
-        run(f"source {v.venv_name}/bin/activate && poetry install")
-        os.environ["PATH"] = path_tmp
+    def bootstrap(self) -> None:
+        if is_linux() or is_darwin():
+            run(f"pip install pip=={self.ctx.pip_ver}")
+        run(f"pip install poetry=={self.ctx.poetry_ver}")
+        run(f"poetry config virtualenvs.create true")
+        run(f"poetry config virtualenvs.in-project true")
+        run(f"poetry install")
 
     @p.command
     def render_ci(self) -> None:

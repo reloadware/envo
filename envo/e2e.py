@@ -36,9 +36,13 @@ if enabled:
     import stickybeak
 
     if is_windows():
+        # print("HIHIHIHI")
         import prompt_toolkit.output.windows10
+        import prompt_toolkit.output.defaults
+
 
         prompt_toolkit.output.windows10.is_win_vt100_enabled = lambda: True
+        prompt_toolkit.output.defaults.is_windows = lambda: False
 
         import prompt_toolkit.output.win32
 
@@ -82,10 +86,10 @@ if enabled:
         prompt_toolkit.input.create_input = create_input
         prompt_toolkit.input.defaults.create_input = create_input
 
-if stickybeak_enabled:
-    project_root = Path(__file__).parent
-    server = stickybeak.Server(project_root, int(os.environ["ENVO_E2E_STICKYBEAK_PORT"]), timeout=15.0)
-    server.start()
+    if stickybeak_enabled:
+        project_root = Path(__file__).parent
+        server = stickybeak.Server(project_root, int(os.environ["ENVO_E2E_STICKYBEAK_PORT"]), timeout=15.0)
+        server.start()
 
 
 def on_exit():

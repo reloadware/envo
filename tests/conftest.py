@@ -35,7 +35,7 @@ def sandbox(request) -> Path:
 
     yield sandbox_dir
 
-    shutil.rmtree(sandbox_dir)
+    shutil.rmtree(sandbox_dir, ignore_errors=True)
 
     os.chdir(cwd)
 

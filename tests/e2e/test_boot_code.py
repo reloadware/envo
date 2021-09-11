@@ -1,6 +1,7 @@
 from pathlib import Path
 from time import sleep
 
+from tests import facade
 from tests.e2e import utils
 from tests.e2e.utils import PromptState
 
@@ -26,8 +27,14 @@ class TestBootCode(utils.TestBase):
         e = shell.start()
 
         e.prompt().eval()
-        shell.sendline("pwd")
-        e.output(r".*sandbox_.*/dir\n")
+        if facade.is_windows():
+            shell.sendline("echo %CD%")
+        else:
+            shell.sendline("pwd")
+        if facade.is_windows():
+            e.output(r".*sandbox_.*\\dir\n")
+        else:
+            e.output(r".*sandbox_.*/dir\n")
         e.prompt().eval()
 
         shell.exit()

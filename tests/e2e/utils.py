@@ -16,7 +16,7 @@ import pytest
 import requests
 from flaky import flaky
 from rhei import Stopwatch
-from stickybeak import Injector
+from stickybeak import Injector, ConnectionError
 
 from envo import const
 from envo.e2e import STICKYBEAK_PORT
@@ -258,7 +258,7 @@ class SpawnEnvo:
         self.stream = pyte.ByteStream(self.screen)
         self.stage = stage
 
-        self.command = fr"envo {stage}"
+        self.command = fr"poetry run envo {stage}"
         self.debug = debug
 
     def start(self, wait_until_ready=True) -> Expecter:
@@ -382,8 +382,8 @@ class SpawnEnvo:
         try:
             print("\nLog:")
             self.envo.get_logger().print_all()
-        except requests.exceptions.ConnectionError:
-            print("COuldn't retrieve log")
+        except ConnectionError:
+            print("Couldn't retrieve log")
 
 
 def shell() -> SpawnEnvo:
