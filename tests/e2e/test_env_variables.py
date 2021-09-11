@@ -1,9 +1,13 @@
 import os
 from pathlib import Path
 
+from pytest import mark
+
 from tests import facade
 from tests.e2e import utils
 from tests.e2e.utils import PromptState
+
+path_and_pythonpath = mark.parametrize("path", ["pythonpath", "path"], ids=["pythonpath", "path"])
 
 
 class TestEnvVariables(utils.TestBase):
@@ -260,22 +264,35 @@ class TestEnvVariables(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    def test_pythonpath(self, shell, env_sandbox):
-        utils.add_meta("load_env_vars: bool = True")
-
+    @path_and_pythonpath
+    def test_pythonpath(self, shell, env_sandbox, path: str):
         utils.add_definition(
-            """
-            self.e.pythonpath = ["path1", "path2"]
+            f"""
+            self.e.{path} = ["/home/user/path1", "/home/user/path2"]
             """
         )
 
-        os.environ["SANDBOX_TESTVAR"] = "TestValue"
+        e = shell.start()
+        e.prompt().eval()
+
+        assert shell.envo.get_os_environ()[path.upper()] == "/home/user/path1:/home/user/path2"
+
+        shell.exit()
+        e.exit().eval()
+
+    @path_and_pythonpath
+    def test_pythonpath_append(self, shell, env_sandbox, path: str):
+        test_path = "/home/user/path1"
+        utils.add_definition(
+            f"""
+            self.e.{path}.append("{test_path}")
+            """
+        )
 
         e = shell.start()
         e.prompt().eval()
-        shell.sendline(f"env.e.test_var")
-        e.output(r"'TestValue'\n")
-        e.prompt().eval()
+
+        assert shell.envo.get_os_environ()[path.upper()][-len(test_path) :] == "/home/user/path1"
 
         shell.exit()
         e.exit().eval()

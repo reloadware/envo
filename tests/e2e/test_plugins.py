@@ -31,12 +31,11 @@ class TestVenv(utils.TestBase):
         e.output(r"<class 'url_regex\.url_regex\.UrlRegex'>\n")
         e.prompt(name=activated_from).eval()
 
-        path = shell.envo.get_env_field("path")
+        path = [str(p) for p in shell.envo.get_env_field("path")]
 
         venv_path = facade.VenvPath(root_path=venv_dir, venv_name=venv_name)
 
-        # assert path.count(str(venv_path.bin_path)) == 1
-        assert path.count(str(venv_path.bin_path))
+        assert path.count(str(venv_path.bin_path)) == 1
 
         site_packages_path = venv_path.site_packages_path
 
@@ -108,7 +107,7 @@ class TestVenv(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    # @flaky
+    @flaky
     def test_binary(self, shell, sandbox):
         venv_path = facade.VenvPath(root_path=sandbox, venv_name=".venv")
         utils.run("python -m venv .venv")

@@ -34,7 +34,7 @@ from rhei import Stopwatch
 from watchdog import events
 from watchdog.events import FileModifiedEvent
 
-from envo import logger
+from envo import logger, misc
 from envo.logs import Logger
 from envo.misc import (
     Callback,
@@ -67,7 +67,7 @@ __all__ = [
 T = TypeVar("T")
 
 if TYPE_CHECKING:
-    from envo import Plugin, misc
+    from envo import Plugin
     from envo.scripts import Status
     from envo.shell import FancyShell, Shell
 
@@ -408,6 +408,8 @@ if False:
         return MagicFunction()
 
 
+PathLike = Union[Path, str]
+
 magic_functions = {
     "command": command,
     "shell_context": shell_context,
@@ -575,22 +577,9 @@ class Env(BaseEnv):
         load_env_vars: bool = False
 
     class Environ(envium.Environ):
-        def pythonpath_get(self) -> str:
-            return self.pythonpath._value
-
-        def pythonpath_set(self, value: str) -> None:
-            parts = value.split(":")
-
-            for p in parts:
-                if p in sys.path:
-                    continue
-                sys.path.append(p)
-
-            self.pythonpath._value = value
-
-        pythonpath: Optional[str] = computed_env_var(raw=True, fget=pythonpath_get, fset=pythonpath_set)
+        pythonpath: Optional[List[PathLike]] = env_var(raw=True, default_factory=list)
+        path: Optional[List[PathLike]] = env_var(raw=True, default_factory=list)
         root: Optional[Path] = env_var()
-        path: Optional[str] = env_var(raw=True)
         stage: Optional[str] = env_var()
         envo_stage: Optional[str] = env_var(raw=True)
         envo_name: Optional[str] = env_var(raw=True)
@@ -621,12 +610,12 @@ class Env(BaseEnv):
         self.e.stage = self.meta.stage
         self.e.envo_stage = self.meta.stage
 
-        self.e.path = os.environ["PATH"]
+        self.e.path = self._path_str_to_list(os.environ["PATH"])
 
         if "PYTHONPATH" not in os.environ:
-            self.e.pythonpath = ""
+            self.e.pythonpath = []
         else:
-            self.e.pythonpath = os.environ["PYTHONPATH"]
+            self.e.pythonpath = self._path_str_to_list(os.environ["PYTHONPATH"])
 
         self.magic_functions = {
             "shell_context": {},
@@ -659,6 +648,19 @@ class Env(BaseEnv):
                 continue
 
             getattr(c, "post_init")(self)
+
+    def _get_path_delimiter(self) -> str:
+        if misc.is_linux() or misc.is_darwin():
+            return ":"
+        elif misc.is_windows():
+            return ";"
+        else:
+            raise NotImplementedError
+
+    def _path_str_to_list(self, path: str) -> List[Path]:
+        paths_str = path.split(self._get_path_delimiter())
+        ret = [Path(s) for s in paths_str]
+        return ret
 
     @classmethod
     def instantiate(cls, stage: Optional[str] = None) -> "Env":
@@ -700,7 +702,6 @@ class Env(BaseEnv):
             raise EnvoError(msg)
 
     def get_env_vars(self) -> Dict[str, str]:
-        self.e.pythonpath = self.e.pythonpath.strip(":")
         ret = self.e.get_env_vars()
         return ret
 

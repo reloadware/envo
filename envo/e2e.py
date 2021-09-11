@@ -37,9 +37,8 @@ if enabled:
 
     if is_windows():
         # print("HIHIHIHI")
-        import prompt_toolkit.output.windows10
         import prompt_toolkit.output.defaults
-
+        import prompt_toolkit.output.windows10
 
         prompt_toolkit.output.windows10.is_win_vt100_enabled = lambda: True
         prompt_toolkit.output.defaults.is_windows = lambda: False

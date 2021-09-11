@@ -33,7 +33,7 @@ class VirtualEnv(Plugin):
     """
 
     class Environ(Plugin.Environ):
-        path: str = env_var(raw=True)
+        path: List[str] = env_var(raw=True)
 
     class Ctx(Plugin.Ctx):
         class Venv(CtxGroup):

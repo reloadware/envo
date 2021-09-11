@@ -252,14 +252,14 @@ class TestHotReload(utils.TestBase):
             os.environ["PATH"] = "/already_existing_path:" + os.environ["PATH"]
             utils.add_definition(
                 """
-                self.e.path = "/some_path:" + self.e.path
+                self.e.path.insert(0, "/some_path:")
                 """
             )
         if facade.is_windows():
             os.environ["PATH"] = "\\already_existing_path;" + os.environ["PATH"]
             utils.add_definition(
                 """
-                self.e.path = "\\\\some_path;" + self.e.path
+                self.e.path.insert(0, "\\\\some_path;")
                 """
             )
 

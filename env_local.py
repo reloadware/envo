@@ -1,13 +1,12 @@
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
 from typing import Any, Dict, List, Optional, Tuple
 
 import envo
-import shutil
-
-from envo.misc import is_linux, is_darwin, is_windows
+from envo.misc import is_darwin, is_linux, is_windows
 
 root = Path(__file__).parent.absolute()
 envo.add_source_roots([root])
@@ -105,7 +104,7 @@ class EnvoLocalEnv(ParentEnv):
 
         ctx = {
             "black_ver": self.black_ver,
-            "python_versions": [v for v in self.python_versions.keys()],
+            "python_versions": [v for v in self.supported_versions],
             "bootstrap_code": bootstrap_code,
         }
 
