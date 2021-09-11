@@ -90,7 +90,10 @@ class TestCommands(utils.TestBase):
 
     def test_single_command(self):
         s = utils.run("""envo test -c "print('teest')" """)
-        assert s == "teest\n"
+        if facade.is_windows():
+            assert "teest\r\n" in s
+        else:
+            assert s == "teest\n"
 
     def test_single_command_fail(self):
         with raises(RunError) as e:
@@ -106,13 +109,22 @@ class TestCommands(utils.TestBase):
         assert "no such file or directory" in utils.clean_output(e.value.stderr)
 
     def test_single_command_command_fail(self):
-        utils.add_command(
-            """
-            @command
-            def flake(self) -> None:
-                run("bash flaake . | tee flake.txt")
-            """
-        )
+        if facade.is_windows():
+            utils.add_command(
+                """
+                @command
+                def flake(self) -> None:
+                    run("flaake")
+                """
+            )
+        else:
+            utils.add_command(
+                """
+                @command
+                def flake(self) -> None:
+                    run("bash flaake . | tee flake.txt")
+                """
+            )
 
         with raises(RunError) as e:
             utils.run("""envo test -c "flake" """)
@@ -121,8 +133,8 @@ class TestCommands(utils.TestBase):
             assert e.value.return_code == 127
             assert "bash: flaake: No such file or directory" in utils.clean_output(e.value.stderr)
         if facade.is_windows():
-            assert e.value.return_code == 255
-            assert "'flaake' is not recognized as an internal or external command" in utils.clean_output(e.value.stdout)
+            assert e.value.return_code == 1
+            assert "'flaake' is not recognized as an internal or external command" in utils.clean_output(e.value.stderr)
 
     def test_single_command_command_fail_traceback(self):
         utils.add_command(
@@ -151,19 +163,28 @@ class TestCommands(utils.TestBase):
         utils.add_flake_cmd()
         res = utils.single_command("my_flake")
 
-        assert res == "Flake all good\nFlake return value\n"
+        if facade.is_windows():
+            assert res == "Flake all good\r\nFlake return value\r\n\r\r\n\x1b[0m"
+        else:
+            assert res == "Flake all good\nFlake return value\n"
 
     def test_envo_run(self):
         utils.add_flake_cmd(file=Path("env_comm.py"))
         res = utils.envo_run("my_flake")
 
-        assert res == "Flake all good\nFlake return value\n"
+        if facade.is_windows():
+            assert res == "Flake all good\r\nFlake return value\r\n\r\r\n\x1b[0m"
+        else:
+            assert res == "Flake all good\nFlake return value\n"
 
     def test_envo_test_run(self):
         utils.add_flake_cmd(file=Path("env_test.py"))
         res = utils.envo_run("my_flake", stage="test")
 
-        assert res == "Flake all good\nFlake return value\n"
+        if facade.is_windows():
+            assert res == "Flake all good\r\nFlake return value\r\n\r\r\n\x1b[0m"
+        else:
+            assert res == "Flake all good\nFlake return value\n"
 
     def test_env_variables_available_in_run(self, shell):
         utils.add_env_declaration("test_var: str = env_var(raw=True)")
@@ -285,123 +306,189 @@ class TestCommands(utils.TestBase):
     def test_run_with_wilcard(self, shell):
         Path("file.py").touch()
 
-        utils.add_command(
+        if facade.is_windows():
+            utils.add_command(
+                """
+            @command
+            def cmd(self, test_arg: str = "") -> str:
+                run(f'DIR /B /S *.py')
             """
-        @command
-        def cmd(self, test_arg: str = "") -> str:
-            run(f"find ./**/*.py")
-        """
-        )
+            )
+        else:
+            utils.add_command(
+                """
+            @command
+            def cmd(self, test_arg: str = "") -> str:
+                run(f"find ./**/*.py")
+            """
+            )
 
         e = shell.start()
         e.prompt().eval()
 
         shell.sendline("cmd")
 
-        e.output(r"./env_comm.py\n./env_test.py\n./file.py\n").prompt().eval()
+        if facade.is_windows():
+            e.output(r".*\\env_comm.py\n.*\\env_test.py\n.*\\file.py\n").prompt().eval()
+        else:
+            e.output(r"\./env_comm\.py\n\./env_test\.py\n\./file\.py\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()
 
     def test_cd_back_false(self, shell):
-        Path("dir").mkdir()
-        Path("dir/file.py").touch()
+        Path("directory").mkdir()
+        Path("directory/file.py").touch()
 
-        utils.add_command(
+        if facade.is_windows():
+            utils.add_command(
+                """
+            @command(cd_back=False)
+            def cmd(self) -> str:
+                os.chdir("directory")
+                run(f"dir")
             """
-        @command(cd_back=False)
-        def cmd(self) -> str:
-            os.chdir("dir")
-            run(f"ls")
-        """
-        )
+            )
+        else:
+            utils.add_command(
+                """
+            @command(cd_back=False)
+            def cmd(self) -> str:
+                os.chdir("directory")
+                run(f"ls")
+            """
+            )
 
         e = shell.start()
         e.prompt().eval()
 
         shell.sendline("cmd")
 
-        e.output(r"file.py\n").prompt().eval()
+        if facade.is_windows():
+            e.output(r".*file\.py.*").prompt().eval()
+        else:
+            e.output(r"file\.py\n").prompt().eval()
 
-        shell.sendline("pwd")
-
-        e.output(r".*/sandbox_.*/dir\n").prompt().eval()
+        if facade.is_windows():
+            shell.sendline("echo %CD%")
+            e.output(r".*\\sandbox_.*\\directory\n").prompt().eval()
+        else:
+            shell.sendline("pwd")
+            e.output(r".*/sandbox_.*/directory\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()
 
     def test_cd_back_true(self, shell):
-        Path("dir").mkdir()
-        Path("dir/file.py").touch()
+        Path("directory").mkdir()
+        Path("directory/file.py").touch()
 
-        utils.add_command(
+        if facade.is_windows():
+            utils.add_command(
+                """
+            @command(cd_back=True)
+            def cmd(self) -> str:
+                os.chdir("directory")
+                run(f"dir")
             """
-        @command(cd_back=True)
-        def cmd(self) -> str:
-            os.chdir("dir")
-            run(f"ls")
-        """
-        )
+            )
+        else:
+            utils.add_command(
+                """
+            @command(cd_back=True)
+            def cmd(self) -> str:
+                os.chdir("directory")
+                run(f"ls")
+            """
+            )
 
         e = shell.start()
         e.prompt().eval()
 
         shell.sendline("cmd")
 
-        e.output(r"file.py\n").prompt().eval()
+        if facade.is_windows():
+            e.output(r".*file\.py.*\n").prompt().eval()
+        else:
+            e.output(r"file\.py\n").prompt().eval()
 
-        shell.sendline("pwd")
-
-        e.output(r".*/sandbox_.*\n").prompt().eval()
+        if facade.is_windows():
+            shell.sendline("echo %CD%")
+            e.output(r".*\\sandbox_[0-9a-f|-]{36}\n").prompt().eval()
+        else:
+            shell.sendline("pwd")
+            e.output(r".*/sandbox_[0-9a-f|-]{36}\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()
 
     def test_in_root_true(self, shell):
-        Path("dir").mkdir()
-        Path("dir/file.py").touch()
-
-        utils.add_command(
+        Path("directory").mkdir()
+        Path("directory/file.py").touch()
+        if facade.is_windows():
+            utils.add_command(
+                """
+            @command(in_root=True)
+            def cmd(self) -> str:
+                run(f"dir")
             """
-        @command(in_root=True)
-        
-        def cmd(self) -> str:
-            run(f"ls")
-        """
-        )
+            )
+        else:
+            utils.add_command(
+                """
+            @command(in_root=True)
+            def cmd(self) -> str:
+                run(f"ls")
+            """
+            )
 
         e = shell.start()
         e.prompt().eval()
 
-        shell.sendline("cd dir")
+        shell.sendline("cd directory")
         e.prompt()
         shell.sendline("cmd")
 
-        e.output(r"dir\nenv_comm.py\nenv_test.py\n").prompt().eval()
+        if facade.is_windows():
+            e.output(r".*directory.*env_comm\.py.*env_test\.py.*").prompt().eval()
+        else:
+            e.output(r"directory\nenv_comm\.py\nenv_test\.py\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()
 
     def test_in_root_false(self, shell):
-        Path("dir").mkdir()
-        Path("dir/file.py").touch()
+        Path("directory").mkdir()
+        Path("directory/file.py").touch()
 
-        utils.add_command(
+        if facade.is_windows():
+            utils.add_command(
+                """
+            @command(in_root=False)
+            def cmd(self) -> str:
+                run(f"dir")
             """
-        @command(in_root=False)
-        def cmd(self) -> str:
-            run(f"ls")
-        """
-        )
+            )
+        else:
+            utils.add_command(
+                """
+            @command(in_root=False)
+            def cmd(self) -> str:
+                run(f"ls")
+            """
+            )
 
         e = shell.start()
         e.prompt().eval()
 
-        shell.sendline("cd dir")
+        shell.sendline("cd directory")
         e.prompt()
         shell.sendline("cmd")
 
-        e.output(r"file.py\n").prompt().eval()
+        if facade.is_windows():
+            e.output(r".*file.py.*").prompt().eval()
+        else:
+            e.output(r"file.py\n").prompt().eval()
 
         shell.exit()
         e.exit().eval()

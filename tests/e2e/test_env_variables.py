@@ -259,3 +259,23 @@ class TestEnvVariables(utils.TestBase):
 
         shell.exit()
         e.exit().eval()
+
+    def test_pythonpath(self, shell, env_sandbox):
+        utils.add_meta("load_env_vars: bool = True")
+
+        utils.add_definition(
+            """
+            self.e.pythonpath = ["path1", "path2"]
+            """
+        )
+
+        os.environ["SANDBOX_TESTVAR"] = "TestValue"
+
+        e = shell.start()
+        e.prompt().eval()
+        shell.sendline(f"env.e.test_var")
+        e.output(r"'TestValue'\n")
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()

@@ -129,7 +129,7 @@ class TestHotReload(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    @mark.skipif(facade.is_darwin(), reason="TODO")
+    @mark.skipif(facade.is_darwin() or facade.is_windows(), reason="TODO")
     def test_delete_dir_with_file_inside(self, shell):
         directory = Path("./test_dir")
         directory.mkdir()
@@ -154,7 +154,7 @@ class TestHotReload(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    @mark.skipif(facade.is_darwin(), reason="TODO")
+    @mark.skipif(facade.is_darwin() or facade.is_windows(), reason="TODO")
     def test_ignored_files(self, shell):
         e = shell.start()
         e.prompt(PromptState.MAYBE_LOADING).eval()
@@ -233,7 +233,7 @@ class TestHotReload(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    @mark.skipif(facade.is_darwin(), reason="TODO")
+    @mark.skipif(facade.is_darwin() or facade.is_windows(), reason="TODO")
     def test_few_times_in_a_row_quick(self, shell):
         e = shell.start()
         e.prompt().eval()

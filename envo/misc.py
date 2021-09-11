@@ -185,7 +185,7 @@ def render_file(template_path: Path, output: Path, context: Dict[str, Any]) -> N
     for n, v in context.items():
         content = content.replace(f"{{{{ {n} }}}}", v)
 
-    output.write_text(content)
+    output.write_text(content, encoding="utf-8")
 
 
 def render_py_file(template_path: Path, output: Path, context: Dict[str, Any]) -> None:
