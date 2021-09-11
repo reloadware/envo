@@ -16,7 +16,7 @@ import pytest
 import requests
 from flaky import flaky
 from rhei import Stopwatch
-from stickybeak import Injector, ConnectionError
+from stickybeak import ConnectionError, Injector
 
 from envo import const
 from envo.e2e import STICKYBEAK_PORT

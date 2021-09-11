@@ -28,6 +28,7 @@ class EnvoCommEnv(Env, VirtualEnv):
         root: str = Path(__file__).parent.absolute()
         name: str = "env"
         verbose_run = True
+        load_env_vars = True
 
     class Environ(Env.Environ, VirtualEnv.Environ):
         ...
@@ -45,6 +46,7 @@ class EnvoCommEnv(Env, VirtualEnv):
 
     def init(self) -> None:
         super().init()
+        self.e.pythonpath = ["path1", "path2"]
 
     @p.command
     def clean(self):

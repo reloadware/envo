@@ -35,7 +35,7 @@ class TestCommands(utils.TestBase):
         e.exit().eval()
 
     def test_envs_persist(self, shell):
-        utils.add_definition("self.e.pythonpath = 'test_dir'")
+        utils.add_definition("self.e.pythonpath = ['test_dir']")
         utils.add_command(
             """
         @command(in_root=False)

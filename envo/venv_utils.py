@@ -65,14 +65,12 @@ class BaseVenv:
     venv_path: VenvPath = field(init=False)
 
     class Environ(envium.Environ):
-        path: str = env_var(raw=True)
+        path: List[Path] = env_var(raw=True, default_factory=list)
 
     def __post_init__(self) -> None:
-        self._path_delimiter = ";" if is_windows() else ":"
-
         self.e = self.Environ(name="envo", load=True)
 
-    def _get_path(self):
+    def _get_path(self) -> str:
         path = f"""{str(self.venv_path.bin_path)}"""
         return path
 
@@ -81,15 +79,15 @@ class BaseVenv:
 
         path = self._get_path()
 
-        if path not in environ.path.split(self._path_delimiter):
-            environ.path = f"""{path}{self._path_delimiter}{environ.path}"""
+        if path not in environ.path:
+            environ.path.insert(0, path)
 
         environ.save_to_os_environ()
 
     def deactivate(self, e: Optional[Env.Environ] = None) -> None:
         environ = e or self.e
         if self._get_path() in environ.path:
-            environ.path = environ.path.replace(self._get_path() + self._path_delimiter, "")
+            environ.path.remove(self._get_path())
 
         environ.save_to_os_environ()
 
