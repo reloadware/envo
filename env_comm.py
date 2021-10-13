@@ -51,8 +51,7 @@ class EnvoCommEnv(Env, VirtualEnv):
 
     @p.command
     def clean(self):
-        to_clean = ["**/*/sandbox_*", "**/*.pyi", "**/.pytest_cache",
-                    "**/*.egg-info", "**/*/__pycache__"]
+        to_clean = ["**/*/sandbox_*", "**/*.pyi", "**/.pytest_cache", "**/*.egg-info", "**/*/__pycache__"]
 
         for c in to_clean:
             for p in self.meta.root.glob(c):
