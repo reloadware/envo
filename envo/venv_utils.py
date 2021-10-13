@@ -83,7 +83,8 @@ class BaseVenv:
         if path not in environ.path:
             environ.path.insert(0, path)
 
-        builtins.__xonsh__.env.update(environ.get_env_vars())
+        if hasattr(builtins, "__xonsh__") and hasattr(builtins.__xonsh__, "env") and builtins.__xonsh__.env:
+            builtins.__xonsh__.env.update(environ.get_env_vars())
         environ.save_to_os_environ()
 
     def deactivate(self, e: Optional[Env.Environ] = None) -> None:
@@ -91,7 +92,8 @@ class BaseVenv:
         if self._get_path() in environ.path:
             environ.path.remove(self._get_path())
 
-        builtins.__xonsh__.env.update(environ.get_env_vars())
+        if hasattr(builtins, "__xonsh__") and hasattr(builtins.__xonsh__, "env") and builtins.__xonsh__.env:
+            builtins.__xonsh__.env.update(environ.get_env_vars())
         environ.save_to_os_environ()
 
     def __enter__(self) -> None:
