@@ -105,7 +105,6 @@ class TestCommands(utils.TestBase):
         with raises(RunError) as e:
             utils.run("""envo test -c "cd /home/non_existend_file" """)
         assert e.value.return_code == 1
-        assert utils.clean_output(e.value.stdout) == "\n"
         assert "no such file or directory" in utils.clean_output(e.value.stderr)
 
     def test_single_command_command_fail(self):

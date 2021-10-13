@@ -373,8 +373,6 @@ class EnvoHeadless(EnvoBase):
             sys.exit(e.code)
         else:
             sys.exit(self.shell.last_return_code)
-        finally:
-            self.mode.unload()
 
     def dry_run(self) -> None:
         self.shell = Shell.create(Shell.Callbacks(), data_dir_name=self.data_dir_name)

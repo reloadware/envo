@@ -292,7 +292,7 @@ class SpawnEnvo:
         self.expecter = Expecter(self, stage=self.stage)
 
         if self.debug:
-            self.injector.connect()
+            self.injector.connect(timeout=15)
 
         if wait_until_ready and self.debug:
             self.envo.wait_until_ready()

@@ -35,7 +35,7 @@ class EnvoCommEnv(Env, VirtualEnv):
 
     class Ctx(Env.Ctx, VirtualEnv.Ctx):
         pip_ver: str = ctx_var(default="21.0.1")
-        poetry_ver: str = ctx_var(default="1.1.7")
+        poetry_ver: str = ctx_var(default="1.1.11")
 
     class Secrets(Env.Secrets):
         ...

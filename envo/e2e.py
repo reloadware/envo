@@ -36,7 +36,6 @@ if enabled:
     import stickybeak
 
     if is_windows():
-        # print("HIHIHIHI")
         import prompt_toolkit.output.defaults
         import prompt_toolkit.output.windows10
 
@@ -87,7 +86,9 @@ if enabled:
 
     if stickybeak_enabled:
         project_root = Path(__file__).parent
-        server = stickybeak.Server(project_root, int(os.environ["ENVO_E2E_STICKYBEAK_PORT"]), timeout=15.0)
+        server = stickybeak.Server(
+            project_root=project_root, port=int(os.environ["ENVO_E2E_STICKYBEAK_PORT"]), timeout=15.0
+        )
         server.start()
 
 
