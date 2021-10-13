@@ -55,7 +55,6 @@ class EnvoLocalEnv(ParentEnv):
     def bootstrap(self) -> None:
         if is_linux() or is_darwin():
             run(f"pip install pip=={self.ctx.pip_ver}")
-        run(f"pip install poetry=={self.ctx.poetry_ver}")
         run(f"poetry config virtualenvs.create true")
         run(f"poetry config virtualenvs.in-project true")
         run(f"poetry install")

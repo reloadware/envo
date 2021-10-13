@@ -57,6 +57,7 @@ Jinja2 = "^3.0.1"
 black = "21.7b0"
 pytest = "^6.2.4"
 pytest-xdist = "^2.3.0"
+pytest-rerunfailures = "^10.2"
 
 [tool.poetry.scripts]
 envo = "envo.scripts:_main"

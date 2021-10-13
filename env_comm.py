@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -35,7 +36,7 @@ class EnvoCommEnv(Env, VirtualEnv):
 
     class Ctx(Env.Ctx, VirtualEnv.Ctx):
         pip_ver: str = ctx_var(default="21.0.1")
-        poetry_ver: str = ctx_var(default="1.1.11")
+        poetry_ver: str = ctx_var(default="1.1.7")
 
     class Secrets(Env.Secrets):
         ...
@@ -50,11 +51,15 @@ class EnvoCommEnv(Env, VirtualEnv):
 
     @p.command
     def clean(self):
-        run("rm **/*/sandbox_* -rf")
-        run(f"rm **/*.pyi -f")
-        run(f"rm **/.pytest_cache -fr")
-        run(f"rm **/*.egg-info -fr")
-        run(f"rm **/*/__pycache__ -fr")
+        to_clean = ["**/*/sandbox_*", "**/*.pyi", "**/.pytest_cache",
+                    "**/*.egg-info", "**/*/__pycache__"]
+
+        for c in to_clean:
+            for p in self.meta.root.glob(c):
+                if p.is_dir():
+                    shutil.rmtree(p, ignore_errors=True)
+                else:
+                    p.unlink()
 
     @p.command
     def bootstrap(self):
