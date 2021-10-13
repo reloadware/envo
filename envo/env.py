@@ -599,6 +599,8 @@ class Env(BaseEnv):
 
     env_id_to_secrets: ClassVar[Dict[str, Secrets]] = {}
 
+    shell: "Shell"
+
     def __init__(self):
         self._environ_before = os.environ.copy()
         self.meta = self.Meta()
@@ -825,6 +827,8 @@ class ShellEnv:
         self._se = se
         self._li = li
         self.env = self._li.env
+
+        self.env.shell = self._li.shell
 
         if self.env.meta.verbose_run:
             os.environ["ENVO_VERBOSE_RUN"] = "True"
