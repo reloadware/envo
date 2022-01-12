@@ -302,6 +302,55 @@ class TestCommands(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    def test_cmd_call_other_cmd(self, shell):
+        utils.add_namespace("p")
+        utils.add_command(
+            """
+        @p.command
+        def bake_cake(self, name: str = "Cake", flavour: str = None) -> str:
+            print(f"Baking {flavour} {name}")
+        """
+        )
+
+        utils.add_command(
+            """
+            @p.command
+            def bakery(self) -> str:
+                self.bake_cake(flavour="Caramel")
+            """
+        )
+
+        e = shell.start()
+
+        e.prompt().eval()
+
+        shell.sendline("p.bakery")
+        e.output(r"Baking Caramel Cake\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
+    def test_cmd_call_other_cmd_envo_run(self, shell):
+        utils.add_namespace("p")
+        utils.add_command(
+            """
+        @p.command
+        def bake_cake(self, name: str = "Cake", flavour: str = None) -> str:
+            print(f"Baking {flavour} {name}")
+        """
+        )
+
+        utils.add_command(
+            """
+        @p.command
+        def bakery(self) -> str:
+            self.bake_cake(flavour="Caramel")
+        """
+        )
+
+        res = utils.envo_run("p.bakery", stage="test")
+        assert "Baking Caramel Cake" in res, res
+
     def test_run_with_wilcard(self, shell):
         Path("file.py").touch()
 

@@ -46,6 +46,8 @@ class VirtualEnv(Plugin):
     ctx: Ctx
     e: Environ
 
+    venv: venv_utils.BaseVenv
+
     def init(self):
         super().init()
 
@@ -58,11 +60,11 @@ class VirtualEnv(Plugin):
 
         try:
             if self.ctx.venv.discover:
-                self._venv = venv_utils.DiscoveredVenv(root=self.meta.root, venv_name=self.ctx.venv.name)
+                self.venv = venv_utils.DiscoveredVenv(root=self.meta.root, venv_name=self.ctx.venv.name)
             else:
-                self._venv = venv_utils.Venv(self.ctx.venv.dir / self.ctx.venv.name)
-            self._venv.activate(self.e)
+                self.venv = venv_utils.Venv(self.ctx.venv.dir / self.ctx.venv.name)
+            self.venv.activate(self.e)
         except venv_utils.CantFindVenv:
             self.__logger.debug("Couldn't find venv. Falling back to predicting")
-            self._venv = venv_utils.PredictedVenv(root=self.meta.root, venv_name=self.ctx.venv.name)
-            self._venv.activate(self.e)
+            self.venv = venv_utils.PredictedVenv(root=self.meta.root, venv_name=self.ctx.venv.name)
+            self.venv.activate(self.e)
