@@ -330,7 +330,7 @@ class TestCommands(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    def test_cmd_call_other_cmd_envo_run(self, shell):
+    def test_cmd_call_other_cmd_envo_run(self):
         utils.add_namespace("p")
         utils.add_command(
             """

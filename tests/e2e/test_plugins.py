@@ -66,7 +66,6 @@ class TestVenv(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    @flaky
     def test_venv_addon_no_venv(self, sandbox, shell):
         venv_path = facade.VenvPath(root_path=sandbox, venv_name=".venv")
 
@@ -74,7 +73,7 @@ class TestVenv(utils.TestBase):
         utils.add_definition("self.ctx.venv.dir = self.meta.root")
 
         e = shell.start()
-        e.prompt().eval()
+        e.prompt(PromptState.MAYBE_LOADING).eval()
 
         self.assert_predicted(shell, venv_dir=sandbox)
 

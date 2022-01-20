@@ -9,7 +9,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Callable, Dict, List, Optional, Union
+from types import FrameType
+from typing import Any, Callable, Dict, Generator, List, Optional, Union
 
 from globmatch import glob_match
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
@@ -384,3 +385,15 @@ def get_repo_root() -> Path:
         path = path.parent
 
     return path
+
+
+def iterate_frames(frame: FrameType) -> Generator[FrameType, None, None]:
+    current_frame: Optional[FrameType] = frame
+    while current_frame:
+        yield current_frame
+        current_frame = current_frame.f_back
+
+
+def is_suspend_frame(frame: FrameType) -> bool:
+    ret = "pydevd.py" in frame.f_code.co_filename and "do_wait_suspend" in frame.f_code.co_name
+    return ret

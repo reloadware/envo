@@ -1,12 +1,14 @@
 from pathlib import Path
 from time import sleep
 
+from pytest import mark
+
 from tests import facade
 from tests.e2e import utils
-from tests.e2e.utils import PromptState
 
 
 class TestSecret(utils.TestBase):
+    @mark.skip(reason="TODO")
     def test_basic(self, shell):
         utils.add_secret_declaration("cake: str = secret()")
         utils.add_command(
