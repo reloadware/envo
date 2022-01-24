@@ -67,7 +67,7 @@ def _run(
     background=False,
 ) -> Optional[str]:
 
-    debug = os.environ.get("ENVO_DEBUG", False)
+    debug = os.environ.get("ENVO_DEBUG", "False") == "True"
 
     if verbose is None:
         verbose = os.environ.get("ENVO_VERBOSE_RUN", False)

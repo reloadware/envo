@@ -41,6 +41,14 @@ def sandbox(request) -> Path:
 
 
 @fixture
+def environ_sandbox() -> Path:
+    environ_before = os.environ.copy()
+
+    yield
+    os.environ = environ_before
+
+
+@fixture
 def env_sandbox() -> Path:
     environ_before = os.environ.copy()
 

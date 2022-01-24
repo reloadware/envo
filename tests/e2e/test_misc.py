@@ -158,6 +158,17 @@ class TestMisc(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    def test_run_with_envo_stage_env_var(self, default_shell):
+        result = utils.run("envo damian init")
+        assert "Created damian environment" in result
+
+        os.environ["ENVO_STAGE"] = "damian"
+
+        e = default_shell.start()
+        e.stage = "damian"
+
+        e.prompt().eval()
+
     @mark.skip(reason="TODO")
     def test_instanciate(self, shell):
         assert False

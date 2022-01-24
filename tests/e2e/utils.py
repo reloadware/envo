@@ -65,7 +65,7 @@ class PromptRe(PromptBase):
 
 class TestBase:
     @pytest.fixture(autouse=True)
-    def setup(self, sandbox, init, envo_imports):
+    def setup(self, sandbox, env_sandbox, init, envo_imports):
         pass
 
 

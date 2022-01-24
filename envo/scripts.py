@@ -600,7 +600,8 @@ def _main() -> None:
     argv = sys.argv[1:]
     keywords = ["init", "dry-run", "version", "dump", "run"]
 
-    stage = DEFAULT_STAGE
+    stage = os.environ.get("ENVO_STAGE", DEFAULT_STAGE)
+
     if argv and argv[0] not in keywords:
         stage = argv[0]
         option_name = argv[1] if len(argv) >= 2 else ""
