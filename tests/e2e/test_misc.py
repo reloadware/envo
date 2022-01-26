@@ -169,6 +169,29 @@ class TestMisc(utils.TestBase):
 
         e.prompt().eval()
 
+    def test_sys_path_not_duplicated(self, shell):
+        comm_path = Path("comm")
+        comm_path.mkdir()
+
+        comm_package = comm_path / "package"
+        comm_package.mkdir()
+
+        comm_package_init = comm_package / "__init__.py"
+        comm_package_init.touch()
+
+        utils.replace_in_code("envo.add_source_roots([root])", "envo.add_source_roots([root, root/'comm'])\n" * 2)
+        utils.replace_in_code("# Declare your command namespaces here", "import package")
+
+        e = shell.start()
+        e.prompt().eval()
+
+        sys_path = shell.envo.get_sys_path()
+        assert sys_path.count(str(comm_path.absolute())) == 1
+        assert "" not in sys_path
+
+        shell.exit()
+        e.exit().eval()
+
     @mark.skip(reason="TODO")
     def test_instanciate(self, shell):
         assert False

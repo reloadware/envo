@@ -859,6 +859,9 @@ class ShellEnv:
 
         self.reloader = None
 
+        if "" in sys.path:
+            sys.path.remove("")
+
         if self._se.reloader_enabled:
             self.reloader = EnvReloader(
                 li=EnvReloader.Links(shell_env=self, status=self._li.status, logger=self.logger),

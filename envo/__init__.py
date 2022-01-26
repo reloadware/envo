@@ -15,8 +15,6 @@ from rich.console import Console
 console = Console()
 console._force_terminal = True
 
-import envo.e2e
-
 from envo import e2e
 from envo.logs import logger
 from envo.devops import *

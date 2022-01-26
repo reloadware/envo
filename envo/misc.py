@@ -27,6 +27,7 @@ __all__ = [
 ]
 
 from envo import const
+from envo.logs import logger
 
 
 class EnvoError(Exception):
@@ -372,7 +373,14 @@ def is_windows():
 
 
 def add_source_roots(paths: List[Union[Path, str]]) -> None:
+    logger.debug(f"Adding source roots {paths}")
     for p in paths:
+        if not str(p).strip():
+            continue
+
+        if str(p) in sys.path:
+            sys.path.remove(str(p))
+
         sys.path.insert(0, str(p))
 
 
