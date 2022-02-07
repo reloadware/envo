@@ -143,3 +143,38 @@ class TestShellContext(utils.TestBase):
 
         shell.exit()
         e.exit().eval()
+
+    def test_context_shadowing(self, shell):
+        utils.add_command(
+            """
+            @shell_context
+            def __some_context(self) -> Dict[str, Any]:
+                return {"cake": "Sponge"}
+            """,
+            Path("env_comm.py"),
+        )
+
+        utils.add_command(
+            """
+            @shell_context
+            def __some_context(self) -> Dict[str, Any]:
+                return {"flavor": "Caramel"}
+            """,
+            Path("env_test.py"),
+        )
+
+        shell.start()
+        e = shell.expecter
+
+        e.prompt().eval()
+
+        shell.sendline("flavor")
+        e.output(fr"'Caramel'\n")
+        e.prompt().eval()
+
+        shell.sendline("cake")
+        e.output(fr"'Sponge'\n")
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()

@@ -391,6 +391,11 @@ class ShellContext(MagicFunction):
 
         return ret
 
+    @property
+    def namespaced_name(self):
+        ret = f"{self.func.__qualname__}"
+        return ret
+
 
 class shell_context(magic_function):  # noqa: N801
     type: str = "shell_context"
