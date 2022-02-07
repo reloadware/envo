@@ -1,3 +1,4 @@
+import builtins
 import inspect
 import os
 import re
@@ -12,7 +13,7 @@ from dataclasses import dataclass, field, is_dataclass
 from pathlib import Path
 from threading import Lock, Thread
 from time import sleep
-from types import MethodType, ModuleType
+from types import FrameType, MethodType, ModuleType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -107,12 +108,19 @@ class MagicFunction:
 
     def __call__(self, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
         logger.debug(f'Running magic function (name="{self.name}", type={self.type})')
-        if args:
-            args = (self.env, *args)  # type: ignore
-        else:
-            args = (self.env,)  # type: ignore
-
         try:
+            frame: FrameType = sys._getframe(1)
+
+            if isinstance(frame.f_locals.get("self"), Env):
+                self_ = frame.f_locals["self"]
+                args = (self_, *args)
+            else:
+                if not args:
+                    args = (builtins.__env__,)
+
+                if not isinstance(args[0], Env):
+                    args = (builtins.__env__, *args)
+
             return self.call(*args, **kwargs)
         except BaseException as e:
             logger.traceback()
@@ -152,11 +160,12 @@ class MagicFunction:
 @dataclass
 class Command(MagicFunction):
     def call(self, *args, **kwargs) -> str:
-        assert self.env is not None
         cwd = Path(".").absolute()
 
+        self_ = args[0]
+
         if self.kwargs["in_root"]:
-            os.chdir(str(self.env.meta.root))
+            os.chdir(str(self_.meta.root))
 
         try:
             ret = self.func(*args, **kwargs)
@@ -597,7 +606,6 @@ class Env(BaseEnv):
 
     ctx: Ctx
     secrets: Secrets
-    magic_functions: Dict[str, Any]
     meta: Meta
 
     _environ_before: Optional[Dict[str, str]]
@@ -624,22 +632,6 @@ class Env(BaseEnv):
         else:
             self.e.pythonpath = self._path_str_to_list(os.environ["PYTHONPATH"])
 
-        self.magic_functions = {
-            "shell_context": {},
-            "precmd": {},
-            "onstdout": {},
-            "onstderr": {},
-            "postcmd": {},
-            "onload": {},
-            "oncreate": {},
-            "ondestroy": {},
-            "onunload": {},
-            "boot_code": {},
-            "command": {},
-            "on_partial_reload": {},
-        }
-
-        self._collect_magic_functions()
         self.ctx = self.Ctx(self.meta.name)
 
         secrets = Env.env_id_to_secrets.get(self.id, self.Secrets(self.meta.name))
@@ -746,39 +738,6 @@ class Env(BaseEnv):
     def get_env_path(cls) -> Path:
         return cls.Meta.root / f"env_{cls.Meta.stage}.py"
 
-    def _collect_magic_functions(self) -> None:
-        """
-        Go through fields and transform decorated functions to commands.
-        """
-
-        def hasattr_static(obj: Any, field: str) -> bool:
-            try:
-                inspect.getattr_static(obj, field)
-            except AttributeError:
-                return False
-            else:
-                return True
-
-        for f in dir(self):
-            if hasattr_static(self.__class__, f) and inspect.isdatadescriptor(
-                inspect.getattr_static(self.__class__, f)
-            ):
-                continue
-
-            attr = inspect.getattr_static(self, f)
-
-            if isinstance(attr, MagicFunction):
-                # inject env into super funtions
-                for c in self.__class__.__mro__:
-                    try:
-                        attr_super = getattr(c, f)
-                        attr_super.env = self
-                    except AttributeError:
-                        pass
-
-                attr.env = self
-                self.magic_functions[attr.type][attr.namespaced_name] = attr
-
     def dump_dot_env(self) -> Path:
         """
         Dump .env file for the current environment.
@@ -825,6 +784,7 @@ class ShellEnv:
 
     reloader: EnvReloader
     _sys_modules_snapshot: Dict[str, ModuleType] = OrderedDict()
+    magic_functions: Dict[str, Any]
     env: Env
 
     def __init__(self, calls: _Callbacks, se: _Sets, li: _Links) -> None:
@@ -834,6 +794,21 @@ class ShellEnv:
         self.env = self._li.env
 
         self.env._shell = self._li.shell
+
+        self.magic_functions = {
+            "shell_context": {},
+            "precmd": {},
+            "onstdout": {},
+            "onstderr": {},
+            "postcmd": {},
+            "onload": {},
+            "oncreate": {},
+            "ondestroy": {},
+            "onunload": {},
+            "boot_code": {},
+            "command": {},
+            "on_partial_reload": {},
+        }
 
         if self.env.meta.verbose_run:
             os.environ["ENVO_VERBOSE_RUN"] = "True"
@@ -851,6 +826,7 @@ class ShellEnv:
 
         self._environ_before = None
         self._shell_environ_before = None
+        self._collect_magic_functions()
 
         self.logger.debug("Starting env", metadata={"root": self.env.meta.root, "stage": self.env.meta.stage})
 
@@ -882,6 +858,8 @@ class ShellEnv:
 
         if not self._sys_modules_snapshot:
             self._sys_modules_snapshot = OrderedDict(sys.modules.copy())
+
+        builtins.__env__ = self.env
 
     def _on_reload_start(self) -> None:
         self.logger.debug("Running reload, trying partial first")
@@ -925,7 +903,7 @@ class ShellEnv:
 
             sw = Stopwatch()
             sw.start()
-            functions = self.env.magic_functions["onload"].values()
+            functions = self.magic_functions["onload"].values()
 
             self._start_reloaders()
 
@@ -941,7 +919,7 @@ class ShellEnv:
                 return
 
             # declare commands
-            for name, c in self.env.magic_functions["command"].items():
+            for name, c in self.magic_functions["command"].items():
                 self._li.shell.set_variable(name, c)
 
             # set context
@@ -957,9 +935,42 @@ class ShellEnv:
         else:
             thread(self)
 
+    def _collect_magic_functions(self) -> None:
+        """
+        Go through fields and transform decorated functions to commands.
+        """
+
+        def hasattr_static(obj: Any, field: str) -> bool:
+            try:
+                inspect.getattr_static(obj, field)
+            except AttributeError:
+                return False
+            else:
+                return True
+
+        for f in dir(self.env):
+            if hasattr_static(self.__class__, f) and inspect.isdatadescriptor(
+                inspect.getattr_static(self.__class__, f)
+            ):
+                continue
+
+            attr = inspect.getattr_static(self.env, f)
+
+            if isinstance(attr, MagicFunction):
+                # inject env into super funtions
+                for c in self.__class__.__mro__:
+                    try:
+                        attr_super = getattr(c, f)
+                        attr_super.env = self.env
+                    except AttributeError:
+                        pass
+
+                attr.env = self.env
+                self.magic_functions[attr.type][attr.namespaced_name] = attr
+
     def _get_shell_context(self) -> Dict[str, Any]:
         shell_context = {}
-        for c in self.env.magic_functions["shell_context"].values():
+        for c in self.magic_functions["shell_context"].values():
             for k, v in c().items():
                 namespaced_name = f"{c.namespace}.{k}" if c.namespace else k
                 shell_context[namespaced_name] = v
@@ -971,12 +982,12 @@ class ShellEnv:
         Called only after creation.
         :return:
         """
-        functions = self.env.magic_functions["oncreate"].values()
+        functions = self.magic_functions["oncreate"].values()
         for h in functions:
             h()
 
     def _on_destroy(self) -> None:
-        functions = self.env.magic_functions["ondestroy"]
+        functions = self.magic_functions["ondestroy"]
         for h in functions.values():
             h()
 
@@ -1063,7 +1074,7 @@ class ShellEnv:
             return False
 
         command_name = cmd.split()[0]
-        cmd_fun = self.env.magic_functions["command"].get(command_name, None)
+        cmd_fun = self.magic_functions["command"].get(command_name, None)
         if not cmd_fun:
             return False
 
@@ -1106,12 +1117,12 @@ class ShellEnv:
 
     def _run_boot_codes(self) -> None:
         self._li.status.source_ready = False
-        boot_codes_f = self.env.magic_functions["boot_code"]
+        boot_codes_f = self.magic_functions["boot_code"]
 
         codes = []
 
         for f in boot_codes_f.values():
-            codes.extend(f())
+            codes.extend(f(self.env))
 
         for c in codes:
             self._li.shell.run_code(c)
@@ -1119,7 +1130,7 @@ class ShellEnv:
         self._li.status.source_ready = True
 
     def _on_precmd(self, command: str) -> Optional[str]:
-        functions = self.env.magic_functions["precmd"]
+        functions = self.magic_functions["precmd"]
         for f in functions.values():
             if re.match(f.kwargs["cmd_regex"], command):
                 ret = f(command=command)  # type: ignore
@@ -1129,7 +1140,7 @@ class ShellEnv:
         return command
 
     def _on_stdout(self, command: str, out: bytes) -> str:
-        functions = self.env.magic_functions["onstdout"]
+        functions = self.magic_functions["onstdout"]
         for f in functions.values():
             if re.match(f.kwargs["cmd_regex"], command):
                 ret = f(command=command, out=out)  # type: ignore
@@ -1138,7 +1149,7 @@ class ShellEnv:
         return out
 
     def _on_stderr(self, command: str, out: bytes) -> str:
-        functions = self.env.magic_functions["onstderr"]
+        functions = self.magic_functions["onstderr"]
         for f in functions.values():
             if re.match(f.kwargs["cmd_regex"], command):
                 ret = f(command=command, out=out)  # type: ignore
@@ -1148,14 +1159,14 @@ class ShellEnv:
 
     def _on_postcmd(self, command: str, stdout: str, stderr: str) -> None:
         self._post_cmd(command, stdout, stderr)
-        functions = self.env.magic_functions["postcmd"]
+        functions = self.magic_functions["postcmd"]
         for f in functions.values():
             if re.match(f.kwargs["cmd_regex"], command):
                 f(command=command, stdout=stdout, stderr=stderr)  # type: ignore
 
     def _unload(self) -> None:
         self._deactivate()
-        functions = self.env.magic_functions["onunload"]
+        functions = self.magic_functions["onunload"]
         for f in functions.values():
             f()
         self._li.shell.calls.reset()
