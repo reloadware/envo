@@ -221,9 +221,6 @@ def import_env_from_file(path: Union[Path, str]) -> Any:
         # Check if it's env file
         if not Path(m.__file__).name.startswith("env_"):
             continue
-        # Double check
-        if not hasattr(m, const.THIS_ENV):
-            continue
 
         del sys.modules[n]
 
