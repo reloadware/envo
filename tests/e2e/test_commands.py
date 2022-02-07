@@ -560,6 +560,25 @@ class TestCommands(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    def test_fire_str_with_spaces(self, shell):
+        utils.add_command(
+            """
+        @command
+        def cmd(self, cake: str) -> str:
+            return f"super {cake}"
+        """
+        )
+
+        e = shell.start()
+        e.prompt().eval()
+
+        shell.sendline('cmd "caramel cake"')
+        e.output(r"super caramel cake\n")
+        e.prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
     @mark.skip(reason="TODO")
     def test_detects_inherited_command_without_decorator(self, shell):
         assert False

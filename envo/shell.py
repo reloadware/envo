@@ -1,5 +1,6 @@
 import builtins
 import os
+import shlex
 import sys
 import time
 from copy import copy
@@ -148,11 +149,8 @@ class Shell(BaseShell):  # type: ignore
         exec(f"{name} = {built_in_name}", builtins.__dict__)
 
     def _execute_with_fire(self, fun: Callable, command: str) -> Any:
-        command_name = command.split()[0]
-        command_args = command.split()[1:]
-
         argv_before = sys.argv.copy()
-        sys.argv = [command_name, *command_args]
+        sys.argv = shlex.split(command)
 
         try:
             fire.Fire(fun)
