@@ -20,7 +20,7 @@ from envo.logs import logger
 from envo.devops import *
 from envo.env import *
 from envo.plugins import *
-from envo.misc import EnvoError, import_from_file, add_source_roots, get_repo_root
+from envo.misc import EnvoError, import_from_file, add_source_roots, get_repo_root, colored
 from envo import venv_utils
 from envium import (
     env_var,

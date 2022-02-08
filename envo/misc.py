@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
 from types import FrameType
-from typing import Any, Callable, Dict, Generator, List, Optional, Union
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 
 from globmatch import glob_match
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
@@ -24,6 +24,7 @@ __all__ = [
     "EnvoError",
     "Callback",
     "FilesWatcher",
+    "colored",
 ]
 
 from envo import const
@@ -401,4 +402,9 @@ def iterate_frames(frame: FrameType) -> Generator[FrameType, None, None]:
 
 def is_suspend_frame(frame: FrameType) -> bool:
     ret = "pydevd.py" in frame.f_code.co_filename and "do_wait_suspend" in frame.f_code.co_name
+    return ret
+
+
+def colored(inp: str, color: Tuple[int, int, int]) -> str:
+    ret = f"\033[38;2;{color[0]};{color[1]};{color[2]}m{inp}\x1b[0m"
     return ret
