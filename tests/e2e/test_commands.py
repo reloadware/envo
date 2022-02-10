@@ -302,6 +302,38 @@ class TestCommands(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
+    def test_namespaces_override(self, shell, env_test_file, env_comm_file):
+        namespace_name = "test_namespace"
+
+        utils.add_namespace(namespace_name, file=env_test_file)
+        utils.add_command(
+            """
+            @command
+            def bake(self, test_arg: str = "") -> str:
+                print("New cake")
+            """,
+            file=env_test_file,
+        )
+
+        utils.add_command(
+            """
+            @command
+            def bake(self, test_arg: str = "") -> str:
+                print("Old cake")
+            """,
+            file=env_comm_file,
+        )
+
+        e = shell.start()
+
+        e.prompt().eval()
+
+        shell.sendline("bake")
+        e.output(r"New cake\n").prompt().eval()
+
+        shell.exit()
+        e.exit().eval()
+
     def test_cmd_call_other_cmd(self, shell):
         utils.add_namespace("p")
         utils.add_command(

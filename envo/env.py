@@ -722,7 +722,7 @@ class ShellEnv:
             else:
                 return True
 
-        for c in self.env.__class__.__mro__:
+        for c in reversed(self.env.__class__.__mro__):
             for f in dir(c):
                 if hasattr_static(self.__class__, f) and inspect.isdatadescriptor(
                     inspect.getattr_static(self.__class__, f)
