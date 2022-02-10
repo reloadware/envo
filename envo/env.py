@@ -8,8 +8,11 @@ import sys
 import typing
 from abc import ABC, abstractmethod
 from collections import OrderedDict
+from contextlib import contextmanager
 from copy import copy, deepcopy
 from dataclasses import dataclass, field, is_dataclass
+from functools import wraps
+from itertools import product
 from pathlib import Path
 from threading import Lock, Thread
 from time import sleep
@@ -27,6 +30,7 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    cast,
 )
 
 import envium
@@ -57,7 +61,6 @@ __all__ = [
     "onstderr",
     "oncreate",
     "onload",
-    "on_partial_reload",
     "onunload",
     "ondestroy",
     "boot_code",
@@ -73,284 +76,134 @@ if TYPE_CHECKING:
     from envo.shell import FancyShell, Shell
 
 
+class MagicFunctionData:
+    type: str
+    namespace: str
+    expected_fun_args: List[str]
+
+
+# magic function data
+mfd_field = "mfd"
+
+
 @dataclass
 class MagicFunction:
-    class UnexpectedArgs(Exception):
-        pass
-
-    class MissingArgs(Exception):
-        pass
-
-    name: str
     type: str
-    func: Callable
-    kwargs: Dict[str, Any]
-    expected_fun_args: List[str]
     namespace: str = ""
-    env: Optional["Env"] = field(init=False, default=None)
+    expected_fun_args = None
 
-    def __post_init__(self) -> None:
-        search = re.search(r"def ((.|\s)*?):\n", inspect.getsource(self.func))
-        if not search:
-            return
-        decl = search.group(1)
-        decl = re.sub(r"self,?\s?", "", decl)
-        self.decl = decl
+    def __new__(cls, *args, **kwargs) -> Callable:
+        if callable(args[0]):
+            fun = cast(Callable[..., Any], args[0])
+            args = args[1:]
 
-        self._validate_fun_args()
+            @wraps(fun)
+            def wrapped(*fun_args, **fun_kwargs):
+                return cls._call(fun, fun_args, fun_kwargs, args, kwargs)
 
-        for k, v in self.kwargs.items():
-            setattr(self, k, v)
+            cls._inject_data(wrapped, *args, **kwargs)
+            return wrapped
+        else:
 
-    def call(self, *args, **kwargs) -> str:
-        ret = self.func(*args, **kwargs)
-        return ret
+            def decor(fun):
+                @wraps(fun)
+                def wrapped(*fun_args, **fun_kwargs):
+                    return cls._call(fun, fun_args, fun_kwargs, args, kwargs)
 
-    def __call__(self, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> Any:
-        logger.debug(f'Running magic function (name="{self.name}", type={self.type})')
-        try:
-            frame: FrameType = sys._getframe(1)
+                cls._inject_data(wrapped, *args, **kwargs)
+                return wrapped
 
-            if isinstance(frame.f_locals.get("self"), Env):
-                self_ = frame.f_locals["self"]
-                args = (self_, *args)
+            return decor
+
+    @classmethod
+    def _call(cls, fun: Callable, fun_args, fun_kwargs, args, kwargs):
+        if not fun_args or not isinstance(fun_args[0], Env):
+            if fun_args and fun_args[0] == "__env__":
+                fun_args = (builtins.__env__, *fun_args[1:])
             else:
-                if not args:
-                    args = (builtins.__env__,)
-
-                if not isinstance(args[0], Env):
-                    args = (builtins.__env__, *args)
-
-            return self.call(*args, **kwargs)
+                fun_args = (builtins.__env__, *fun_args)
+        try:
+            with cls._context(fun_args[0], *args, **kwargs):
+                ret = fun(*fun_args, **fun_kwargs)
+            return ret
         except BaseException as e:
+            sys.stderr.write("\n")
+            sys.stderr.flush()
             logger.traceback()
             raise
 
-    def _validate_fun_args(self) -> None:
-        args = inspect.getfullargspec(self.func).args
-        args.remove("self")
-        unexpected_args = set(args) - set(self.expected_fun_args)
-        missing_args = set(self.expected_fun_args) - set(args)
+    @classmethod
+    def _inject_data(cls, wrapped: Callable, *args, **kwargs) -> None:
+        wrapped.mfd = MagicFunctionData()
+        wrapped.mfd.type = cls.type
+        wrapped.mfd.namespace = cls.namespace
+        wrapped.mfd.expected_fun_args = cls.expected_fun_args
 
-        func_info = (
-            f"{self.decl}\n"
-            f'In file "{inspect.getfile(self.func)}"\n'
-            f"Line number: {inspect.getsourcelines(self.func)[1]}"
-        )
-
-        if unexpected_args:
-            raise EnvoError(
-                f"Unexpected magic function args {list(unexpected_args)}, "
-                f"should be {self.expected_fun_args}\n"
-                f"{func_info}"
-            )
-
-        if missing_args:
-            raise EnvoError(f"Missing magic function args {list(missing_args)}:\n" f"{func_info}")
-
-    @property
-    def namespaced_name(self):
-        name = self.name
-        name = name.lstrip("_")
-
-        namespace = f"{self.namespace}." if self.namespace else ""
-        return namespace + name
+    @contextmanager
+    def _context(self, *args, **kwargs) -> None:
+        yield
 
 
 @dataclass
-class Command(MagicFunction):
-    def call(self, *args, **kwargs) -> str:
+class command(MagicFunction):
+    type = "command"
+
+    def __new__(cls, in_root: Optional[bool] = True, cd_back: Optional[bool] = True) -> Callable:
+        ret = super().__new__(cls, in_root, cd_back)
+        return ret
+
+    @classmethod
+    @contextmanager
+    def _context(cls, env: "Env", in_root: Optional[bool] = True, cd_back: Optional[bool] = True) -> None:
         cwd = Path(".").absolute()
 
-        self_ = args[0]
+        if in_root:
+            os.chdir(str(env.meta.root))
 
-        if self.kwargs["in_root"]:
-            os.chdir(str(self_.meta.root))
+        yield
 
-        try:
-            ret = self.func(*args, **kwargs)
-        finally:
-            if self.kwargs["cd_back"]:
-                os.chdir(str(cwd))
-
-        if ret is not None:
-            return str(ret)
-
-    def _validate_fun_args(self) -> None:
-        """
-        Commands have user defined arguments so we disable this
-        """
-        pass
+        if cd_back:
+            os.chdir(str(cwd))
 
 
-class magic_function:  # noqa: N801
-    klass = MagicFunction
-    kwargs: Dict[str, Any]
-    default_kwargs: Dict[str, Any] = {}
-    expected_fun_args: List[str] = []
-    type: str
-    namespace: str = ""
-
-    def __call__(self, func: Callable):
-        kwargs = self.default_kwargs.copy()
-        kwargs.update(self.kwargs)
-
-        return self.klass(
-            name=func.__name__,
-            kwargs=kwargs,
-            func=func,
-            type=self.type,
-            expected_fun_args=self.expected_fun_args,
-            namespace=self.namespace,
-        )
-
-    def __new__(cls, *args: Tuple[Any], **kwargs: Dict[str, Any]):
-        # handle case when command decorator is used without arguments and ()
-        if not kwargs and args and callable(args[0]):
-            kwargs = cls.default_kwargs.copy()
-            func: Callable = args[0]  # type: ignore
-            return cls.klass(
-                name=func.__name__,
-                kwargs=kwargs,
-                func=func,
-                type=cls.type,
-                expected_fun_args=cls.expected_fun_args,
-                namespace=cls.namespace,
-            )
-        else:
-            obj = super().__new__(cls)
-            obj.__init__(**kwargs)
-            return obj
-
-    def __init__(self, *args: Tuple[Any], **kwargs: Dict[str, Any]) -> None:
-        self.kwargs = kwargs
-
-
-# decorators
-class command(magic_function):  # noqa: N801
-    """
-    @command decorator class.
-    """
-
-    klass = Command
-    type: str = "command"
-    default_kwargs = {"cd_back": "True", "in_root": "True"}
-
-
-# Just to satistfy pycharm
-if False:
-
-    def command(cd_back: bool = True, in_root: bool = True):
-        return MagicFunction()
-
-
-# decorators
-class boot_code(magic_function):  # noqa: N801
+class boot_code(MagicFunction):  # noqa: N801
     type: str = "boot_code"
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+
+class Event(MagicFunction):  # noqa: N801
+    pass
 
 
-# Just to satistfy pycharm
-if False:
-
-    def boot_code(func):
-        return MagicFunction()
-
-
-class event(magic_function):  # noqa: N801
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-
-
-# Just to satistfy pycharm
-if False:
-
-    def event(func):
-        return MagicFunction()
-
-
-class onload(event):  # noqa: N801
+class onload(Event):  # noqa: N801
     type: str = "onload"
 
 
-# Just to satistfy pycharm
-if False:
-
-    def onload(func):
-        return MagicFunction()
-
-
-class oncreate(event):  # noqa: N801
+class oncreate(Event):  # noqa: N801
     type: str = "oncreate"
 
 
-# Just to satistfy pycharm
-if False:
-
-    def oncreate(func):
-        return MagicFunction()
-
-
-class ondestroy(event):  # noqa: N801
+class ondestroy(Event):  # noqa: N801
     type: str = "ondestroy"
 
 
-# Just to satistfy pycharm
-if False:
-
-    def ondestroy(func):
-        return MagicFunction()
-
-
-class onunload(event):  # noqa: N801
+class onunload(Event):  # noqa: N801
     type: str = "onunload"
 
 
-# Just to satistfy pycharm
-if False:
+class cmd_hook(MagicFunction):  # noqa: N801
+    def __new__(cls, cmd_regex: str = ".*") -> Callable:
+        ret = super().__new__(cls, cmd_regex)
+        return ret
 
-    def onunload(func):
-        return MagicFunction()
-
-
-class on_partial_reload(event):  # noqa: N801
-    type: str = "on_partial_reload"
-    expected_fun_args = ["file", "actions"]
-
-
-# Just to satistfy pycharm
-if False:
-
-    def on_partial_reload(func):
-        return MagicFunction()
-
-
-@dataclass
-class Hook(MagicFunction):
-    cmd_regex: str = field(init=False, default=None)
-
-
-class cmd_hook(magic_function):  # noqa: N801
-    klass = Hook
-
-    default_kwargs = {"cmd_regex": ".*"}
-
-    def __init__(self, cmd_regex: str = ".*") -> None:
-        super().__init__(cmd_regex=cmd_regex)  # type: ignore
+    @classmethod
+    def _inject_data(cls, wrapped: Callable, cmd_regex: str = ".*") -> None:
+        super()._inject_data(wrapped, cmd_regex)
+        wrapped.mfd.cmd_regex = cmd_regex
 
 
 class precmd(cmd_hook):  # noqa: N801
     type: str = "precmd"
-    expected_fun_args = ["command"]
-
-
-# Just to satistfy pycharm
-if False:
-
-    def precmd(cmd_regex: str = ".*"):
-        return MagicFunction()
+    expected_fun_args = ["command", "out"]
 
 
 class onstdout(cmd_hook):  # noqa: N801
@@ -358,23 +211,9 @@ class onstdout(cmd_hook):  # noqa: N801
     expected_fun_args = ["command", "out"]
 
 
-# Just to satistfy pycharm
-if False:
-
-    def onstdout(func):
-        return MagicFunction()
-
-
 class onstderr(cmd_hook):  # noqa: N801
     type: str = "onstderr"
     expected_fun_args = ["command", "out"]
-
-
-# Just to satistfy pycharm
-if False:
-
-    def onstderr(func):
-        return MagicFunction()
 
 
 class postcmd(cmd_hook):  # noqa: N801
@@ -382,44 +221,11 @@ class postcmd(cmd_hook):  # noqa: N801
     expected_fun_args = ["command", "stdout", "stderr"]
 
 
-# Just to satistfy pycharm
-if False:
-
-    def postcmd(func):
-        return MagicFunction()
-
-
-@dataclass
-class ShellContext(MagicFunction):
-    def call(self, *args, **kwargs) -> Dict[str, Any]:
-        try:
-            ret = self.func(*args, **kwargs)
-        except Exception as e:
-            logger.traceback()
-            ret = {}
-
-        return ret
-
-    @property
-    def namespaced_name(self):
-        ret = f"{self.func.__qualname__}"
-        return ret
-
-
-class shell_context(magic_function):  # noqa: N801
+class shell_context(MagicFunction):  # noqa: N801
     type: str = "shell_context"
-
-    klass = ShellContext
 
     def __init__(self) -> None:
         super().__init__()
-
-
-# Just to satistfy pycharm
-if False:
-
-    def shell_context(func):
-        return MagicFunction()
 
 
 PathLike = Union[Path, str]
@@ -435,57 +241,28 @@ magic_functions = {
     "precmd": precmd,
     "onstdout": onstdout,
     "onstderr": onstderr,
-    "on_partial_reload": on_partial_reload,
 }
 
 
 class Namespace:
-    command: Type[Callable]
-    shell_context: Type[Callable]
-    boot_code: Type[Callable]
-    onload: Type[Callable]
-    onunload: Type[Callable]
-    oncreate: Type[Callable]
-    ondestroy: Type[Callable]
-    precmd: Type[Callable]
-    onstdout: Type[Callable]
-    onstderr: Type[Callable]
-    on_partial_reload: Type[Callable]
+    command = command
+    shell_context = shell_context
+    boot_code = boot_code
+    onload = onload
+    onunload = onunload
+    oncreate = oncreate
+    ondestroy = ondestroy
+    precmd = precmd
+    onstdout = onstdout
+    onstderr = onstderr
 
     def __init__(self, name: str) -> None:
         self._name = name
 
         for n, f in magic_functions.items():
-            namespaced_fun = type(f"namespaced_{n}", (f,), {})
-            namespaced_fun.namespace = self._name
-            setattr(self, n, namespaced_fun)
-
-
-@dataclass
-class Field:
-    name: str
-    namespace: str
-    type: Any
-    value: Any
-    raw: bool
-
-    @property
-    def cleaned_name(self) -> str:
-        if self.raw:
-            return self.name
-        else:
-            return self.name.replace("_", "")
-
-    @property
-    def namespaced_name(self) -> str:
-        if self.raw:
-            return self.cleaned_name
-        else:
-            return f"{self.namespace}_{self.cleaned_name}" if self.namespace else self.cleaned_name
-
-    @property
-    def full_name(self) -> str:
-        return f"{self.namespace}.{self.cleaned_name}" if self.namespace else self.cleaned_name
+            namespaced_magic_fun = type(f"namespaced_{n}", (f,), {})
+            namespaced_magic_fun.namespace = self._name
+            setattr(self, n, namespaced_magic_fun)
 
 
 @dataclass
@@ -807,7 +584,6 @@ class ShellEnv:
             "onunload": {},
             "boot_code": {},
             "command": {},
-            "on_partial_reload": {},
         }
 
         if self.env.meta.verbose_run:
@@ -835,8 +611,6 @@ class ShellEnv:
         self._li.shell.calls.on_stderr = Callback(self._on_stderr)
         self._li.shell.calls.post_cmd = Callback(self._on_postcmd)
         self._li.shell.calls.on_exit = Callback(self._on_destroy)
-
-        # self.genstub()
 
         self.reloader = None
 
@@ -948,31 +722,28 @@ class ShellEnv:
             else:
                 return True
 
-        for f in dir(self.env):
-            if hasattr_static(self.__class__, f) and inspect.isdatadescriptor(
-                inspect.getattr_static(self.__class__, f)
-            ):
-                continue
+        for c in self.env.__class__.__mro__:
+            for f in dir(c):
+                if hasattr_static(self.__class__, f) and inspect.isdatadescriptor(
+                    inspect.getattr_static(self.__class__, f)
+                ):
+                    continue
 
-            attr = inspect.getattr_static(self.env, f)
+                attr = inspect.getattr_static(c, f)
 
-            if isinstance(attr, MagicFunction):
-                # inject env into super funtions
-                for c in self.__class__.__mro__:
-                    try:
-                        attr_super = getattr(c, f)
-                        attr_super.env = self.env
-                    except AttributeError:
-                        pass
-
-                attr.env = self.env
-                self.magic_functions[attr.type][attr.namespaced_name] = attr
+                if hasattr(attr, mfd_field):
+                    namespaced_name = f"{attr.mfd.namespace}.{f}" if attr.mfd.namespace else f
+                    self.magic_functions[attr.mfd.type][namespaced_name] = attr
 
     def _get_shell_context(self) -> Dict[str, Any]:
         shell_context = {}
         for c in self.magic_functions["shell_context"].values():
-            for k, v in c().items():
-                namespaced_name = f"{c.namespace}.{k}" if c.namespace else k
+            try:
+                cont = c()
+            except Exception:
+                continue
+            for k, v in cont.items():
+                namespaced_name = f"{c.mfd.namespace}.{k}" if c.mfd.namespace else k
                 shell_context[namespaced_name] = v
 
         return shell_context
@@ -1094,12 +865,6 @@ class ShellEnv:
         self._executing_cmd = False
 
     @command
-    def genstub(self) -> None:
-        from envo.stub_gen import StubGen
-
-        StubGen(self).generate()
-
-    @command
     def source_reload(self) -> None:
         to_remove = list(sys.modules.keys() - self._sys_modules_snapshot.keys())
 
@@ -1132,8 +897,8 @@ class ShellEnv:
     def _on_precmd(self, command: str) -> Optional[str]:
         functions = self.magic_functions["precmd"]
         for f in functions.values():
-            if re.match(f.kwargs["cmd_regex"], command):
-                ret = f(command=command)  # type: ignore
+            if re.match(f.mfd.cmd_regex, command):
+                ret = f(command)  # type: ignore
                 command = ret
 
         command = self._pre_cmd(command)
@@ -1142,8 +907,8 @@ class ShellEnv:
     def _on_stdout(self, command: str, out: bytes) -> str:
         functions = self.magic_functions["onstdout"]
         for f in functions.values():
-            if re.match(f.kwargs["cmd_regex"], command):
-                ret = f(command=command, out=out)  # type: ignore
+            if re.match(f.mfd.cmd_regex, command):
+                ret = f(command, out)  # type: ignore
                 if ret:
                     out = ret
         return out
@@ -1151,8 +916,8 @@ class ShellEnv:
     def _on_stderr(self, command: str, out: bytes) -> str:
         functions = self.magic_functions["onstderr"]
         for f in functions.values():
-            if re.match(f.kwargs["cmd_regex"], command):
-                ret = f(command=command, out=out)  # type: ignore
+            if re.match(f.mfd.cmd_regex, command):
+                ret = f(command, out)  # type: ignore
                 if ret:
                     out = ret
         return out
@@ -1161,8 +926,8 @@ class ShellEnv:
         self._post_cmd(command, stdout, stderr)
         functions = self.magic_functions["postcmd"]
         for f in functions.values():
-            if re.match(f.kwargs["cmd_regex"], command):
-                f(command=command, stdout=stdout, stderr=stderr)  # type: ignore
+            if re.match(f.mfd.cmd_regex, command):
+                f(command, stdout, stderr)  # type: ignore
 
     def _unload(self) -> None:
         self._deactivate()

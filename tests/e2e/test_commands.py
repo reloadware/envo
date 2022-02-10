@@ -265,21 +265,21 @@ class TestCommands(utils.TestBase):
         utils.add_namespace(namespace_name, file=env_test_file)
         utils.add_command(
             """
-        @test_namespace.command
-        def __some_cmd(self, test_arg: str = "") -> str:
-            print("from env_test!")
-            return "from env_test!"
-        """,
+            @test_namespace.command
+            def some_cmd(self, test_arg: str = "") -> str:
+                print("from env_test!")
+                return "from env_test!"
+            """,
             file=env_test_file,
         )
 
         utils.add_command(
             """
-                @command
-                def __some_cmd(self, test_arg: str = "") -> str:
-                    print("from env_comm!")
-                    return "from env_comm!"
-                """,
+            @command
+            def some_cmd(self, test_arg: str = "") -> str:
+                print("from env_comm!")
+                return "from env_comm!"
+            """,
             file=env_comm_file,
         )
 

@@ -50,6 +50,11 @@ class EnvoLocalEnv(ParentEnv):
         self.ci_out = self.meta.root / ".github/workflows/test.yml"
 
         self.black_ver = "21.7b0"
+        self.test_cmd()
+
+    @command
+    def test_cmd(self) -> None:
+        pass
 
     @p.command
     def bootstrap(self) -> None:

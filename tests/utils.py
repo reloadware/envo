@@ -196,7 +196,7 @@ def add_flake_cmd(file=Path("env_test.py"), namespace=None, message="Flake all g
     add_command(
         f"""
         @{namespaced_command}
-        def __my_flake(self, test_arg: str = "") -> str:
+        def my_flake(self, test_arg: str = "") -> str:
             print("{message}" + test_arg)
             return "Flake return value"
         """,
@@ -210,7 +210,7 @@ def add_mypy_cmd(file=Path("env_test.py"), namespace=None, message="Mypy all goo
     add_command(
         f"""
         @{namespaced_command}
-        def __my_mypy(self, test_arg: str = "") -> None:
+        def my_mypy(self, test_arg: str = "") -> None:
             print("{message}" + test_arg)
         """,
         file=file,

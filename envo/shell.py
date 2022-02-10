@@ -151,6 +151,7 @@ class Shell(BaseShell):  # type: ignore
     def _execute_with_fire(self, fun: Callable, command: str) -> Any:
         argv_before = sys.argv.copy()
         sys.argv = shlex.split(command)
+        sys.argv.insert(1, "__env__")
 
         try:
             fire.Fire(fun)

@@ -30,56 +30,6 @@ class TestHooks(utils.TestBase):
         shell.exit()
         e.exit().eval()
 
-    def test_fun_args_validation(self, shell):
-        utils.add_hook(
-            r"""
-            @precmd(cmd_regex=r"print\(.*\)")
-            def pre_print(self, cmd: str) -> str:
-                assert command == 'print("pancake");'
-                print("pre")
-                return command * 2
-            """
-        )
-        e = shell.start()
-
-        e.output(
-            (
-                r"Unexpected magic function args \['cmd'\], should be \['command'\].*"
-                r"pre_print\(cmd: str\) -> str.*"
-                r'In file ".*".*'
-                r"Line number: \d\d\n"
-            )
-        )
-        e.prompt(utils.PromptState.EMERGENCY).eval()
-
-        shell.exit()
-        e.exit().eval()
-
-    def test_fun_args_validation_missing_arg(self, shell):
-        utils.add_hook(
-            r"""
-            @precmd(cmd_regex=r"print\(.*\)")
-            def pre_print(self) -> str:
-                print("test")
-                return "cmd"
-            """
-        )
-        e = shell.start()
-
-        e.output(
-            (
-                r"Missing magic function args \['command'\].*"
-                r"pre_print\(\) -> str.*"
-                r'In file ".*".*'
-                r"Line number: \d\d\n"
-            )
-        )
-
-        e.prompt(utils.PromptState.EMERGENCY).eval()
-
-        shell.exit()
-        e.exit().eval()
-
     def test_precmd_not_matching_not_run(self, shell):
         utils.add_hook(
             r"""
