@@ -203,7 +203,7 @@ class Shell(BaseShell):  # type: ignore
         import signal
 
         import xonsh.history.main as xhm
-        from xonsh.built_ins import XonshSession, load_builtins
+        from xonsh.built_ins import XSH
         from xonsh.imphooks import install_import_hooks
         from xonsh.xontribs import xontribs_load
 
@@ -212,13 +212,11 @@ class Shell(BaseShell):  # type: ignore
         data_dir = Path.home() / f".envo/xonsh_data/{data_dir_name}"
         os.makedirs(data_dir, exist_ok=True)
 
-        execer = Execer(xonsh_ctx=ctx)
+        execer = Execer()
 
-        builtins.__xonsh__ = XonshSession(ctx=ctx, execer=execer)  # type: ignore
+        XSH.load(execer=execer, ctx=ctx)
 
-        load_builtins(ctx=ctx, execer=execer)
-        env = builtins.__xonsh__.env  # type: ignore
-        env.update(
+        XSH.env.update(
             {
                 "XONSH_INTERACTIVE": True,
                 "SHELL_TYPE": "prompt_toolkit",
@@ -227,13 +225,12 @@ class Shell(BaseShell):  # type: ignore
             }
         )
 
-        if "ENVO_SHELL_NOHISTORY" not in os.environ:
-            builtins.__xonsh__.history = xhm.construct_history(  # type: ignore
-                env=env.detype(), ts=[time.time(), None], locked=True, buffersize=100
-            )
-            builtins.__xonsh__.history.gc.wait_for_shell = False  # type: ignore
+        XSH.history = xhm.construct_history(  # type: ignore
+            env=XSH.env.detype(), ts=[time.time(), None], locked=True, buffersize=100
+        )
+        XSH.history.gc.wait_for_shell = False  # type: ignore
 
-        install_import_hooks()
+        install_import_hooks(execer)
         builtins.aliases.update({"ll": "ls -alF"})  # type: ignore
         xontribs_load([""])
 
@@ -245,8 +242,8 @@ class Shell(BaseShell):  # type: ignore
             signal.signal(signal.SIGTTOU, func_sig_ttin_ttou)
 
         shell = cls(calls, execer)
-        builtins.__xonsh__.shell = shell  # type: ignore
-        builtins.__xonsh__.shell.shell = shell  # type: ignore
+        XSH.shell = shell  # type: ignore
+        XSH.shell.shell = shell  # type: ignore
 
         return shell
 
@@ -269,7 +266,7 @@ class Shell(BaseShell):  # type: ignore
         try:
             # W want to catch all exceptions just in case the command fails so we can handle std_err and post_cmd
             self.append_history = BaseShell._append_history
-            BaseShell._append_history = lambda self, inp, ts, spc, tee_out: None
+            BaseShell._append_history = lambda self, inp, ts, spc, tee_out, cwd: None
             ts0 = time.time()
 
             if line:
@@ -353,16 +350,11 @@ class FancyShell(Shell, PromptToolkitShell):  # type: ignore
         self.calls.on_ready()
 
         self.cmdloop()
-
         self.calls.on_exit()
 
     def set_prompt(self, prompt: str) -> None:
         super(FancyShell, self).set_prompt(prompt)
         self.prompter.message = self.prompt_tokens()
-        self.prompter.app.invalidate()
-
-    def redraw(self) -> None:
-        self.prompter.app.renderer.erase(leave_alternate_screen=False)
         self.prompter.app.invalidate()
 
 

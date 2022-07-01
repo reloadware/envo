@@ -27,7 +27,6 @@ __all__ = [
     "colored",
 ]
 
-from envo import const
 from envo.logs import logger
 
 
@@ -263,72 +262,6 @@ def get_envo_relevant_traceback(exc: BaseException) -> List[str]:
         msg = msg_relevant
 
     return msg
-
-
-@dataclass
-class EnvParser:
-    path: Path
-
-    def __post_init__(self):
-        self.parents = self._get_parents()
-
-    @property
-    def source(self) -> str:
-        return self.path.read_text("utf-8")
-
-    @property
-    def class_name(self) -> str:
-        return re.search(r"\nclass (.*)\(UserEnv\):", self.source)[1]
-
-    @property
-    def plugins(self) -> List[str]:
-        raw_search = re.search(r"plugins.*=.*\[(.*)]", self.source)[1]
-        if not raw_search:
-            return []
-
-        ret = raw_search.split(",")
-        return ret
-
-    def _get_parents(self) -> List["EnvParser"]:
-        parents_str = re.search(r"parents.*=.*\[(.*)]", self.source)[1]
-        if not parents_str:
-            return []
-        parents_paths_relative = parents_str.replace("'", "").replace('"', "").split(",")
-        parents_paths_relative = [p.strip() for p in parents_paths_relative]
-
-        parents_paths = [Path(self.path.parent / p).resolve() for p in parents_paths_relative]
-        ret = [EnvParser(p) for p in parents_paths]
-        return ret
-
-    def get_stub(self) -> str:
-        # remove duplicates
-        parents_src = ""
-        for p in self.parents:
-            parents_src += p.get_stub() + "\n"
-
-        parents = [f"__{p.class_name}" for p in self.parents]
-
-        class_name = f"__{self.class_name}"
-
-        src = self.source.replace(self.class_name, class_name)
-        # Remove method bodies
-        src = re.sub(r"(def.*\(.*\).*?:)\n(?:(?:\n* {8,}.*?\n)+)", r"\1 ...", src)
-        # Remove Env declaration
-        src = re.sub(r"Env *?=.*?\n", r"", src)
-        # Leave only variable declarations
-        src = re.sub(r"((?:    )+\S*:.*)=.*\n", r"\1\n", src)
-
-        melted = dedent(
-            f"""\n
-        class {self.class_name}(envo.env.Env, {class_name}, {",".join(parents)} {"," if parents else ""} {",".join(self.plugins)}):
-            def __init__(self):
-                pass
-        """  # noqa: E501
-        )
-
-        ret = parents_src + src + melted
-
-        return ret
 
 
 PLATFORM_WINDOWS = "windows"

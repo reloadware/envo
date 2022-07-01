@@ -252,9 +252,11 @@ class RemoteEnvo:
 
 class SpawnEnvo:
     process: Optional[Popen] = None
+    injector: Injector
 
     def __init__(self, stage: str = "", debug=True):
         self.screen = pyte.Screen(200, 50)
+
         self.stream = pyte.ByteStream(self.screen)
         self.stage = stage
 
@@ -263,7 +265,6 @@ class SpawnEnvo:
 
     def start(self, wait_until_ready=True) -> Expecter:
         self.expecter = None
-        self._buffer = []
 
         self.stop_collecting = False
         self._printed_info = False
@@ -340,7 +341,6 @@ class SpawnEnvo:
                 c: bytes = self.process.stdout.read(1)
                 if not c:
                     return
-                self._buffer.append(c)
                 if c == b"\n":
                     c = b"\r\n"
                 self.stream.feed(c)
@@ -381,7 +381,7 @@ class SpawnEnvo:
 
         try:
             print("\nLog:")
-            self.envo.get_logger().print_all()
+            self.envo.get_logger().print_all(False)
         except ConnectionError:
             print("Couldn't retrieve log")
 

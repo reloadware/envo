@@ -31,8 +31,8 @@ class Msg:
     def __post_init__(self) -> None:
         self.body = str(self.body).lstrip()
 
-    def print(self) -> None:
-        print(self.render_all(with_color=True))
+    def print(self, color: bool = True) -> None:
+        print(self.render_all(with_color=color))
 
     def _fix_formatting(self, text: str) -> str:
         from loguru._colorizer import AnsiParser
@@ -273,9 +273,9 @@ class Logger:
 
         return filtered
 
-    def print_all(self) -> None:
+    def print_all(self, color: bool =True) -> None:
         for m in self.messages:
-            m.print()
+            m.print(color)
 
     def tail(self, messages_n: int) -> None:
         for m in self.messages[-messages_n:]:
