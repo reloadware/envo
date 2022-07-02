@@ -28,6 +28,12 @@ class PromptState(Enum):
     NORMAL = 1
 
 
+@dataclass
+class ShellCodeError(Exception):
+    msg: str
+    exc: Exception
+
+
 class PromptBase:
     default: str = str(DEFAULT_PROMPT)
     loading: bool = False
@@ -177,7 +183,9 @@ class Shell(BaseShell):  # type: ignore
 
         from xonsh.codecache import run_compiled_code
 
-        run_compiled_code(c, self.ctx, None, "single")
+        exc, value, traceback = run_compiled_code(c, self.ctx, None, "single")
+        if exc:
+            raise ShellCodeError(msg=f'"{code}" -> {repr(value)}', exc=exc)
 
     def run_code(self, code: str) -> None:
         logger.debug(f'Running code """{code}"""')

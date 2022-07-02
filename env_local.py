@@ -11,7 +11,7 @@ from envo.misc import is_darwin, is_linux, is_windows
 root = Path(__file__).parent.absolute()
 envo.add_source_roots([root])
 
-from envo import Namespace, command, console, inject, logger, run
+from envo import Namespace, command, console, inject, logger, run, boot_code
 
 # Declare your command namespaces here
 # like this:
@@ -55,6 +55,10 @@ class EnvoLocalEnv(ParentEnv):
     @command
     def test_cmd(self) -> None:
         pass
+
+    @boot_code
+    def test_boot(self) -> List[str]:
+        return []
 
     @p.command
     def bootstrap(self) -> None:

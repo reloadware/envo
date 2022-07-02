@@ -70,10 +70,11 @@ __all__ = [
 
 T = TypeVar("T")
 
+from envo.shell import Shell, ShellCodeError
+
 if TYPE_CHECKING:
     from envo import Plugin
     from envo.scripts import Status
-    from envo.shell import FancyShell, Shell
 
 
 class MagicFunctionData:
@@ -685,10 +686,10 @@ class ShellEnv:
                 for h in functions:
                     h()
                 self._run_boot_codes()
-            except BaseException as e:
+            except ShellCodeError as e:
                 # TODO: pass env code to exception to get relevant traceback?
                 self._li.status.shell_context_ready = True
-                self._calls.on_error(e)
+                self._calls.on_error(e.exc, e.msg)
                 self._exit()
                 return
 

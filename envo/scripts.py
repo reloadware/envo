@@ -68,6 +68,7 @@ class HeadlessMode:
     shell_env: ShellEnv
     reloader_enabled: bool = False
     blocking: bool = True
+    prompt: NormalPrompt
 
     def __init__(self, se: Sets, li: Links, calls: Callbacks) -> None:
         self.se = se
@@ -112,6 +113,7 @@ class HeadlessMode:
 
         self.prompt = NormalPrompt()
         self.prompt.state = PromptState.LOADING
+        self.prompt.msg = self.se.msg
         self.prompt.emoji = self.shell_env.env.meta.emoji
         self.prompt.name = self.shell_env.get_name()
 
@@ -121,7 +123,6 @@ class HeadlessMode:
         self.li.shell.set_variable("environ", os.environ)
 
         self.shell_env.activate()
-
         self.shell_env.load()
 
     def get_env_file(self) -> Path:
@@ -427,12 +428,13 @@ class Envo(EnvoBase):
         except BaseException as exc:
             self.on_error(exc)
 
-    def on_error(self, exc: BaseException) -> None:
-        msg = misc.get_envo_relevant_traceback(exc)
-        msg = "".join(msg)
-        msg = "\n" + msg.rstrip()
+    def on_error(self, exc: BaseException, msg: Optional[str] = None) -> None:
+        if not msg:
+            msg = misc.get_envo_relevant_traceback(exc)
+            msg = "".join(msg)
+            msg = "\n" + msg.rstrip()
 
-        logger.error(msg)
+        logger.error(msg, loguru_disable=True)
 
         if self.mode:
             self.mode.unload()

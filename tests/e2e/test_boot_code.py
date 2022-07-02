@@ -48,11 +48,14 @@ class TestBootCode(utils.TestBase):
         utils.add_boot(boot)
         e = shell.start()
 
+        e.output(r'.*1/0.*ZeroDivisionError.*')
         e.prompt(PromptState.EMERGENCY_MAYBE_LOADING).eval()
-        e.output(r".*File.*ZeroDivisionError: division by zero\n")
 
         env_test.write_text(file_before)
         sleep(1)
+
+        e.pop()
+        e.pop()
 
         e.prompt().eval()
 

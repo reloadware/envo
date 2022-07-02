@@ -14,6 +14,7 @@ from colorama import Fore, Style
 
 from envo import console, logger
 from envo.misc import is_darwin, is_linux, is_windows
+from envo.shell import ShellCodeError
 
 
 class CommandError(RuntimeError):
@@ -137,4 +138,8 @@ def run(
 
 
 def inject(command: str) -> None:
-    __xonsh__.shell.run_code(command)
+    from xonsh.built_ins import XSH
+    try:
+        XSH.shell.run_code(command)
+    except ShellCodeError as e:
+        raise e.exc
